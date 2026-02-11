@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+:root {
+  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
+  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
+  --border-default: #30363d; --border-muted: #21262d;
+  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
+  --done-fg: #a371f7;
+}
+html.light {
+  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
+  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
+  --border-default: #d0d7de; --border-muted: #d8dee4;
+  --accent-fg: #0969da; --accent-emphasis: #0969da;
+  --done-fg: #8250df;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  background: var(--bg-canvas); color: var(--fg-default);
+  min-height: 100vh; display: flex; flex-direction: column;
+  align-items: center; padding-top: 15vh;
+  user-select: none;
+}
+.logo {
+  font-size: 48px; font-weight: 700; letter-spacing: -2px;
+  color: var(--fg-default);
+  margin-bottom: 8px;
+  animation: logoIn 0.5s cubic-bezier(0.33,1,0.68,1);
+}
+@keyframes logoIn { from { opacity:0; transform:scale(0.9); } }
+.subtitle { color: var(--fg-muted); font-size: 15px; margin-bottom: 32px; animation: fadeIn 0.5s 0.1s both; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } }
+.search {
+  width: 100%; max-width: 600px; position: relative; margin-bottom: 40px;
+  animation: fadeIn 0.5s 0.15s both;
+}
+.search input {
+  width: 100%; padding: 14px 20px 14px 44px;
+  border: 1px solid var(--border-default); border-radius: 12px;
+  background: var(--bg-default); color: var(--fg-default);
+  font-size: 15px; font-family: inherit; outline: none;
+  transition: all 0.2s;
+}
+.search input:focus {
+  border-color: var(--accent-emphasis);
+  box-shadow: 0 0 0 3px rgba(31,111,235,0.3);
+  background: var(--bg-subtle);
+}
+.search svg {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--fg-subtle);
+}
+.quick-links {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; max-width: 600px; width: 100%;
+  animation: fadeIn 0.5s 0.2s both;
+}
+@media (max-width: 600px) { .quick-links { grid-template-columns: repeat(2, 1fr); } }
+.quick-link {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 16px 12px; background: var(--bg-default);
+  border: 1px solid var(--border-muted); border-radius: 8px;
+  cursor: pointer; transition: all 0.2s cubic-bezier(0.33,1,0.68,1);
+  color: var(--fg-default); font-size: 12px; position: relative;
+}
+.quick-link:hover {
+  border-color: var(--accent-emphasis); transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(1,4,9,0.4);
+}
+.quick-link:active { transform: translateY(0) scale(0.97); }
+.quick-link .ql-del {
+  position: absolute; top: 4px; right: 4px; width: 18px; height: 18px;
+  border: none; background: var(--bg-subtle); color: var(--fg-subtle);
+  border-radius: 50%; cursor: pointer; font-size: 12px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: all 0.12s;
+}
+.quick-link:hover .ql-del { opacity: 1; }
+.quick-link .ql-del:hover { background: #da3633; color: #fff; }
+.quick-link-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--bg-subtle); display: flex;
+  align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: var(--accent-fg);
+  transition: all 0.2s;
+}
+.quick-link:hover .quick-link-icon {
+  background: var(--accent-emphasis); color: white;
+}
+.quick-link-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  padding: 16px 12px; background: transparent;
+  border: 2px dashed var(--border-muted); border-radius: 8px;
+  cursor: pointer; transition: all 0.2s; color: var(--fg-subtle); font-size: 12px;
+}
+.quick-link-add:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
+.quick-link-add .plus { font-size: 24px; font-weight: 300; }
+.ql-dialog-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex;
+  align-items: center; justify-content: center; z-index: 100; animation: fadeIn 0.15s;
+}
+.ql-dialog {
+  background: var(--bg-default); border: 1px solid var(--border-default);
+  border-radius: 12px; padding: 24px; width: 360px;
+}
+.ql-dialog h3 { font-size: 16px; margin-bottom: 16px; }
+.ql-dialog input {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border-default);
+  border-radius: 6px; background: var(--bg-canvas); color: var(--fg-default);
+  font-family: inherit; font-size: 13px; outline: none; margin-bottom: 10px;
+}
+.ql-dialog input:focus { border-color: var(--accent-emphasis); }
+.ql-dialog-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.ql-dialog-btns button {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border-default);
+  background: var(--bg-subtle); color: var(--fg-default); cursor: pointer;
+  font-family: inherit; font-size: 13px;
+}
+.ql-dialog-btns .primary { background: var(--accent-emphasis); color: #fff; border-color: var(--accent-emphasis); }
+</style>
+</head>
+<body>
+<div class="logo">GitBrowser</div>
+<div class="subtitle">Fast. Private. Open.</div>
+<div class="search">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+  <input id="search" type="text" placeholder="Search the web or enter URL..." autofocus />
+</div>
+<div class="quick-links" id="quick-links"></div>
+<script>
+const DEFAULT_LINKS = [
+  { name: 'GitHub', url: 'https://github.com' },
+  { name: 'Google', url: 'https://google.com' },
+  { name: 'YouTube', url: 'https://youtube.com' },
+  { name: 'Reddit', url: 'https://reddit.com' },
+  { name: 'Stack Overflow', url: 'https://stackoverflow.com' },
+  { name: 'Wikipedia', url: 'https://wikipedia.org' },
+  { name: 'X / Twitter', url: 'https://twitter.com' },
+  { name: 'Hacker News', url: 'https://news.ycombinator.com' },
+];
+
+function getLinks() {
+  try { const s = localStorage.getItem('quick_links'); if (s) return JSON.parse(s); } catch {}
+  return DEFAULT_LINKS;
+}
+function saveLinks(links) { localStorage.setItem('quick_links', JSON.stringify(links)); }
+
+function renderLinks() {
+  const container = document.getElementById('quick-links');
+  container.innerHTML = '';
+  const links = getLinks();
+  links.forEach((l, i) => {
+    const div = document.createElement('div');
+    div.className = 'quick-link';
+    const letter = (l.name || l.url || '?')[0].toUpperCase();
+    div.innerHTML = `<div class="quick-link-icon">${esc(letter)}</div>${esc(l.name)}<button class="ql-del" title="Remove">\u00D7</button>`;
+    div.addEventListener('click', (e) => {
+      if (e.target.closest('.ql-del')) return;
+      const gb = window.gitbrowser;
+      if (gb) gb.navigate(l.url);
+      else document.title = '__gb_navigate:' + l.url;
+    });
+    div.querySelector('.ql-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const arr = getLinks(); arr.splice(i, 1); saveLinks(arr); renderLinks();
+    });
+    container.appendChild(div);
+  });
+  // Add button
+  const addBtn = document.createElement('div');
+  addBtn.className = 'quick-link-add';
+  addBtn.innerHTML = '<div class="plus">+</div>Add';
+  addBtn.onclick = showAddDialog;
+  container.appendChild(addBtn);
+}
+
+function showAddDialog() {
+  const overlay = document.createElement('div');
+  overlay.className = 'ql-dialog-overlay';
+  overlay.innerHTML = `<div class="ql-dialog">
+    <h3>Add Quick Link</h3>
+    <input id="ql-name" placeholder="Name" />
+    <input id="ql-url" placeholder="URL (https://...)" />
+    <div class="ql-dialog-btns">
+      <button id="ql-cancel">Cancel</button>
+      <button id="ql-save" class="primary">Add</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#ql-cancel').onclick = () => overlay.remove();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector('#ql-save').onclick = () => {
+    const name = overlay.querySelector('#ql-name').value.trim();
+    let url = overlay.querySelector('#ql-url').value.trim();
+    if (!name || !url) return;
+    if (!url.startsWith('http')) url = 'https://' + url;
+    const arr = getLinks(); arr.push({ name, url }); saveLinks(arr);
+    overlay.remove(); renderLinks();
+  };
+  overlay.querySelector('#ql-name').focus();
+  overlay.querySelector('#ql-url').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') overlay.querySelector('#ql-save').click();
+  });
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+renderLinks();
+
+document.getElementById('search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    const gb = window.gitbrowser;
+    if (gb) gb.navigate(e.target.value.trim());
+    else document.title = '__gb_navigate:' + e.target.value.trim();
+  }
+});
+
+// Theme
+const gb = window.gitbrowser;
+function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+if (gb) {
+  gb.onThemeChanged((d) => applyTheme(d.theme));
+  gb.getSettings().then(s => {
+    if (s && s.appearance) {
+      let t = s.appearance.theme;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  }).catch(() => {});
+}
+
+// Localization
+if (gb && gb.getLocaleData) {
+  gb.getLocaleData().then(({ data: t }) => {
+    if (!t || !t.newtab) return;
+    const n = t.newtab;
+    const sub = document.querySelector('.subtitle');
+    if (sub && n.subtitle) sub.textContent = n.subtitle;
+    const si = document.getElementById('search');
+    if (si && n.search_placeholder) si.placeholder = n.search_placeholder;
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

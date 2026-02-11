@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+:root {
+  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
+  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
+  --border-default: #30363d; --border-muted: #21262d;
+  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
+  --danger-fg: #f85149; --danger-emphasis: #da3633;
+  --success-fg: #3fb950;
+}
+html.light {
+  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
+  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
+  --border-default: #d0d7de; --border-muted: #d8dee4;
+  --accent-fg: #0969da; --accent-emphasis: #0969da;
+  --danger-fg: #cf222e; --danger-emphasis: #cf222e;
+  --success-fg: #1a7f37;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  background: var(--bg-canvas); color: var(--fg-default);
+  padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
+}
+.page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 14px; }
+.search-box {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--border-default);
+  border-radius: 8px; background: var(--bg-default); color: var(--fg-default);
+  font-family: inherit; font-size: 14px; outline: none; margin-bottom: 20px;
+  transition: border-color 0.15s;
+}
+.search-box:focus { border-color: var(--accent-emphasis); box-shadow: 0 0 0 3px rgba(31,111,235,0.2); }
+.list { display: flex; flex-direction: column; gap: 1px; }
+.item {
+  display: flex; align-items: center; padding: 12px 16px; gap: 12px;
+  background: var(--bg-default); border-radius: 6px; cursor: pointer;
+  transition: background 0.12s; border: 1px solid transparent;
+}
+.item:hover { background: var(--bg-subtle); border-color: var(--border-muted); }
+.item-icon {
+  width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent-fg); font-weight: 700; font-size: 14px; flex-shrink: 0;
+}
+.item-info { flex: 1; min-width: 0; }
+.item-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-url { font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.item-del {
+  width: 28px; height: 28px; border: none; background: none; color: var(--fg-subtle);
+  cursor: pointer; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: all 0.12s; flex-shrink: 0; font-size: 16px;
+}
+.item:hover .item-del { opacity: 1; }
+.item-del:hover { background: var(--danger-emphasis); color: #fff; }
+.empty { padding: 48px; text-align: center; color: var(--fg-muted); font-size: 14px; }
+.empty svg { margin-bottom: 12px; color: var(--fg-subtle); }
+</style>
+</head>
+<body>
+<div class="page-title">Bookmarks</div>
+<div class="page-desc">Your saved pages</div>
+<input class="search-box" id="search" placeholder="Search bookmarks..." autofocus />
+<div class="list" id="list"></div>
+
+<script>
+const gb = window.gitbrowser;
+const listEl = document.getElementById('list');
+const searchEl = document.getElementById('search');
+let debounce = null;
+
+searchEl.addEventListener('input', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => load(searchEl.value), 200);
+});
+
+async function load(query) {
+  let items;
+  try {
+    if (query) items = await gb.searchBookmarks(query);
+    else items = await gb.getBookmarks();
+  } catch { items = []; }
+  if (!Array.isArray(items)) items = [];
+  
+  if (items.length === 0) {
+    listEl.innerHTML = `<div class="empty">
+      <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+      <div>${query ? 'No bookmarks match your search' : 'No bookmarks yet. Press Ctrl+D to add one.'}</div>
+    </div>`;
+    return;
+  }
+  listEl.innerHTML = '';
+  items.forEach(bm => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    const letter = (bm.title || bm.url || '?')[0].toUpperCase();
+    div.innerHTML = `
+      <div class="item-icon">${esc(letter)}</div>
+      <div class="item-info">
+        <div class="item-title">${esc(bm.title || bm.url)}</div>
+        <div class="item-url">${esc(bm.url)}</div>
+      </div>
+      <button class="item-del" title="Remove">\u00D7</button>
+    `;
+    div.querySelector('.item-info').onclick = () => gb.openUrl(bm.url);
+    div.querySelector('.item-del').onclick = (e) => {
+      e.stopPropagation();
+      gb.deleteBookmark(bm.id);
+      div.style.opacity = '0'; div.style.transform = 'translateX(-10px)';
+      div.style.transition = 'all 0.2s';
+      setTimeout(() => { div.remove(); if (!listEl.children.length) load(''); }, 200);
+    };
+    listEl.appendChild(div);
+  });
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// Theme
+function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+if (window.gitbrowser) {
+  gb.onThemeChanged((d) => applyTheme(d.theme));
+  gb.getSettings().then(s => {
+    if (s && s.appearance) {
+      let t = s.appearance.theme;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  }).catch(() => {});
+}
+
+load('');
+
+// Localization
+if (gb && gb.getLocaleData) {
+  gb.getLocaleData().then(({ data: t }) => {
+    if (t && t.bookmarks) {
+      document.querySelector('.page-title').textContent = t.bookmarks.title || 'Bookmarks';
+      document.querySelector('.page-desc').textContent = t.bookmarks.desc || 'Your saved pages';
+      searchEl.placeholder = t.bookmarks.search_placeholder || 'Search bookmarks...';
+    }
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<div class="settings-title">Settings</div>
+<div class="settings-desc">Manage your browser preferences</div>
+
+<div class="settings-section">
+  <div class="settings-section-header">General</div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-label">Language</div><div class="setting-desc">Interface language</div></div>
+    <select id="s-language" onchange="setSetting('general.language',this.value)"><option value="en">English</option><option value="ru">Russian</option></select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-label">On Startup</div><div class="setting-desc">What to show when browser starts</div></div>
+    <select id="s-startup" onchange="setSetting('general.startup_behavior',this.value)"><option value="Restore">Restore session</option><option value="NewTab">New tab</option><option value="Homepage">Homepage</option></select>
+  </div>
+  <div class="setting-row">
+    <div class="setting-info"><div class="setting-label">Search Engine</div><div class="setting-desc">Default search provider</div></div>
+    <select id="s-search" onchange="setSetting('general.default_search_engine',this.value)"><option value="google">Google</option><option value="duckduckgo">DuckDuckGo</option><option value="bing">Bing</option></select>
+  </div>
+</div>
+
+<div class="settings-section">
+  <div class="settings-section-header">Privacy and Security</div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Block Trackers</div><div class="setting-desc">Prevent tracking scripts from loading</div></div>
+    <div class="toggle on" id="s-trackers" data-key="privacy.tracker_blocking"></div></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Block Ads</div><div class="setting-desc">Remove advertisements from pages</div></div>
+    <div class="toggle on" id="s-ads" data-key="privacy.ad_blocking"></div></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Force HTTPS</div><div class="setting-desc">Upgrade insecure connections automatically</div></div>
+    <div class="toggle on" id="s-https" data-key="privacy.https_enforcement"></div></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">DNS over HTTPS</div><div class="setting-desc">Encrypt DNS queries for privacy</div></div>
+    <div class="toggle on" id="s-doh" data-key="privacy.dns_over_https"></div></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Anti-Fingerprinting</div><div class="setting-desc">Reduce browser fingerprint surface</div></div>
+    <div class="toggle on" id="s-fingerprint" data-key="privacy.anti_fingerprinting"></div></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Clear Data on Exit</div><div class="setting-desc">Remove browsing data when closing</div></div>
+    <div class="toggle" id="s-clearonexit" data-key="privacy.clear_data_on_exit"></div></div>
+</div>
+
+<div class="settings-section">
+  <div class="settings-section-header">Appearance</div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Theme</div><div class="setting-desc">Color scheme</div></div>
+    <select id="s-theme" onchange="setSetting('appearance.theme',this.value)"><option value="Dark">Dark</option><option value="Light">Light</option><option value="System">System</option></select></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Accent Color</div></div>
+    <input type="color" id="s-accent" value="#2ea44f" onchange="setSetting('appearance.accent_color',this.value)" /></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Font Size</div></div>
+    <input type="number" id="s-fontsize" value="14" min="10" max="24" style="width:60px" onchange="setSetting('appearance.font_size',parseInt(this.value))" /></div>
+</div>
+
+<div class="settings-section">
+  <div class="settings-section-header">Performance</div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Tab Suspend Timeout</div><div class="setting-desc">Minutes before inactive tabs are suspended</div></div>
+    <input type="number" id="s-suspend" value="30" min="1" max="120" style="width:70px" onchange="setSetting('performance.tab_suspend_timeout_minutes',parseInt(this.value))" /></div>
+  <div class="setting-row"><div class="setting-info"><div class="setting-label">Lazy Load Images</div><div class="setting-desc">Defer loading off-screen images</div></div>
+    <div class="toggle on" id="s-lazyimg" data-key="performance.lazy_load_images"></div></div>
+</div>
+
+<div style="padding:16px 0">
+  <button class="btn btn-danger" onclick="if(window.__gb_ipc)__gb_ipc('reset_settings',{})">Reset All Settings to Defaults</button>
+</div>

@@ -1,0 +1,94 @@
+[package]
+name = "gitbrowser"
+version = "0.1.0"
+edition = "2021"
+description = "A privacy-focused minimal web browser with GitHub-style UI"
+license = "MIT"
+
+[features]
+default = ["gui", "network"]
+gui = ["wry", "tao"]
+network = ["adblock", "trust-dns-resolver"]
+
+[dependencies]
+wry = { version = "0.54", optional = true }
+tao = { version = "0.34", optional = true }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ring = "0.17"
+zeroize = { version = "1", features = ["derive"] }
+reqwest = { version = "0.12", features = ["rustls-tls", "stream"] }
+tokio = { version = "1", features = ["full"] }
+adblock = { version = "0.9", optional = true }
+trust-dns-resolver = { version = "0.23", optional = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+proptest = "1"
+rstest = "0.23"
+tempfile = "3"
+
+[[test]]
+name = "errors_test"
+path = "tests/unit/errors_test.rs"
+
+[[test]]
+name = "database_test"
+path = "tests/unit/database_test.rs"
+
+[[test]]
+name = "password_roundtrip_test"
+path = "tests/property/password_roundtrip_test.rs"
+
+[[test]]
+name = "crypto_service_test"
+path = "tests/unit/crypto_service_test.rs"
+
+[[test]]
+name = "settings_roundtrip_test"
+path = "tests/property/settings_roundtrip_test.rs"
+
+[[test]]
+name = "settings_engine_test"
+path = "tests/unit/settings_engine_test.rs"
+
+[[test]]
+name = "localization_test"
+path = "tests/property/localization_test.rs"
+
+[[test]]
+name = "localization_engine_test"
+path = "tests/unit/localization_engine_test.rs"
+
+[[test]]
+name = "bookmark_operations_test"
+path = "tests/property/bookmark_operations_test.rs"
+
+[[test]]
+name = "history_operations_test"
+path = "tests/property/history_operations_test.rs"
+
+[[test]]
+name = "bookmark_manager_test"
+path = "tests/unit/bookmark_manager_test.rs"
+
+[[test]]
+name = "history_manager_test"
+path = "tests/unit/history_manager_test.rs"
+
+[[test]]
+name = "tab_operations_test"
+path = "tests/property/tab_operations_test.rs"
+
+[[test]]
+name = "session_roundtrip_test"
+path = "tests/property/session_roundtrip_test.rs"
+
+[[test]]
+name = "tab_manager_test"
+path = "tests/unit/tab_manager_test.rs"
+
+[[bin]]
+name = "gitbrowser-rpc"
+path = "src/rpc_server.rs"

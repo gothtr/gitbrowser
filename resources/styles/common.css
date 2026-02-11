@@ -1,0 +1,98 @@
+/* GitBrowser Common Styles — shared across dark and light themes */
+/* Requirements: 17.1, 17.2, 17.3, 17.5 */
+
+/* Sans-serif system font stack (Req 17.2) */
+* {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+/* Straight corners on all interactive elements (Req 17.1) */
+button,
+entry,
+switch,
+progressbar > trough,
+progressbar > trough > progress,
+scrollbar slider,
+.linked > button {
+    border-radius: 0;
+}
+
+/* Transition durations for interactive elements (Req 17.3) */
+button {
+    transition: background-color 200ms ease-in-out,
+                border-color 200ms ease-in-out,
+                color 100ms ease-in-out;
+}
+
+entry {
+    transition: border-color 200ms ease-in-out,
+                box-shadow 200ms ease-in-out;
+}
+
+switch {
+    transition: background-color 300ms ease-in-out;
+}
+
+notebook > header > tabs > tab {
+    transition: color 100ms ease-in-out,
+                border-color 100ms ease-in-out,
+                background-color 100ms ease-in-out;
+}
+
+menuitem {
+    transition: background-color 100ms ease-in-out;
+}
+
+scrollbar slider {
+    transition: background-color 200ms ease-in-out;
+}
+
+/* Responsive layout: minimum sizing and flexible containers (Req 17.5) */
+window {
+    min-width: 800px;
+    min-height: 600px;
+}
+
+.sidebar,
+.navigation-sidebar {
+    min-width: 240px;
+}
+
+headerbar {
+    min-height: 36px;
+}
+
+/* Tab bar compact sizing */
+notebook > header > tabs > tab {
+    min-width: 80px;
+    max-width: 240px;
+    padding: 4px 12px;
+}
+
+/* Address bar fills available width */
+.address-bar {
+    min-height: 32px;
+}
+
+/* Consistent padding for panels */
+.panel-content {
+    padding: 8px 12px;
+}
+
+/* Consistent spacing for toolbar buttons */
+.toolbar button {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px;
+}
+
+/* Icon sizing */
+.icon-16 {
+    min-width: 16px;
+    min-height: 16px;
+}
+
+.icon-24 {
+    min-width: 24px;
+    min-height: 24px;
+}

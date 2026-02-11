@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+:root {
+  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
+  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
+  --border-default: #30363d; --border-muted: #21262d;
+  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
+  --danger-fg: #f85149; --danger-emphasis: #da3633;
+}
+html.light {
+  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
+  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
+  --border-default: #d0d7de; --border-muted: #d8dee4;
+  --accent-fg: #0969da; --accent-emphasis: #0969da;
+  --danger-fg: #cf222e; --danger-emphasis: #cf222e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  background: var(--bg-canvas); color: var(--fg-default);
+  padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
+}
+.page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 14px; }
+.top-bar { display: flex; gap: 8px; margin-bottom: 20px; }
+.search-box {
+  flex: 1; padding: 10px 14px; border: 1px solid var(--border-default);
+  border-radius: 8px; background: var(--bg-default); color: var(--fg-default);
+  font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.15s;
+}
+.search-box:focus { border-color: var(--accent-emphasis); box-shadow: 0 0 0 3px rgba(31,111,235,0.2); }
+.btn-clear {
+  padding: 10px 16px; border: 1px solid var(--danger-fg); border-radius: 8px;
+  background: transparent; color: var(--danger-fg); cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 500; transition: all 0.12s; white-space: nowrap;
+}
+.btn-clear:hover { background: var(--danger-emphasis); color: #fff; border-color: var(--danger-emphasis); }
+.list { display: flex; flex-direction: column; gap: 1px; }
+.item {
+  display: flex; align-items: center; padding: 10px 16px; gap: 12px;
+  background: var(--bg-default); border-radius: 6px; cursor: pointer;
+  transition: background 0.12s; border: 1px solid transparent;
+}
+.item:hover { background: var(--bg-subtle); border-color: var(--border-muted); }
+.item-info { flex: 1; min-width: 0; }
+.item-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-url { font-size: 11px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.item-time { font-size: 11px; color: var(--fg-subtle); white-space: nowrap; flex-shrink: 0; }
+.item-del {
+  width: 24px; height: 24px; border: none; background: none; color: var(--fg-subtle);
+  cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: all 0.12s; flex-shrink: 0; font-size: 14px;
+}
+.item:hover .item-del { opacity: 1; }
+.item-del:hover { background: var(--danger-emphasis); color: #fff; }
+.empty { padding: 48px; text-align: center; color: var(--fg-muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="page-title">History</div>
+<div class="page-desc">Your browsing history</div>
+<div class="top-bar">
+  <input class="search-box" id="search" placeholder="Search history..." autofocus />
+  <button class="btn-clear" id="btn-clear">Clear All</button>
+</div>
+<div class="list" id="list"></div>
+
+<script>
+const gb = window.gitbrowser;
+const listEl = document.getElementById('list');
+const searchEl = document.getElementById('search');
+let debounce = null;
+
+searchEl.addEventListener('input', () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(() => load(searchEl.value), 200);
+});
+
+document.getElementById('btn-clear').onclick = () => {
+  gb.clearHistory();
+  listEl.innerHTML = '<div class="empty">History cleared</div>';
+};
+
+async function load(query) {
+  let items;
+  try {
+    if (query) items = await gb.searchHistory(query);
+    else items = await gb.getHistory();
+  } catch { items = []; }
+  if (!Array.isArray(items)) items = [];
+  
+  if (items.length === 0) {
+    listEl.innerHTML = '<div class="empty">No history</div>';
+    return;
+  }
+  listEl.innerHTML = '';
+  items.slice(0, 200).forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    const time = h.visit_time ? formatTime(h.visit_time) : '';
+    div.innerHTML = `
+      <div class="item-info">
+        <div class="item-title">${esc(h.title || h.url)}</div>
+        <div class="item-url">${esc(h.url)}</div>
+      </div>
+      <div class="item-time">${esc(time)}</div>
+      <button class="item-del" title="Delete">\u00D7</button>
+    `;
+    div.querySelector('.item-info').onclick = () => gb.openUrl(h.url);
+    div.querySelector('.item-del').onclick = (e) => {
+      e.stopPropagation();
+      gb.deleteHistoryEntry(h.id);
+      div.style.opacity = '0'; div.style.transition = 'all 0.15s';
+      setTimeout(() => div.remove(), 150);
+    };
+    listEl.appendChild(div);
+  });
+}
+
+function formatTime(t) {
+  try {
+    const d = new Date(t);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return d.toLocaleDateString([], {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  } catch { return t; }
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// Theme
+function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+if (window.gitbrowser) {
+  gb.onThemeChanged((d) => applyTheme(d.theme));
+  gb.getSettings().then(s => {
+    if (s && s.appearance) {
+      let t = s.appearance.theme;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  }).catch(() => {});
+}
+
+load('');
+
+// Localization
+let _lt = {};
+if (gb && gb.getLocaleData) {
+  gb.getLocaleData().then(({ data: t }) => {
+    if (t && t.history) {
+      _lt = t.history;
+      document.querySelector('.page-title').textContent = t.history.title || 'History';
+      document.querySelector('.page-desc').textContent = t.history.desc || 'Your browsing history';
+      searchEl.placeholder = t.history.search_placeholder || 'Search history...';
+      document.getElementById('btn-clear').textContent = t.history.clear_all || 'Clear All';
+    }
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

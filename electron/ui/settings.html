@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+:root {
+  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
+  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
+  --border-default: #30363d; --border-muted: #21262d;
+  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
+  --success-emphasis: #238636; --success-fg: #3fb950;
+  --danger-fg: #f85149; --danger-emphasis: #da3633;
+}
+html.light {
+  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
+  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
+  --border-default: #d0d7de; --border-muted: #d8dee4;
+  --accent-fg: #0969da; --accent-emphasis: #0969da;
+  --success-emphasis: #1a7f37; --success-fg: #1a7f37;
+  --danger-fg: #cf222e; --danger-emphasis: #cf222e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  background: var(--bg-canvas); color: var(--fg-default);
+  padding: 32px 48px; max-width: 800px; overflow-y: auto; height: 100vh;
+}
+.title { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+.desc { color: var(--fg-muted); margin-bottom: 32px; }
+.section {
+  margin-bottom: 24px; border: 1px solid var(--border-default);
+  border-radius: 8px; overflow: hidden;
+  animation: sectionIn 0.3s cubic-bezier(0.33,1,0.68,1) both;
+}
+.section:nth-child(3) { animation-delay: 0.05s; }
+.section:nth-child(4) { animation-delay: 0.1s; }
+.section:nth-child(5) { animation-delay: 0.15s; }
+@keyframes sectionIn { from { opacity:0; transform:translateY(8px); } }
+.section-header {
+  padding: 12px 16px; background: var(--bg-default);
+  font-weight: 600; font-size: 14px;
+  border-bottom: 1px solid var(--border-default);
+}
+.row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--border-muted);
+  transition: background 0.12s;
+}
+.row:last-child { border-bottom: none; }
+.row:hover { background: var(--bg-default); }
+.row-info { flex: 1; }
+.row-label { font-size: 14px; font-weight: 500; }
+.row-desc { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+.toggle {
+  width: 40px; height: 22px; border-radius: 11px;
+  background: var(--bg-subtle); border: 1px solid var(--border-default);
+  cursor: pointer; position: relative; transition: all 0.2s; flex-shrink: 0;
+}
+.toggle.on { background: var(--success-emphasis); border-color: var(--success-emphasis); }
+.toggle::after {
+  content: ''; position: absolute; width: 16px; height: 16px;
+  border-radius: 50%; background: white; top: 2px; left: 2px;
+  transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle.on::after { left: 20px; }
+select, input[type="number"] {
+  background: var(--bg-canvas); border: 1px solid var(--border-default);
+  color: var(--fg-default); padding: 6px 10px; border-radius: 6px;
+  font-family: inherit; font-size: 13px; cursor: pointer;
+  transition: border-color 0.15s;
+}
+select:focus, input:focus { border-color: var(--accent-emphasis); outline: none; }
+.btn-danger {
+  padding: 8px 20px; border: 1px solid var(--danger-fg);
+  border-radius: 6px; background: transparent;
+  color: var(--danger-fg); cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  transition: all 0.15s;
+}
+.btn-danger:hover { background: var(--danger-emphasis); color: white; border-color: var(--danger-emphasis); }
+.saved-indicator {
+  display: inline-block; color: var(--success-fg); font-size: 12px;
+  margin-left: 8px; opacity: 0; transition: opacity 0.2s;
+}
+.saved-indicator.show { opacity: 1; }
+.version { color: var(--fg-subtle); font-size: 12px; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="title">Settings <span class="saved-indicator" id="saved">Saved</span></div>
+<div class="desc">Manage your browser preferences</div>
+
+<div class="section">
+  <div class="section-header">General</div>
+  <div class="row"><div class="row-info"><div class="row-label">Language</div><div class="row-desc">Interface language</div></div>
+    <select id="s-language"><option value="en">English</option><option value="ru">Russian</option></select></div>
+  <div class="row"><div class="row-info"><div class="row-label">On Startup</div><div class="row-desc">What to show when browser starts</div></div>
+    <select id="s-startup"><option value="Restore">Restore session</option><option value="NewTab">New tab</option></select></div>
+  <div class="row"><div class="row-info"><div class="row-label">Search Engine</div><div class="row-desc">Default search provider</div></div>
+    <select id="s-search-engine"><option value="google">Google</option><option value="duckduckgo">DuckDuckGo</option><option value="bing">Bing</option></select></div>
+</div>
+
+<div class="section">
+  <div class="section-header">Privacy and Security</div>
+  <div class="row"><div class="row-info"><div class="row-label">Block Trackers</div><div class="row-desc">Prevent tracking scripts</div></div>
+    <div class="toggle on" id="s-trackers" data-key="privacy.tracker_blocking"></div></div>
+  <div class="row"><div class="row-info"><div class="row-label">Block Ads</div><div class="row-desc">Remove advertisements</div></div>
+    <div class="toggle on" id="s-ads" data-key="privacy.ad_blocking"></div></div>
+  <div class="row"><div class="row-info"><div class="row-label">Force HTTPS</div><div class="row-desc">Upgrade insecure connections</div></div>
+    <div class="toggle on" id="s-https" data-key="privacy.https_enforcement"></div></div>
+  <div class="row"><div class="row-info"><div class="row-label">DNS over HTTPS</div><div class="row-desc">Encrypt DNS queries</div></div>
+    <div class="toggle on" id="s-doh" data-key="privacy.dns_over_https"></div></div>
+  <div class="row"><div class="row-info"><div class="row-label">Anti-Fingerprinting</div><div class="row-desc">Protect against browser fingerprinting</div></div>
+    <div class="toggle on" id="s-fingerprint" data-key="privacy.anti_fingerprinting"></div></div>
+  <div class="row"><div class="row-info"><div class="row-label">Clear Data on Exit</div><div class="row-desc">Remove browsing data when closing</div></div>
+    <div class="toggle" id="s-clear-exit" data-key="privacy.clear_data_on_exit"></div></div>
+</div>
+
+<div class="section">
+  <div class="section-header">Appearance</div>
+  <div class="row"><div class="row-info"><div class="row-label">Theme</div></div>
+    <select id="s-theme"><option value="Dark">Dark</option><option value="Light">Light</option><option value="System">System</option></select></div>
+  <div class="row"><div class="row-info"><div class="row-label">Font Size</div></div>
+    <input type="number" id="s-fontsize" value="14" min="10" max="24" style="width:60px" /></div>
+</div>
+
+<div style="padding:16px 0; display:flex; gap:12px; align-items:center;">
+  <button class="btn-danger" id="btn-reset">Reset All Settings to Defaults</button>
+</div>
+<div class="version" id="version-info">GitBrowser v0.1.0</div>
+
+<script>
+const gb = window.gitbrowser;
+const savedEl = document.getElementById('saved');
+
+function showSaved() {
+  savedEl.classList.add('show');
+  setTimeout(() => savedEl.classList.remove('show'), 1500);
+}
+
+// Load settings from Rust backend
+async function loadSettings() {
+  if (!gb) return;
+  try {
+    const s = await gb.getSettings();
+    if (!s) return;
+    // General
+    if (s.general) {
+      setVal('s-language', s.general.language);
+      setVal('s-startup', s.general.startup_behavior);
+      setVal('s-search-engine', s.general.default_search_engine);
+    }
+    // Privacy
+    if (s.privacy) {
+      setToggle('s-trackers', s.privacy.tracker_blocking);
+      setToggle('s-ads', s.privacy.ad_blocking);
+      setToggle('s-https', s.privacy.https_enforcement);
+      setToggle('s-doh', s.privacy.dns_over_https);
+      setToggle('s-fingerprint', s.privacy.anti_fingerprinting);
+      setToggle('s-clear-exit', s.privacy.clear_data_on_exit);
+    }
+    // Appearance
+    if (s.appearance) {
+      setVal('s-theme', s.appearance.theme);
+      document.getElementById('s-fontsize').value = s.appearance.font_size || 14;
+      // Apply theme
+      let t = s.appearance.theme;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  } catch (e) { console.error('Failed to load settings:', e); }
+}
+
+function setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el && val !== undefined) el.value = val;
+}
+
+function setToggle(id, val) {
+  const el = document.getElementById(id);
+  if (el) { if (val) el.classList.add('on'); else el.classList.remove('on'); }
+}
+
+// Save a setting
+async function saveSetting(key, value) {
+  if (!gb) return;
+  try {
+    const result = await gb.setSetting(key, value);
+    if (result && result.error) {
+      showToast('Failed to save setting', true);
+      return;
+    }
+    showSaved();
+    // If theme changed, apply immediately
+    if (key === 'appearance.theme') {
+      let t = value;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  } catch (e) {
+    console.error('Failed to save setting:', e);
+    showToast('Failed to save setting', true);
+  }
+}
+
+function showToast(msg, isError) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:16px;left:50%;transform:translateX(-50%);padding:8px 20px;
+    background:${isError ? 'var(--danger-emphasis)' : 'var(--success-emphasis)'};color:#fff;
+    border-radius:8px;font-size:13px;z-index:100;animation:fadeIn 0.2s`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2000);
+}
+
+// Theme
+function applyTheme(theme) {
+  document.documentElement.classList.toggle('light', theme === 'Light');
+}
+if (gb && gb.onThemeChanged) gb.onThemeChanged((data) => applyTheme(data.theme));
+
+// Wire up selects
+document.getElementById('s-language').onchange = function() { saveSetting('general.language', this.value); };
+document.getElementById('s-startup').onchange = function() { saveSetting('general.startup_behavior', this.value); };
+document.getElementById('s-search-engine').onchange = function() { saveSetting('general.default_search_engine', this.value); };
+document.getElementById('s-theme').onchange = function() { saveSetting('appearance.theme', this.value); };
+document.getElementById('s-fontsize').onchange = function() { saveSetting('appearance.font_size', parseInt(this.value)); };
+
+// Wire up toggles
+document.querySelectorAll('.toggle').forEach(t => {
+  t.onclick = function() {
+    this.classList.toggle('on');
+    const key = this.dataset.key;
+    if (key) saveSetting(key, this.classList.contains('on'));
+  };
+});
+
+// Reset
+document.getElementById('btn-reset').onclick = async () => {
+  if (!gb) return;
+  // Reset by setting all defaults
+  await gb.setSetting('general.language', 'en');
+  await gb.setSetting('general.startup_behavior', 'Restore');
+  await gb.setSetting('general.default_search_engine', 'google');
+  await gb.setSetting('privacy.tracker_blocking', true);
+  await gb.setSetting('privacy.ad_blocking', true);
+  await gb.setSetting('privacy.https_enforcement', true);
+  await gb.setSetting('privacy.dns_over_https', true);
+  await gb.setSetting('privacy.anti_fingerprinting', true);
+  await gb.setSetting('privacy.clear_data_on_exit', false);
+  await gb.setSetting('appearance.theme', 'System');
+  await gb.setSetting('appearance.font_size', 14);
+  loadSettings();
+  showSaved();
+};
+
+loadSettings();
+
+// Localization
+async function loadLocale() {
+  if (!gb || !gb.getLocaleData) return;
+  try {
+    const { data: t } = await gb.getLocaleData();
+    if (!t || !t.settings) return;
+    const s = t.settings;
+    document.querySelector('.title').childNodes[0].textContent = (s.title || 'Settings') + ' ';
+    document.querySelector('.desc').textContent = s.desc || 'Manage your browser preferences';
+    document.getElementById('saved').textContent = s.saved || 'Saved';
+    const headers = document.querySelectorAll('.section-header');
+    if (headers[0] && s.general) headers[0].textContent = s.general;
+    if (headers[1] && s.privacy) headers[1].textContent = s.privacy;
+    if (headers[2] && s.appearance) headers[2].textContent = s.appearance;
+    // Row labels
+    const rows = document.querySelectorAll('.row');
+    const labels = [
+      [s.language_label, s.language_desc],
+      [s.startup_behavior, s.startup_desc],
+      [s.search_engine, s.search_engine_desc],
+      [s.tracker_blocking, s.tracker_desc],
+      [s.ad_blocking, s.ad_desc],
+      [s.https_enforcement, s.https_desc],
+      [s.dns_over_https, s.dns_desc],
+      [s.anti_fingerprinting, s.fingerprint_desc],
+      [s.clear_data_on_exit, s.clear_exit_desc],
+      [s.theme, null],
+      [s.font_size, null],
+    ];
+    rows.forEach((row, i) => {
+      if (labels[i]) {
+        const lbl = row.querySelector('.row-label');
+        const desc = row.querySelector('.row-desc');
+        if (lbl && labels[i][0]) lbl.textContent = labels[i][0];
+        if (desc && labels[i][1]) desc.textContent = labels[i][1];
+      }
+    });
+    if (s.reset) document.getElementById('btn-reset').textContent = s.reset;
+  } catch {}
+}
+loadLocale();
+</script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+/* GitBrowser Dark Theme — GitHub dark palette */
+/* Requirements: 17.1, 17.2, 17.3, 17.5 */
+
+window {
+    background-color: #0d1117;
+    color: #c9d1d9;
+}
+
+headerbar {
+    background-color: #161b22;
+    border-bottom: 1px solid #30363d;
+    color: #c9d1d9;
+}
+
+button {
+    background-color: #21262d;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 0;
+    padding: 4px 12px;
+    transition: background-color 200ms ease-in-out;
+}
+
+button:hover {
+    background-color: #1f242b;
+}
+
+button:active {
+    background-color: #30363d;
+}
+
+button:disabled {
+    opacity: 0.5;
+}
+
+button.suggested-action {
+    background-color: #2ea44f;
+    color: #ffffff;
+    border-color: #2ea44f;
+}
+
+button.suggested-action:hover {
+    background-color: #3fb950;
+}
+
+button.destructive-action {
+    background-color: #da3633;
+    color: #ffffff;
+    border-color: #da3633;
+}
+
+entry {
+    background-color: #0d1117;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 0;
+    padding: 4px 8px;
+    transition: border-color 200ms ease-in-out;
+}
+
+entry:focus {
+    border-color: #58a6ff;
+}
+
+label {
+    color: #c9d1d9;
+}
+
+label.dim-label {
+    color: #8b949e;
+}
+
+.sidebar,
+.navigation-sidebar {
+    background-color: #161b22;
+    border-right: 1px solid #30363d;
+}
+
+scrollbar slider {
+    background-color: #484f58;
+    border-radius: 0;
+}
+
+scrollbar slider:hover {
+    background-color: #6e7681;
+}
+
+notebook > header {
+    background-color: #161b22;
+    border-bottom: 1px solid #30363d;
+}
+
+notebook > header > tabs > tab {
+    background-color: transparent;
+    color: #8b949e;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 6px 12px;
+    transition: color 100ms ease-in-out, border-color 100ms ease-in-out;
+}
+
+notebook > header > tabs > tab:checked {
+    color: #c9d1d9;
+    border-bottom-color: #58a6ff;
+}
+
+notebook > header > tabs > tab:hover {
+    color: #c9d1d9;
+}
+
+separator {
+    background-color: #30363d;
+}
+
+popover,
+popover > contents {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+}
+
+menuitem {
+    padding: 4px 8px;
+    transition: background-color 100ms ease-in-out;
+}
+
+menuitem:hover {
+    background-color: #1f242b;
+}
+
+tooltip {
+    background-color: #21262d;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+}
+
+progressbar > trough {
+    background-color: #21262d;
+    border-radius: 0;
+}
+
+progressbar > trough > progress {
+    background-color: #2ea44f;
+    border-radius: 0;
+}
+
+switch {
+    background-color: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 0;
+    transition: background-color 200ms ease-in-out;
+}
+
+switch:checked {
+    background-color: #2ea44f;
+}
+
+.linked > button {
+    border-radius: 0;
+}
+
+infobar {
+    background-color: #161b22;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+}
+
+textview text {
+    background-color: #0d1117;
+    color: #c9d1d9;
+}
+
+link {
+    color: #58a6ff;
+}

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+:root {
+  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
+  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
+  --border-default: #30363d; --border-muted: #21262d;
+  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
+  --success-fg: #3fb950; --danger-fg: #f85149;
+}
+html.light {
+  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
+  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
+  --border-default: #d0d7de; --border-muted: #d8dee4;
+  --accent-fg: #0969da; --accent-emphasis: #0969da;
+  --success-fg: #1a7f37; --danger-fg: #cf222e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  background: var(--bg-canvas); color: var(--fg-default);
+  height: 100vh; overflow-y: auto;
+}
+.center { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+.container { text-align: center; max-width: 480px; padding: 32px; }
+.gh-icon { margin-bottom: 20px; color: var(--fg-default); }
+.title { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.desc { color: var(--fg-muted); font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+.login-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border: 1px solid var(--border-default); border-radius: 8px;
+  background: var(--bg-default); color: var(--fg-default); cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 500; transition: all 0.15s;
+}
+.login-btn:hover { background: var(--bg-subtle); border-color: var(--accent-emphasis); color: var(--accent-fg); }
+.input-row { margin-bottom: 16px; }
+.input-row input {
+  width: 100%; max-width: 320px; padding: 10px 14px; border: 1px solid var(--border-default);
+  border-radius: 8px; background: var(--bg-default); color: var(--fg-default);
+  font-family: inherit; font-size: 13px; outline: none; text-align: center;
+}
+.input-row input:focus { border-color: var(--accent-emphasis); }
+.input-row label { display: block; font-size: 12px; color: var(--fg-muted); margin-bottom: 6px; }
+/* Device flow */
+.device-code { font-size: 32px; font-weight: 700; letter-spacing: 4px; color: var(--accent-fg); margin: 16px 0; }
+.device-link { color: var(--accent-fg); text-decoration: underline; cursor: pointer; font-size: 14px; }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--fg-subtle); border-top-color: var(--accent-fg); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.status { color: var(--fg-muted); font-size: 13px; margin-top: 12px; }
+/* Profile */
+.profile-view { padding: 32px; max-width: 600px; margin: 0 auto; }
+.profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.avatar { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--border-default); }
+.profile-name { font-size: 20px; font-weight: 600; }
+.profile-login { font-size: 14px; color: var(--fg-muted); }
+.nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.nav-item {
+  padding: 14px; background: var(--bg-default); border: 1px solid var(--border-muted);
+  border-radius: 8px; cursor: pointer; transition: all 0.12s; text-align: center; font-size: 13px; color: var(--fg-muted);
+}
+.nav-item:hover { border-color: var(--accent-emphasis); color: var(--accent-fg); background: var(--bg-subtle); }
+.nav-item strong { display: block; color: var(--fg-default); margin-bottom: 2px; }
+.repo-list { margin-top: 16px; }
+.repo-list h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.repo {
+  display: flex; align-items: center; padding: 10px 12px; background: var(--bg-default);
+  border: 1px solid var(--border-muted); border-radius: 6px; margin-bottom: 4px;
+  cursor: pointer; transition: all 0.12s; gap: 8px;
+}
+.repo:hover { border-color: var(--accent-fg); background: var(--bg-subtle); }
+.repo-name { font-size: 13px; font-weight: 500; color: var(--accent-fg); flex: 1; }
+.repo-desc { font-size: 11px; color: var(--fg-muted); }
+.repo-stars { font-size: 11px; color: var(--fg-subtle); white-space: nowrap; }
+.logout-btn {
+  margin-top: 16px; padding: 8px 16px; border: 1px solid var(--border-default);
+  border-radius: 6px; background: none; color: var(--fg-muted); cursor: pointer;
+  font-family: inherit; font-size: 12px; transition: all 0.12s;
+}
+.logout-btn:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
+.features { margin-top: 24px; text-align: left; }
+.feature { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-muted); }
+.feature:last-child { border-bottom: none; }
+.feature-icon { color: var(--success-fg); flex-shrink: 0; margin-top: 2px; }
+.feature-text { font-size: 13px; color: var(--fg-muted); }
+.feature-text strong { color: var(--fg-default); }
+</style>
+</head>
+<body>
+
+<!-- Login View -->
+<div class="center" id="login-view">
+<div class="container">
+  <div class="gh-icon"><svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg></div>
+  <div class="title">GitHub Integration</div>
+  <div class="desc">Connect via OAuth Device Flow — secure, no password needed.</div>
+  <div class="input-row">
+    <label>GitHub OAuth App Client ID</label>
+    <input id="client-id" type="text" placeholder="Ov23li..." />
+  </div>
+  <button class="login-btn" id="btn-login">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+    Sign in with GitHub
+  </button>
+  <div class="features">
+    <div class="feature"><div class="feature-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg></div><div class="feature-text"><strong>Quick access</strong> to repos, PRs, issues, notifications</div></div>
+    <div class="feature"><div class="feature-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg></div><div class="feature-text"><strong>Secure OAuth</strong> — no tokens stored in browser</div></div>
+    <div class="feature"><div class="feature-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg></div><div class="feature-text"><strong>Notification badges</strong> in toolbar</div></div>
+  </div>
+</div>
+</div>
+
+<!-- Device Flow View -->
+<div class="center" id="device-view" style="display:none">
+<div class="container">
+  <div class="title">Authorize GitBrowser</div>
+  <div class="desc">Go to the link below and enter this code:</div>
+  <div class="device-code" id="user-code"></div>
+  <div><a class="device-link" id="verify-link" target="_blank"></a></div>
+  <div class="status" id="poll-status"><span class="spinner"></span>Waiting for authorization...</div>
+</div>
+</div>
+
+<!-- Profile View -->
+<div id="profile-view" style="display:none">
+<div class="profile-view">
+  <div class="profile-header">
+    <img class="avatar" id="avatar" src="" alt="" />
+    <div><div class="profile-name" id="profile-name"></div><div class="profile-login" id="profile-login"></div></div>
+  </div>
+  <div class="nav-grid">
+    <div class="nav-item" id="nav-repos"><strong>Repositories</strong>Your repos</div>
+    <div class="nav-item" id="nav-notif"><strong>Notifications</strong>Updates</div>
+    <div class="nav-item" id="nav-prs"><strong>Pull Requests</strong>Open PRs</div>
+    <div class="nav-item" id="nav-gists"><strong>Gists</strong>Code snippets</div>
+  </div>
+  <div class="repo-list" id="repo-list"></div>
+  <button class="logout-btn" id="btn-logout">Sign out</button>
+</div>
+</div>
+
+<script>
+const gb = window.gitbrowser;
+let ghToken = localStorage.getItem('gh_token');
+let ghClientId = localStorage.getItem('gh_client_id') || '';
+
+if (ghToken) loadProfile(ghToken);
+
+document.getElementById('client-id').value = ghClientId;
+
+document.getElementById('btn-login').onclick = async () => {
+  const clientId = document.getElementById('client-id').value.trim();
+  if (!clientId) { document.getElementById('client-id').focus(); return; }
+  localStorage.setItem('gh_client_id', clientId);
+
+  // Start Device Flow
+  const result = await gb.githubDeviceLogin({ clientId });
+  if (result.error) {
+    document.querySelector('.desc').textContent = 'Error: ' + result.error;
+    document.querySelector('.desc').style.color = 'var(--danger-fg, #f85149)';
+    return;
+  }
+
+  // Show device code
+  document.getElementById('login-view').style.display = 'none';
+  document.getElementById('device-view').style.display = '';
+  document.getElementById('user-code').textContent = result.userCode;
+  const link = document.getElementById('verify-link');
+  link.textContent = result.verificationUri;
+  link.href = result.verificationUri;
+  link.onclick = (e) => { e.preventDefault(); gb.openUrlNewTab(result.verificationUri); };
+
+  // Poll for token
+  const interval = (result.interval || 5) * 1000;
+  const deadline = Date.now() + (result.expiresIn || 900) * 1000;
+  const pollTimer = setInterval(async () => {
+    if (Date.now() > deadline) {
+      clearInterval(pollTimer);
+      document.getElementById('poll-status').textContent = 'Code expired. Please try again.';
+      setTimeout(() => { document.getElementById('device-view').style.display = 'none'; document.getElementById('login-view').style.display = ''; }, 2000);
+      return;
+    }
+    try {
+      const poll = await gb.githubDevicePoll({ clientId, deviceCode: result.deviceCode });
+      if (poll.status === 'ok') {
+        clearInterval(pollTimer);
+        ghToken = poll.token;
+        localStorage.setItem('gh_token', ghToken);
+        document.getElementById('poll-status').innerHTML = '<span style="color:var(--success-fg)">Authorized! Loading profile...</span>';
+        document.getElementById('device-view').style.display = 'none';
+        loadProfile(ghToken);
+      } else if (poll.status === 'expired' || poll.status === 'error') {
+        clearInterval(pollTimer);
+        document.getElementById('poll-status').textContent = 'Authorization failed: ' + (poll.error || 'Try again.');
+        setTimeout(() => { document.getElementById('device-view').style.display = 'none'; document.getElementById('login-view').style.display = ''; }, 3000);
+      }
+      // 'pending' and 'slow_down' — just keep polling
+    } catch (e) {
+      document.getElementById('poll-status').textContent = 'Polling error: ' + e.message;
+    }
+  }, interval);
+};
+
+document.getElementById('btn-logout').onclick = () => {
+  localStorage.removeItem('gh_token');
+  ghToken = null;
+  document.getElementById('profile-view').style.display = 'none';
+  document.getElementById('login-view').style.display = '';
+};
+
+document.getElementById('nav-repos').onclick = () => gb.openUrlNewTab('https://github.com');
+document.getElementById('nav-notif').onclick = () => gb.openUrlNewTab('https://github.com/notifications');
+document.getElementById('nav-prs').onclick = () => gb.openUrlNewTab('https://github.com/pulls');
+document.getElementById('nav-gists').onclick = () => gb.openUrlNewTab('https://gist.github.com');
+
+async function loadProfile(token) {
+  const user = await gb.githubApi({ endpoint: '/user', token });
+  if (user.error) { localStorage.removeItem('gh_token'); return; }
+
+  document.getElementById('login-view').style.display = 'none';
+  document.getElementById('profile-view').style.display = '';
+  document.getElementById('avatar').src = user.avatar_url;
+  document.getElementById('profile-name').textContent = user.name || user.login;
+  document.getElementById('profile-login').textContent = '@' + user.login;
+
+  // Load repos
+  const repos = await gb.githubApi({ endpoint: '/user/repos?sort=updated&per_page=10', token });
+  const listEl = document.getElementById('repo-list');
+  if (Array.isArray(repos) && repos.length > 0) {
+    listEl.innerHTML = '<h3>Recent Repositories</h3>';
+    repos.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'repo';
+      div.innerHTML = `<div style="flex:1;min-width:0"><div class="repo-name">${esc(r.full_name)}</div>${r.description ? '<div class="repo-desc">' + esc(r.description) + '</div>' : ''}</div><div class="repo-stars">\u2605 ${r.stargazers_count || 0}</div>`;
+      div.onclick = () => gb.openUrlNewTab(r.html_url);
+      listEl.appendChild(div);
+    });
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// Theme
+function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+if (gb) {
+  gb.onThemeChanged((d) => applyTheme(d.theme));
+  gb.getSettings().then(s => {
+    if (s && s.appearance) {
+      let t = s.appearance.theme;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  }).catch(() => {});
+}
+
+// Localization
+if (gb && gb.getLocaleData) {
+  gb.getLocaleData().then(({ data: t }) => {
+    if (!t || !t.github) return;
+    const g = t.github;
+    document.querySelector('#login-view .title').textContent = g.title || 'GitHub Integration';
+    document.querySelector('#login-view .desc').textContent = g.desc || 'Connect via OAuth Device Flow';
+    document.querySelector('#login-view label').textContent = g.client_id_label || 'GitHub OAuth App Client ID';
+    const loginBtn = document.getElementById('btn-login');
+    loginBtn.childNodes[loginBtn.childNodes.length - 1].textContent = ' ' + (g.login || 'Sign in with GitHub');
+    document.querySelector('#device-view .title').textContent = g.authorize_title || 'Authorize GitBrowser';
+    document.querySelector('#device-view .desc').textContent = g.authorize_desc || 'Go to the link below and enter this code:';
+    document.getElementById('btn-logout').textContent = g.logout || 'Sign out';
+    const navItems = document.querySelectorAll('.nav-item');
+    if (navItems[0]) navItems[0].innerHTML = '<strong>' + (g.repositories || 'Repositories') + '</strong>' + (g.repos_desc || 'Your repos');
+    if (navItems[1]) navItems[1].innerHTML = '<strong>' + (g.notifications || 'Notifications') + '</strong>' + (g.notif_desc || 'Updates');
+    if (navItems[2]) navItems[2].innerHTML = '<strong>' + (g.pull_requests || 'Pull Requests') + '</strong>' + (g.prs_desc || 'Open PRs');
+    if (navItems[3]) navItems[3].innerHTML = '<strong>' + (g.gists || 'Gists') + '</strong>' + (g.gists_desc || 'Code snippets');
+    const features = document.querySelectorAll('.feature-text');
+    if (features[0] && g.feature_access) features[0].innerHTML = '<strong>' + g.feature_access.split(' ')[0] + ' ' + g.feature_access.split(' ')[1] + '</strong> ' + g.feature_access.split(' ').slice(2).join(' ');
+    if (features[1] && g.feature_secure) features[1].innerHTML = '<strong>' + g.feature_secure.split(' \u2014 ')[0] + '</strong> \u2014 ' + (g.feature_secure.split(' \u2014 ')[1] || '');
+    if (features[2] && g.feature_badges) features[2].innerHTML = '<strong>' + g.feature_badges.split(' ')[0] + ' ' + g.feature_badges.split(' ')[1] + '</strong> ' + g.feature_badges.split(' ').slice(2).join(' ');
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+:root {
+  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
+  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
+  --border-default: #30363d; --border-muted: #21262d;
+  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
+  --success-fg: #3fb950; --danger-fg: #f85149;
+}
+html.light {
+  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
+  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
+  --border-default: #d0d7de; --border-muted: #d8dee4;
+  --accent-fg: #0969da; --accent-emphasis: #0969da;
+  --success-fg: #1a7f37; --danger-fg: #cf222e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  background: var(--bg-canvas); color: var(--fg-default);
+  padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
+}
+.page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 14px; }
+.list { display: flex; flex-direction: column; gap: 8px; }
+.item {
+  padding: 14px 16px; background: var(--bg-default); border-radius: 8px;
+  border: 1px solid var(--border-muted); transition: border-color 0.12s;
+}
+.item:hover { border-color: var(--border-default); }
+.item-top { display: flex; align-items: center; gap: 10px; }
+.item-icon { color: var(--accent-fg); flex-shrink: 0; }
+.item-info { flex: 1; min-width: 0; }
+.item-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-status { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+.item-status.done { color: var(--success-fg); }
+.item-status.error { color: var(--danger-fg); }
+.dl-controls { display: flex; gap: 4px; margin-left: 8px; }
+.dl-btn {
+  width: 28px; height: 28px; border: 1px solid var(--border-default); background: var(--bg-subtle);
+  color: var(--fg-muted); cursor: pointer; border-radius: 4px; display: flex;
+  align-items: center; justify-content: center; font-size: 12px; transition: all 0.12s;
+}
+.dl-btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
+.dl-btn.cancel:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
+.progress { height: 4px; background: var(--bg-subtle); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.progress-bar { height: 100%; background: var(--accent-emphasis); border-radius: 2px; transition: width 0.3s; }
+.empty { padding: 48px; text-align: center; color: var(--fg-muted); font-size: 14px; }
+.empty svg { margin-bottom: 12px; color: var(--fg-subtle); }
+</style>
+</head>
+<body>
+<div class="page-title">Downloads</div>
+<div class="page-desc">Your downloaded files</div>
+<div class="list" id="list"></div>
+
+<script>
+const gb = window.gitbrowser;
+const listEl = document.getElementById('list');
+
+async function load() {
+  let items;
+  try { items = await gb.getDownloads(); } catch { items = []; }
+  if (!Array.isArray(items) || items.length === 0) {
+    listEl.innerHTML = `<div class="empty">
+      <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>
+      <div>No downloads yet</div>
+    </div>`;
+    return;
+  }
+  listEl.innerHTML = '';
+  items.forEach(dl => renderItem(dl));
+}
+
+function renderItem(dl) {
+  const div = document.createElement('div');
+  div.className = 'item';
+  div.id = 'dl-' + dl.id;
+  const pct = dl.totalBytes > 0 ? Math.round((dl.receivedBytes / dl.totalBytes) * 100) : 0;
+  const isDone = dl.state === 'completed';
+  const isFailed = dl.state === 'cancelled' || dl.state === 'interrupted';
+  const isActive = !isDone && !isFailed;
+  div.innerHTML = `
+    <div class="item-top">
+      <div class="item-icon"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg></div>
+      <div class="item-info">
+        <div class="item-name">${esc(dl.filename)}</div>
+        <div class="item-status ${isDone ? 'done' : isFailed ? 'error' : ''}">${isDone ? 'Completed' : isFailed ? 'Failed' : (dl.paused ? 'Paused — ' : '') + pct + '% — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes)}</div>
+      </div>
+      ${isActive ? `<div class="dl-controls">
+        <button class="dl-btn" title="${dl.paused ? 'Resume' : 'Pause'}" data-action="${dl.paused ? 'resume' : 'pause'}" data-id="${dl.id}">${dl.paused ? '\u25B6' : '\u23F8'}</button>
+        <button class="dl-btn cancel" title="Cancel" data-action="cancel" data-id="${dl.id}">\u2715</button>
+      </div>` : ''}
+    </div>
+    ${isActive ? `<div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>` : ''}
+  `;
+  // Wire up buttons
+  div.querySelectorAll('.dl-btn').forEach(btn => {
+    btn.onclick = () => {
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === 'pause') gb.pauseDownload(id);
+      else if (action === 'resume') gb.resumeDownload(id);
+      else if (action === 'cancel') gb.cancelDownload(id);
+    };
+  });
+  listEl.appendChild(div);
+}
+
+// Live updates
+gb.onDownloadStarted((dl) => { renderItem(dl); });
+gb.onDownloadProgress((dl) => {
+  const el = document.getElementById('dl-' + dl.id);
+  if (el) {
+    const bar = el.querySelector('.progress-bar');
+    const status = el.querySelector('.item-status');
+    const pct = dl.totalBytes > 0 ? Math.round((dl.receivedBytes / dl.totalBytes) * 100) : 0;
+    if (bar) bar.style.width = pct + '%';
+    if (status) status.textContent = (dl.paused ? 'Paused — ' : '') + pct + '% — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes);
+    // Update pause/resume button
+    const pauseBtn = el.querySelector('.dl-btn[data-action="pause"], .dl-btn[data-action="resume"]');
+    if (pauseBtn) {
+      pauseBtn.dataset.action = dl.paused ? 'resume' : 'pause';
+      pauseBtn.textContent = dl.paused ? '\u25B6' : '\u23F8';
+      pauseBtn.title = dl.paused ? 'Resume' : 'Pause';
+    }
+  }
+});
+gb.onDownloadDone((dl) => {
+  const el = document.getElementById('dl-' + dl.id);
+  if (el) {
+    const status = el.querySelector('.item-status');
+    const progress = el.querySelector('.progress');
+    if (status) { status.textContent = dl.state === 'completed' ? 'Completed' : 'Failed'; status.className = 'item-status ' + (dl.state === 'completed' ? 'done' : 'error'); }
+    if (progress) progress.remove();
+  }
+});
+
+function formatBytes(b) {
+  if (!b || b <= 0) return '0 B';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
+  return (b / 1073741824).toFixed(1) + ' GB';
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// Theme
+function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+if (window.gitbrowser) {
+  gb.onThemeChanged((d) => applyTheme(d.theme));
+  gb.getSettings().then(s => {
+    if (s && s.appearance) {
+      let t = s.appearance.theme;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  }).catch(() => {});
+}
+
+load();
+
+// Localization
+if (gb && gb.getLocaleData) {
+  gb.getLocaleData().then(({ data: t }) => {
+    if (t && t.downloads) {
+      document.querySelector('.page-title').textContent = t.downloads.title || 'Downloads';
+      document.querySelector('.page-desc').textContent = t.downloads.desc || 'Your downloaded files';
+    }
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

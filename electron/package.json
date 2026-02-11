@@ -1,0 +1,13 @@
+{
+  "name": "gitbrowser",
+  "version": "0.1.0",
+  "description": "A privacy-focused minimal web browser with GitHub-style UI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0"
+  }
+}
