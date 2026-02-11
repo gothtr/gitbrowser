@@ -10,6 +10,7 @@ use std::io::{self, BufRead, Write};
 use gitbrowser::app::App;
 use gitbrowser::managers::bookmark_manager::{BookmarkManager, BookmarkManagerTrait};
 use gitbrowser::managers::history_manager::{HistoryManager, HistoryManagerTrait};
+use gitbrowser::services::password_manager::PasswordManagerTrait;
 use gitbrowser::services::settings_engine::SettingsEngineTrait;
 use gitbrowser::services::localization_engine::LocalizationEngineTrait;
 
@@ -201,6 +202,75 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
                 }
                 Err(_) => Ok(json!([]))
             }
+        }
+
+        // ─── Password Manager ───
+        "password.unlock" => {
+            let master = params.get("master_password").and_then(|v| v.as_str()).ok_or("missing master_password")?;
+            let mut a = app.borrow_mut();
+            let ok = a.password_manager.unlock(master).map_err(|e| e.to_string())?;
+            Ok(json!({"ok": ok}))
+        }
+        "password.lock" => {
+            let mut a = app.borrow_mut();
+            a.password_manager.lock();
+            Ok(json!({"ok": true}))
+        }
+        "password.is_unlocked" => {
+            let a = app.borrow();
+            Ok(json!({"unlocked": a.password_manager.is_unlocked()}))
+        }
+        "password.list" => {
+            let url = params.get("url").and_then(|v| v.as_str()).unwrap_or("");
+            let a = app.borrow();
+            let creds = if url.is_empty() {
+                a.password_manager.list_all_credentials().map_err(|e| e.to_string())?
+            } else {
+                a.password_manager.get_credentials(url).map_err(|e| e.to_string())?
+            };
+            let arr: Vec<Value> = creds.iter().map(|c| {
+                let pw = a.password_manager.decrypt_password(c).unwrap_or_default();
+                json!({
+                    "id": c.id, "url": c.url, "username": c.username,
+                    "password": pw, "created_at": c.created_at, "updated_at": c.updated_at
+                })
+            }).collect();
+            Ok(json!(arr))
+        }
+        "password.save" => {
+            let url = params.get("url").and_then(|v| v.as_str()).ok_or("missing url")?;
+            let username = params.get("username").and_then(|v| v.as_str()).ok_or("missing username")?;
+            let password = params.get("password").and_then(|v| v.as_str()).ok_or("missing password")?;
+            let mut a = app.borrow_mut();
+            let id = a.password_manager.save_credential(url, username, password).map_err(|e| e.to_string())?;
+            Ok(json!({"id": id}))
+        }
+        "password.update" => {
+            let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
+            let username = params.get("username").and_then(|v| v.as_str());
+            let password = params.get("password").and_then(|v| v.as_str());
+            let mut a = app.borrow_mut();
+            a.password_manager.update_credential(id, username, password).map_err(|e| e.to_string())?;
+            Ok(json!({"ok": true}))
+        }
+        "password.delete" => {
+            let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
+            let mut a = app.borrow_mut();
+            a.password_manager.delete_credential(id).map_err(|e| e.to_string())?;
+            Ok(json!({"ok": true}))
+        }
+        "password.generate" => {
+            let length = params.get("length").and_then(|v| v.as_u64()).unwrap_or(16) as usize;
+            let uppercase = params.get("uppercase").and_then(|v| v.as_bool()).unwrap_or(true);
+            let lowercase = params.get("lowercase").and_then(|v| v.as_bool()).unwrap_or(true);
+            let numbers = params.get("numbers").and_then(|v| v.as_bool()).unwrap_or(true);
+            let symbols = params.get("symbols").and_then(|v| v.as_bool()).unwrap_or(true);
+            let a = app.borrow();
+            let opts = gitbrowser::types::credential::PasswordGenOptions {
+                length, uppercase, lowercase, numbers, symbols,
+            };
+            let pw = a.password_manager.generate_password(&opts);
+            Ok(json!({"password": pw}))
         }
 
         // ─── Ping ───

@@ -24,7 +24,22 @@ body {
   min-height: 100vh; display: flex; flex-direction: column;
   align-items: center; padding-top: 12vh;
   user-select: none;
+  transition: background 0.3s;
 }
+/* Background color picker */
+.bg-picker {
+  position: fixed; bottom: 16px; right: 16px; display: flex; gap: 6px;
+  align-items: center; padding: 6px 10px; background: var(--bg-default);
+  border: 1px solid var(--border-muted); border-radius: 8px;
+  opacity: 0.4; transition: opacity 0.2s; z-index: 10;
+}
+.bg-picker:hover { opacity: 1; }
+.bg-swatch {
+  width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: all 0.15s;
+}
+.bg-swatch:hover, .bg-swatch.active { border-color: var(--accent-fg); transform: scale(1.15); }
+.bg-swatch.reset { background: var(--bg-canvas); border: 2px dashed var(--border-default); }
 .greeting {
   font-size: 32px; font-weight: 600; letter-spacing: -0.5px;
   color: var(--fg-default); margin-bottom: 4px;
@@ -282,6 +297,60 @@ function updateClock() {
 }
 updateClock();
 setInterval(updateClock, 10000);
+
+// ─── Background color picker ───
+const BG_COLORS = [
+  null, // reset to default
+  '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f',
+  '#2d132c', '#1c1c1c', '#212121', '#263238',
+  '#1b262c', '#0a1931', '#2c3333', '#3c1642',
+];
+const LIGHT_BG_COLORS = [
+  null,
+  '#f0f4f8', '#e8eaf6', '#e3f2fd', '#fce4ec',
+  '#f3e5f5', '#e0f2f1', '#fff8e1', '#efebe9',
+  '#eceff1', '#f1f8e9', '#e8f5e9', '#fafafa',
+];
+
+function getBgColors() {
+  return document.documentElement.classList.contains('light') ? LIGHT_BG_COLORS : BG_COLORS;
+}
+
+function renderBgPicker() {
+  let picker = document.getElementById('bg-picker');
+  if (!picker) {
+    picker = document.createElement('div');
+    picker.className = 'bg-picker';
+    picker.id = 'bg-picker';
+    document.body.appendChild(picker);
+  }
+  picker.innerHTML = '';
+  const saved = localStorage.getItem('newtab_bg');
+  const colors = getBgColors();
+  colors.forEach((c, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'bg-swatch' + (i === 0 ? ' reset' : '') + ((c === saved || (i === 0 && !saved)) ? ' active' : '');
+    if (c) sw.style.background = c;
+    sw.title = i === 0 ? 'Default' : c;
+    sw.onclick = () => {
+      if (c) {
+        localStorage.setItem('newtab_bg', c);
+        document.body.style.background = c;
+      } else {
+        localStorage.removeItem('newtab_bg');
+        document.body.style.background = '';
+      }
+      picker.querySelectorAll('.bg-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    };
+    picker.appendChild(sw);
+  });
+}
+
+// Apply saved bg
+const savedBg = localStorage.getItem('newtab_bg');
+if (savedBg) document.body.style.background = savedBg;
+renderBgPicker();
 </script>
 </body>
 </html>

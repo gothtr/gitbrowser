@@ -114,6 +114,8 @@ select:focus, input:focus { border-color: var(--accent-emphasis); outline: none;
     <div class="toggle on" id="s-fingerprint" data-key="privacy.anti_fingerprinting"></div></div>
   <div class="row"><div class="row-info"><div class="row-label">Clear Data on Exit</div><div class="row-desc">Remove browsing data when closing</div></div>
     <div class="toggle" id="s-clear-exit" data-key="privacy.clear_data_on_exit"></div></div>
+  <div class="row" style="cursor:pointer" id="open-passwords"><div class="row-info"><div class="row-label">🔑 Password Manager</div><div class="row-desc">Manage saved credentials</div></div>
+    <span style="color:var(--fg-subtle);font-size:13px">→</span></div>
 </div>
 
 <div class="section">
@@ -234,6 +236,9 @@ document.querySelectorAll('.toggle').forEach(t => {
     if (key) saveSetting(key, this.classList.contains('on'));
   };
 });
+
+// Open Password Manager
+document.getElementById('open-passwords').onclick = () => { if (gb) gb.openPasswords(); };
 
 // Reset
 document.getElementById('btn-reset').onclick = async () => {

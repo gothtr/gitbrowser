@@ -74,6 +74,17 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   aiChat: (data) => ipcRenderer.invoke('ai-chat', data),
   aiClearHistory: (sessionId) => ipcRenderer.send('ai-clear-history', sessionId),
 
+  // Password Manager
+  passwordUnlock: (data) => ipcRenderer.invoke('password-unlock', data),
+  passwordLock: () => ipcRenderer.invoke('password-lock'),
+  passwordIsUnlocked: () => ipcRenderer.invoke('password-is-unlocked'),
+  passwordList: (data) => ipcRenderer.invoke('password-list', data || {}),
+  passwordSave: (data) => ipcRenderer.invoke('password-save', data),
+  passwordUpdate: (data) => ipcRenderer.invoke('password-update', data),
+  passwordDelete: (data) => ipcRenderer.invoke('password-delete', data),
+  passwordGenerate: (data) => ipcRenderer.invoke('password-generate', data || {}),
+  openPasswords: () => ipcRenderer.send('open-passwords'),
+
   // GitHub
   githubDeviceLogin: (data) => ipcRenderer.invoke('github-device-login', data),
   githubDevicePoll: (data) => ipcRenderer.invoke('github-device-poll', data),
@@ -94,4 +105,5 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   onDownloadDone: (cb) => ipcRenderer.on('download-done', (_e, d) => cb(d)),
   onThemeChanged: (cb) => ipcRenderer.on('theme-changed', (_e, d) => cb(d)),
   onCloseFind: (cb) => ipcRenderer.on('close-find', (_e, d) => cb(d)),
+  onGhNotifCount: (cb) => ipcRenderer.on('gh-notif-count', (_e, d) => cb(d)),
 });

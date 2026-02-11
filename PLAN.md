@@ -53,7 +53,7 @@
 - [x] Переработать newtab: приветствие по времени суток, часы, погода-виджет (опционально), красивая типографика
 - [x] Добавить анимации появления элементов на всех внутренних страницах (stagger fade-in)
 - [x] Улучшить карточки quick-links: показывать favicon сайта вместо буквы
-- [ ] Добавить возможность менять фон newtab (solid colors, без градиентов)
+- [x] Добавить возможность менять фон newtab (solid colors, без градиентов)
 - [x] Сделать более крупные и читаемые элементы на страницах bookmarks/history/downloads
 - [x] Чистый, минималистичный стиль — без фиолетовых/градиентных акцентов
 
@@ -88,14 +88,14 @@
 - По сути это "аккаунт браузера", но функционал не соответствует
 
 ### Исправления
-- [ ] Добавить вкладки в profile-view: Repos / Notifications / Issues / PRs / Activity
-- [ ] Показывать непрочитанные уведомления (badge на кнопке GitHub в тулбаре)
-- [ ] Добавить Activity Feed (последние события пользователя)
-- [ ] Добавить просмотр Issues и PRs с фильтрацией
+- [x] Добавить вкладки в profile-view: Repos / Notifications / Issues / PRs / Activity
+- [x] Показывать непрочитанные уведомления (badge на кнопке GitHub в тулбаре)
+- [x] Добавить Activity Feed (последние события пользователя)
+- [x] Добавить просмотр Issues и PRs с фильтрацией
 - [ ] Добавить синхронизацию закладок через GitHub Gists (encrypt → upload)
 - [ ] Перенести токен из localStorage в зашифрованное хранилище Rust backend
-- [ ] Добавить информацию профиля: bio, followers, following, public repos count
-- [ ] Добавить быстрые действия: создать repo, создать gist, открыть GitHub Copilot
+- [x] Добавить информацию профиля: bio, followers, following, public repos count
+- [x] Добавить быстрые действия: создать repo, создать gist, открыть GitHub Copilot
 
 ---
 
@@ -108,11 +108,11 @@
 - Нет RPC handlers в rpc_server.rs
 
 ### Исправления
-- [ ] Создать `electron/ui/passwords.html` — UI менеджера паролей
-- [ ] Добавить IPC handlers в main.js: password-unlock, password-lock, password-list, password-save, password-delete, password-generate
-- [ ] Добавить preload API: `passwordUnlock()`, `passwordLock()`, `passwordList()`, `passwordSave()`, `passwordDelete()`, `passwordGenerate()`
-- [ ] Добавить RPC handlers в rpc_server.rs
-- [ ] Добавить кнопку "Пароли" в тулбар или в настройки
+- [x] Создать `electron/ui/passwords.html` — UI менеджера паролей
+- [x] Добавить IPC handlers в main.js: password-unlock, password-lock, password-list, password-save, password-delete, password-generate
+- [x] Добавить preload API: `passwordUnlock()`, `passwordLock()`, `passwordList()`, `passwordSave()`, `passwordDelete()`, `passwordGenerate()`
+- [x] Добавить RPC handlers в rpc_server.rs
+- [x] Добавить кнопку "Пароли" в тулбар или в настройки
 - [ ] Добавить автозаполнение: при фокусе на поле пароля показывать popup с сохранёнными credentials
 - [ ] Добавить предложение сохранить пароль после логина на сайте
 
@@ -183,7 +183,7 @@
 - [x] Zoom indicator не показывает текущий уровень при переключении вкладок
 - [x] Find bar не закрывается при переключении вкладок
 - [x] Нет Ctrl+Tab для переключения между вкладками
-- [ ] Нет middle-click для открытия ссылки в новой вкладке
+- [x] Нет middle-click для открытия ссылки в новой вкладке
 - [x] Toast сообщения не локализованы
 - [x] Нет подтверждения при очистке истории
 

@@ -21,6 +21,8 @@ pub trait PasswordManagerTrait {
     fn is_unlocked(&self) -> bool;
     fn save_credential(&mut self, url: &str, username: &str, password: &str) -> Result<String, CryptoError>;
     fn get_credentials(&self, url: &str) -> Result<Vec<CredentialEntry>, CryptoError>;
+    fn list_all_credentials(&self) -> Result<Vec<CredentialEntry>, CryptoError>;
+    fn decrypt_password(&self, entry: &CredentialEntry) -> Result<String, CryptoError>;
     fn update_credential(&mut self, id: &str, username: Option<&str>, password: Option<&str>) -> Result<(), CryptoError>;
     fn delete_credential(&mut self, id: &str) -> Result<(), CryptoError>;
     fn generate_password(&self, options: &PasswordGenOptions) -> String;
@@ -189,6 +191,44 @@ impl PasswordManagerTrait for PasswordManager {
             result.push(entry.map_err(|e| CryptoError::Encryption(e.to_string()))?);
         }
         Ok(result)
+    }
+
+    fn list_all_credentials(&self) -> Result<Vec<CredentialEntry>, CryptoError> {
+        let _key = self.require_unlocked()?;
+        let conn = self.db.connection();
+        let mut stmt = conn.prepare(
+            "SELECT id, url, username, encrypted_password, iv, auth_tag, created_at, updated_at FROM credentials WHERE id NOT LIKE 'gitbrowser_%' ORDER BY updated_at DESC"
+        ).map_err(|e| CryptoError::Encryption(e.to_string()))?;
+
+        let entries = stmt.query_map(params![], |row| {
+            Ok(CredentialEntry {
+                id: row.get(0)?,
+                url: row.get(1)?,
+                username: row.get(2)?,
+                encrypted_password: row.get(3)?,
+                iv: row.get(4)?,
+                auth_tag: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        }).map_err(|e| CryptoError::Encryption(e.to_string()))?;
+
+        let mut result = Vec::new();
+        for entry in entries {
+            result.push(entry.map_err(|e| CryptoError::Encryption(e.to_string()))?);
+        }
+        Ok(result)
+    }
+
+    fn decrypt_password(&self, entry: &CredentialEntry) -> Result<String, CryptoError> {
+        let key = self.require_unlocked()?;
+        let encrypted = EncryptedData {
+            ciphertext: entry.encrypted_password.clone(),
+            iv: entry.iv.clone(),
+            auth_tag: entry.auth_tag.clone(),
+        };
+        let plaintext = self.crypto.decrypt_aes256gcm(&encrypted, key)?;
+        String::from_utf8(plaintext).map_err(|e| CryptoError::Decryption(e.to_string()))
     }
 
     fn update_credential(&mut self, id: &str, username: Option<&str>, password: Option<&str>) -> Result<(), CryptoError> {

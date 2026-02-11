@@ -8,14 +8,16 @@
   --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
   --border-default: #30363d; --border-muted: #21262d;
   --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
-  --success-fg: #3fb950; --danger-fg: #f85149;
+  --success-fg: #3fb950; --danger-fg: #f85149; --done-fg: #a371f7;
+  --open-fg: #3fb950; --closed-fg: #f85149; --merged-fg: #a371f7;
 }
 html.light {
   --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
   --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
   --border-default: #d0d7de; --border-muted: #d8dee4;
   --accent-fg: #0969da; --accent-emphasis: #0969da;
-  --success-fg: #1a7f37; --danger-fg: #cf222e;
+  --success-fg: #1a7f37; --danger-fg: #cf222e; --done-fg: #8250df;
+  --open-fg: #1a7f37; --closed-fg: #cf222e; --merged-fg: #8250df;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -43,42 +45,11 @@ body {
 }
 .input-row input:focus { border-color: var(--accent-emphasis); }
 .input-row label { display: block; font-size: 12px; color: var(--fg-muted); margin-bottom: 6px; }
-/* Device flow */
 .device-code { font-size: 32px; font-weight: 700; letter-spacing: 4px; color: var(--accent-fg); margin: 16px 0; }
 .device-link { color: var(--accent-fg); text-decoration: underline; cursor: pointer; font-size: 14px; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--fg-subtle); border-top-color: var(--accent-fg); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .status { color: var(--fg-muted); font-size: 13px; margin-top: 12px; }
-/* Profile */
-.profile-view { padding: 32px; max-width: 600px; margin: 0 auto; }
-.profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-.avatar { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--border-default); }
-.profile-name { font-size: 20px; font-weight: 600; }
-.profile-login { font-size: 14px; color: var(--fg-muted); }
-.nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
-.nav-item {
-  padding: 14px; background: var(--bg-default); border: 1px solid var(--border-muted);
-  border-radius: 8px; cursor: pointer; transition: all 0.12s; text-align: center; font-size: 13px; color: var(--fg-muted);
-}
-.nav-item:hover { border-color: var(--accent-emphasis); color: var(--accent-fg); background: var(--bg-subtle); }
-.nav-item strong { display: block; color: var(--fg-default); margin-bottom: 2px; }
-.repo-list { margin-top: 16px; }
-.repo-list h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
-.repo {
-  display: flex; align-items: center; padding: 10px 12px; background: var(--bg-default);
-  border: 1px solid var(--border-muted); border-radius: 6px; margin-bottom: 4px;
-  cursor: pointer; transition: all 0.12s; gap: 8px;
-}
-.repo:hover { border-color: var(--accent-fg); background: var(--bg-subtle); }
-.repo-name { font-size: 13px; font-weight: 500; color: var(--accent-fg); flex: 1; }
-.repo-desc { font-size: 11px; color: var(--fg-muted); }
-.repo-stars { font-size: 11px; color: var(--fg-subtle); white-space: nowrap; }
-.logout-btn {
-  margin-top: 16px; padding: 8px 16px; border: 1px solid var(--border-default);
-  border-radius: 6px; background: none; color: var(--fg-muted); cursor: pointer;
-  font-family: inherit; font-size: 12px; transition: all 0.12s;
-}
-.logout-btn:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
 .features { margin-top: 24px; text-align: left; }
 .feature { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-muted); }
 .feature:last-child { border-bottom: none; }
@@ -124,18 +95,97 @@ body {
 
 <!-- Profile View -->
 <div id="profile-view" style="display:none">
+<style>
+.profile-view { max-width: 700px; margin: 0 auto; padding: 24px; }
+.profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+.avatar { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--border-default); }
+.profile-info { flex: 1; }
+.profile-name { font-size: 20px; font-weight: 600; }
+.profile-login { font-size: 14px; color: var(--fg-muted); }
+.profile-bio { font-size: 13px; color: var(--fg-muted); margin-top: 2px; }
+.profile-stats { display: flex; gap: 16px; margin: 12px 0 16px; font-size: 13px; color: var(--fg-muted); }
+.profile-stats span { cursor: pointer; }
+.profile-stats span:hover { color: var(--accent-fg); }
+.profile-stats strong { color: var(--fg-default); }
+.tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border-muted); margin-bottom: 16px; }
+.tab-btn {
+  padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--fg-muted);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; font-family: inherit; transition: all 0.12s; position: relative;
+}
+.tab-btn:hover { color: var(--fg-default); }
+.tab-btn.active { color: var(--fg-default); border-bottom-color: var(--accent-emphasis); }
+.tab-btn .badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--accent-emphasis); color: #fff; font-size: 11px; font-weight: 600;
+  margin-left: 6px;
+}
+.tab-content { min-height: 300px; }
+.item-card {
+  display: flex; align-items: flex-start; padding: 12px; background: var(--bg-default);
+  border: 1px solid var(--border-muted); border-radius: 8px; margin-bottom: 6px;
+  cursor: pointer; transition: all 0.12s; gap: 10px;
+}
+.item-card:hover { border-color: var(--accent-fg); background: var(--bg-subtle); }
+.item-title { font-size: 13px; font-weight: 500; color: var(--accent-fg); }
+.item-desc { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+.item-meta { font-size: 11px; color: var(--fg-subtle); margin-top: 4px; display: flex; gap: 12px; align-items: center; }
+.state-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;
+}
+.state-open { background: rgba(63,185,80,0.15); color: var(--open-fg); }
+.state-closed { background: rgba(248,81,73,0.15); color: var(--closed-fg); }
+.state-merged { background: rgba(163,113,247,0.15); color: var(--merged-fg); }
+.notif-unread { border-left: 3px solid var(--accent-emphasis); }
+.notif-reason { font-size: 11px; color: var(--fg-subtle); text-transform: capitalize; }
+.empty-state { text-align: center; padding: 48px 16px; color: var(--fg-muted); font-size: 14px; }
+.loading-state { text-align: center; padding: 48px 16px; color: var(--fg-subtle); font-size: 13px; }
+.quick-actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.quick-action {
+  padding: 6px 14px; border: 1px solid var(--border-default); border-radius: 6px;
+  background: var(--bg-default); color: var(--fg-muted); cursor: pointer;
+  font-family: inherit; font-size: 12px; transition: all 0.12s;
+}
+.quick-action:hover { border-color: var(--accent-emphasis); color: var(--accent-fg); }
+.logout-btn {
+  margin-top: 16px; padding: 8px 16px; border: 1px solid var(--border-default);
+  border-radius: 6px; background: none; color: var(--fg-muted); cursor: pointer;
+  font-family: inherit; font-size: 12px; transition: all 0.12s;
+}
+.logout-btn:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
+.filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.filter-btn {
+  padding: 4px 12px; border: 1px solid var(--border-muted); border-radius: 16px;
+  background: none; color: var(--fg-muted); cursor: pointer; font-family: inherit; font-size: 12px;
+  transition: all 0.12s;
+}
+.filter-btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
+.filter-btn.active { background: var(--accent-emphasis); color: #fff; border-color: var(--accent-emphasis); }
+</style>
 <div class="profile-view">
   <div class="profile-header">
     <img class="avatar" id="avatar" src="" alt="" />
-    <div><div class="profile-name" id="profile-name"></div><div class="profile-login" id="profile-login"></div></div>
+    <div class="profile-info">
+      <div class="profile-name" id="profile-name"></div>
+      <div class="profile-login" id="profile-login"></div>
+      <div class="profile-bio" id="profile-bio"></div>
+    </div>
   </div>
-  <div class="nav-grid">
-    <div class="nav-item" id="nav-repos"><strong>Repositories</strong>Your repos</div>
-    <div class="nav-item" id="nav-notif"><strong>Notifications</strong>Updates</div>
-    <div class="nav-item" id="nav-prs"><strong>Pull Requests</strong>Open PRs</div>
-    <div class="nav-item" id="nav-gists"><strong>Gists</strong>Code snippets</div>
+  <div class="profile-stats" id="profile-stats"></div>
+  <div class="quick-actions" id="quick-actions">
+    <button class="quick-action" id="qa-new-repo">+ New Repo</button>
+    <button class="quick-action" id="qa-new-gist">+ New Gist</button>
+    <button class="quick-action" id="qa-profile">View Profile</button>
   </div>
-  <div class="repo-list" id="repo-list"></div>
+  <div class="tab-bar" id="tab-bar">
+    <button class="tab-btn active" data-tab="repos">Repos</button>
+    <button class="tab-btn" data-tab="notifications">Notifications <span class="badge" id="notif-badge" style="display:none">0</span></button>
+    <button class="tab-btn" data-tab="issues">Issues</button>
+    <button class="tab-btn" data-tab="prs">Pull Requests</button>
+    <button class="tab-btn" data-tab="activity">Activity</button>
+  </div>
+  <div class="tab-content" id="tab-content"></div>
   <button class="logout-btn" id="btn-logout">Sign out</button>
 </div>
 </div>
@@ -144,104 +194,360 @@ body {
 const gb = window.gitbrowser;
 let ghToken = localStorage.getItem('gh_token');
 let ghClientId = localStorage.getItem('gh_client_id') || '';
+let currentUser = null;
+let activeTab = 'repos';
+let cachedData = {};
+let issueFilter = 'assigned';
+let prFilter = 'assigned';
 
-if (ghToken) loadProfile(ghToken);
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  if (s < 2592000) return Math.floor(s / 86400) + 'd ago';
+  return new Date(d).toLocaleDateString();
+}
 
-document.getElementById('client-id').value = ghClientId;
+async function ghApi(endpoint, token) {
+  if (!gb) return { error: 'No bridge' };
+  return gb.githubApi({ endpoint, token: token || ghToken });
+}
 
+function showView(id) {
+  ['login-view', 'device-view', 'profile-view'].forEach(v => {
+    document.getElementById(v).style.display = v === id ? '' : 'none';
+  });
+}
+
+// ─── Login ───
 document.getElementById('btn-login').onclick = async () => {
   const clientId = document.getElementById('client-id').value.trim();
   if (!clientId) { document.getElementById('client-id').focus(); return; }
   localStorage.setItem('gh_client_id', clientId);
+  ghClientId = clientId;
 
-  // Start Device Flow
-  const result = await gb.githubDeviceLogin({ clientId });
-  if (result.error) {
-    document.querySelector('.desc').textContent = 'Error: ' + result.error;
-    document.querySelector('.desc').style.color = 'var(--danger-fg, #f85149)';
-    return;
-  }
+  const res = await gb.githubDeviceLogin({ clientId });
+  if (res.error) { alert('Error: ' + res.error); return; }
 
-  // Show device code
-  document.getElementById('login-view').style.display = 'none';
-  document.getElementById('device-view').style.display = '';
-  document.getElementById('user-code').textContent = result.userCode;
+  document.getElementById('user-code').textContent = res.userCode;
   const link = document.getElementById('verify-link');
-  link.textContent = result.verificationUri;
-  link.href = result.verificationUri;
-  link.onclick = (e) => { e.preventDefault(); gb.openUrlNewTab(result.verificationUri); };
+  link.textContent = res.verificationUri;
+  link.href = res.verificationUri;
+  link.onclick = (e) => { e.preventDefault(); gb.openUrl(res.verificationUri); };
+  showView('device-view');
 
-  // Poll for token
-  const interval = (result.interval || 5) * 1000;
-  const deadline = Date.now() + (result.expiresIn || 900) * 1000;
-  const pollTimer = setInterval(async () => {
-    if (Date.now() > deadline) {
-      clearInterval(pollTimer);
-      document.getElementById('poll-status').textContent = 'Code expired. Please try again.';
-      setTimeout(() => { document.getElementById('device-view').style.display = 'none'; document.getElementById('login-view').style.display = ''; }, 2000);
+  pollForToken(clientId, res.deviceCode, (res.interval || 5) * 1000);
+};
+
+async function pollForToken(clientId, deviceCode, interval) {
+  const statusEl = document.getElementById('poll-status');
+  const poll = async () => {
+    const res = await gb.githubDevicePoll({ clientId, deviceCode });
+    if (res.status === 'ok') {
+      ghToken = res.token;
+      localStorage.setItem('gh_token', ghToken);
+      loadProfile(ghToken);
       return;
     }
-    try {
-      const poll = await gb.githubDevicePoll({ clientId, deviceCode: result.deviceCode });
-      if (poll.status === 'ok') {
-        clearInterval(pollTimer);
-        ghToken = poll.token;
-        localStorage.setItem('gh_token', ghToken);
-        document.getElementById('poll-status').innerHTML = '<span style="color:var(--success-fg)">Authorized! Loading profile...</span>';
-        document.getElementById('device-view').style.display = 'none';
-        loadProfile(ghToken);
-      } else if (poll.status === 'expired' || poll.status === 'error') {
-        clearInterval(pollTimer);
-        document.getElementById('poll-status').textContent = 'Authorization failed: ' + (poll.error || 'Try again.');
-        setTimeout(() => { document.getElementById('device-view').style.display = 'none'; document.getElementById('login-view').style.display = ''; }, 3000);
-      }
-      // 'pending' and 'slow_down' — just keep polling
-    } catch (e) {
-      document.getElementById('poll-status').textContent = 'Polling error: ' + e.message;
+    if (res.status === 'expired') {
+      statusEl.innerHTML = 'Code expired. Please try again.';
+      setTimeout(() => showView('login-view'), 2000);
+      return;
     }
-  }, interval);
-};
+    if (res.status === 'error') {
+      statusEl.innerHTML = 'Error: ' + esc(res.error);
+      return;
+    }
+    const delay = res.status === 'slow_down' ? interval + 5000 : interval;
+    setTimeout(poll, delay);
+  };
+  setTimeout(poll, interval);
+}
 
-document.getElementById('btn-logout').onclick = () => {
-  localStorage.removeItem('gh_token');
-  ghToken = null;
-  document.getElementById('profile-view').style.display = 'none';
-  document.getElementById('login-view').style.display = '';
-};
-
-document.getElementById('nav-repos').onclick = () => gb.openUrlNewTab('https://github.com');
-document.getElementById('nav-notif').onclick = () => gb.openUrlNewTab('https://github.com/notifications');
-document.getElementById('nav-prs').onclick = () => gb.openUrlNewTab('https://github.com/pulls');
-document.getElementById('nav-gists').onclick = () => gb.openUrlNewTab('https://gist.github.com');
-
+// ─── Profile ───
 async function loadProfile(token) {
-  const user = await gb.githubApi({ endpoint: '/user', token });
-  if (user.error) { localStorage.removeItem('gh_token'); return; }
-
-  document.getElementById('login-view').style.display = 'none';
-  document.getElementById('profile-view').style.display = '';
-  document.getElementById('avatar').src = user.avatar_url;
+  showView('profile-view');
+  const user = await ghApi('/user', token);
+  if (user.error) {
+    localStorage.removeItem('gh_token');
+    ghToken = null;
+    showView('login-view');
+    return;
+  }
+  currentUser = user;
+  document.getElementById('avatar').src = user.avatar_url || '';
   document.getElementById('profile-name').textContent = user.name || user.login;
   document.getElementById('profile-login').textContent = '@' + user.login;
+  document.getElementById('profile-bio').textContent = user.bio || '';
 
-  // Load repos
-  const repos = await gb.githubApi({ endpoint: '/user/repos?sort=updated&per_page=10', token });
-  const listEl = document.getElementById('repo-list');
-  if (Array.isArray(repos) && repos.length > 0) {
-    listEl.innerHTML = '<h3>Recent Repositories</h3>';
-    repos.forEach(r => {
-      const div = document.createElement('div');
-      div.className = 'repo';
-      div.innerHTML = `<div style="flex:1;min-width:0"><div class="repo-name">${esc(r.full_name)}</div>${r.description ? '<div class="repo-desc">' + esc(r.description) + '</div>' : ''}</div><div class="repo-stars">\u2605 ${r.stargazers_count || 0}</div>`;
-      div.onclick = () => gb.openUrlNewTab(r.html_url);
-      listEl.appendChild(div);
-    });
+  const stats = document.getElementById('profile-stats');
+  stats.innerHTML = `
+    <span onclick="openGh('/${esc(user.login)}?tab=followers')"><strong>${user.followers || 0}</strong> followers</span>
+    <span onclick="openGh('/${esc(user.login)}?tab=following')"><strong>${user.following || 0}</strong> following</span>
+    <span><strong>${user.public_repos || 0}</strong> repos</span>
+    ${user.public_gists ? `<span><strong>${user.public_gists}</strong> gists</span>` : ''}
+  `;
+
+  // Quick actions
+  document.getElementById('qa-new-repo').onclick = () => openGh('/new');
+  document.getElementById('qa-new-gist').onclick = () => openGh('https://gist.github.com');
+  document.getElementById('qa-profile').onclick = () => openGh('/' + user.login);
+
+  // Tab bar
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => switchGhTab(btn.dataset.tab);
+  });
+
+  // Logout
+  document.getElementById('btn-logout').onclick = () => {
+    localStorage.removeItem('gh_token');
+    ghToken = null;
+    currentUser = null;
+    cachedData = {};
+    showView('login-view');
+  };
+
+  loadTab('repos');
+  loadNotifCount(token);
+}
+
+function openGh(path) {
+  const url = path.startsWith('http') ? path : 'https://github.com' + path;
+  if (gb) gb.openUrlNewTab(url);
+}
+
+function switchGhTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  loadTab(tab);
+}
+
+async function loadTab(tab) {
+  const content = document.getElementById('tab-content');
+  content.innerHTML = '<div class="loading-state"><span class="spinner"></span> Loading...</div>';
+
+  switch (tab) {
+    case 'repos': await loadRepos(content); break;
+    case 'notifications': await loadNotifications(content); break;
+    case 'issues': await loadIssues(content); break;
+    case 'prs': await loadPRs(content); break;
+    case 'activity': await loadActivity(content); break;
   }
 }
 
-function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+// ─── Repos ───
+async function loadRepos(el) {
+  const data = cachedData.repos || await ghApi('/user/repos?sort=updated&per_page=30');
+  if (data.error) { el.innerHTML = '<div class="empty-state">Failed to load repos</div>'; return; }
+  cachedData.repos = data;
+  if (!data.length) { el.innerHTML = '<div class="empty-state">No repositories</div>'; return; }
+  el.innerHTML = data.map(r => `
+    <div class="item-card" onclick="openGh('/${esc(r.full_name)}')">
+      <div style="flex:1">
+        <div class="item-title">${esc(r.full_name)}</div>
+        ${r.description ? `<div class="item-desc">${esc(r.description)}</div>` : ''}
+        <div class="item-meta">
+          ${r.language ? `<span>${esc(r.language)}</span>` : ''}
+          <span>⭐ ${r.stargazers_count}</span>
+          <span>🍴 ${r.forks_count}</span>
+          <span>${timeAgo(r.updated_at)}</span>
+          ${r.private ? '<span style="color:var(--fg-subtle)">🔒 Private</span>' : ''}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
 
-// Theme
+// ─── Notifications ───
+async function loadNotifCount(token) {
+  const data = await ghApi('/notifications?per_page=1', token);
+  if (Array.isArray(data)) {
+    const badge = document.getElementById('notif-badge');
+    if (data.length > 0) {
+      // Fetch all to get count
+      const all = await ghApi('/notifications?per_page=50', token);
+      const count = Array.isArray(all) ? all.length : 0;
+      badge.textContent = count > 99 ? '99+' : count;
+      badge.style.display = count > 0 ? '' : 'none';
+      cachedData.notifications = all;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+async function loadNotifications(el) {
+  const data = cachedData.notifications || await ghApi('/notifications?per_page=50');
+  if (data.error) { el.innerHTML = '<div class="empty-state">Failed to load notifications</div>'; return; }
+  cachedData.notifications = data;
+  if (!data.length) { el.innerHTML = '<div class="empty-state">No notifications</div>'; return; }
+  el.innerHTML = data.map(n => {
+    const unread = n.unread ? ' notif-unread' : '';
+    const icon = n.subject.type === 'PullRequest' ? '🔀' : n.subject.type === 'Issue' ? '🔵' : '💬';
+    const repo = n.repository ? n.repository.full_name : '';
+    return `
+      <div class="item-card${unread}" onclick="openNotif('${esc(n.subject.url || '')}', '${esc(n.subject.type)}')">
+        <div style="font-size:18px">${icon}</div>
+        <div style="flex:1">
+          <div class="item-title">${esc(n.subject.title)}</div>
+          <div class="item-meta">
+            <span>${esc(repo)}</span>
+            <span class="notif-reason">${esc(n.reason)}</span>
+            <span>${timeAgo(n.updated_at)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function openNotif(apiUrl, type) {
+  if (!apiUrl) return;
+  // Convert API URL to web URL
+  try {
+    const data = await ghApi(apiUrl.replace('https://api.github.com', ''));
+    if (data.html_url) openGh(data.html_url);
+  } catch { /* ignore */ }
+}
+
+// ─── Issues ───
+async function loadIssues(el) {
+  const filterHtml = `<div class="filter-row">
+    <button class="filter-btn${issueFilter === 'assigned' ? ' active' : ''}" onclick="setIssueFilter('assigned')">Assigned</button>
+    <button class="filter-btn${issueFilter === 'created' ? ' active' : ''}" onclick="setIssueFilter('created')">Created</button>
+    <button class="filter-btn${issueFilter === 'mentioned' ? ' active' : ''}" onclick="setIssueFilter('mentioned')">Mentioned</button>
+  </div>`;
+
+  const key = 'issues_' + issueFilter;
+  const data = cachedData[key] || await ghApi('/issues?filter=' + issueFilter + '&state=open&per_page=30');
+  if (data.error) { el.innerHTML = filterHtml + '<div class="empty-state">Failed to load issues</div>'; return; }
+  cachedData[key] = data;
+  if (!data.length) { el.innerHTML = filterHtml + '<div class="empty-state">No open issues</div>'; return; }
+
+  el.innerHTML = filterHtml + data.map(i => {
+    const repo = i.repository ? i.repository.full_name : (i.html_url || '').split('/').slice(3, 5).join('/');
+    return `
+      <div class="item-card" onclick="openGh('${esc(i.html_url)}')">
+        <div style="flex:1">
+          <div class="item-title">
+            <span class="state-badge state-open">open</span>
+            ${esc(i.title)}
+          </div>
+          <div class="item-meta">
+            <span>${esc(repo)}</span>
+            <span>#${i.number}</span>
+            <span>${timeAgo(i.created_at)}</span>
+            ${i.comments ? `<span>💬 ${i.comments}</span>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function setIssueFilter(f) {
+  issueFilter = f;
+  delete cachedData['issues_' + f];
+  loadTab('issues');
+}
+
+// ─── Pull Requests ───
+async function loadPRs(el) {
+  const filterHtml = `<div class="filter-row">
+    <button class="filter-btn${prFilter === 'assigned' ? ' active' : ''}" onclick="setPrFilter('assigned')">Assigned</button>
+    <button class="filter-btn${prFilter === 'created' ? ' active' : ''}" onclick="setPrFilter('created')">Created</button>
+    <button class="filter-btn${prFilter === 'review' ? ' active' : ''}" onclick="setPrFilter('review')">Review Requested</button>
+  </div>`;
+
+  let endpoint;
+  if (prFilter === 'review') {
+    endpoint = '/search/issues?q=type:pr+state:open+review-requested:' + (currentUser ? currentUser.login : '') + '&per_page=30';
+  } else {
+    endpoint = '/search/issues?q=type:pr+state:open+' + prFilter + ':' + (currentUser ? currentUser.login : '') + '&per_page=30';
+  }
+
+  const key = 'prs_' + prFilter;
+  let data = cachedData[key];
+  if (!data) {
+    const res = await ghApi(endpoint);
+    data = res.items || res;
+    if (res.error) { el.innerHTML = filterHtml + '<div class="empty-state">Failed to load PRs</div>'; return; }
+    cachedData[key] = data;
+  }
+  if (!data.length) { el.innerHTML = filterHtml + '<div class="empty-state">No open pull requests</div>'; return; }
+
+  el.innerHTML = filterHtml + data.map(pr => {
+    const repo = (pr.html_url || '').split('/').slice(3, 5).join('/');
+    const merged = pr.pull_request && pr.pull_request.merged_at;
+    const stateClass = merged ? 'state-merged' : pr.state === 'closed' ? 'state-closed' : 'state-open';
+    const stateLabel = merged ? 'merged' : pr.state;
+    return `
+      <div class="item-card" onclick="openGh('${esc(pr.html_url)}')">
+        <div style="flex:1">
+          <div class="item-title">
+            <span class="state-badge ${stateClass}">${stateLabel}</span>
+            ${esc(pr.title)}
+          </div>
+          <div class="item-meta">
+            <span>${esc(repo)}</span>
+            <span>#${pr.number}</span>
+            <span>${timeAgo(pr.created_at)}</span>
+            ${pr.comments ? `<span>💬 ${pr.comments}</span>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function setPrFilter(f) {
+  prFilter = f;
+  delete cachedData['prs_' + f];
+  loadTab('prs');
+}
+
+// ─── Activity ───
+async function loadActivity(el) {
+  if (!currentUser) { el.innerHTML = '<div class="empty-state">Not logged in</div>'; return; }
+  const data = cachedData.activity || await ghApi('/users/' + currentUser.login + '/received_events?per_page=30');
+  if (data.error) { el.innerHTML = '<div class="empty-state">Failed to load activity</div>'; return; }
+  cachedData.activity = data;
+  if (!data.length) { el.innerHTML = '<div class="empty-state">No recent activity</div>'; return; }
+
+  el.innerHTML = data.map(ev => {
+    const repo = ev.repo ? ev.repo.name : '';
+    const actor = ev.actor ? ev.actor.login : '';
+    let desc = '';
+    switch (ev.type) {
+      case 'PushEvent': desc = `pushed ${(ev.payload.commits || []).length} commit(s)`; break;
+      case 'CreateEvent': desc = `created ${ev.payload.ref_type || 'repo'}${ev.payload.ref ? ' ' + ev.payload.ref : ''}`; break;
+      case 'DeleteEvent': desc = `deleted ${ev.payload.ref_type} ${ev.payload.ref || ''}`; break;
+      case 'WatchEvent': desc = 'starred'; break;
+      case 'ForkEvent': desc = 'forked'; break;
+      case 'IssuesEvent': desc = `${ev.payload.action} issue #${ev.payload.issue ? ev.payload.issue.number : ''}`; break;
+      case 'PullRequestEvent': desc = `${ev.payload.action} PR #${ev.payload.pull_request ? ev.payload.pull_request.number : ''}`; break;
+      case 'IssueCommentEvent': desc = `commented on #${ev.payload.issue ? ev.payload.issue.number : ''}`; break;
+      case 'PullRequestReviewEvent': desc = `reviewed PR #${ev.payload.pull_request ? ev.payload.pull_request.number : ''}`; break;
+      case 'ReleaseEvent': desc = `${ev.payload.action} release ${ev.payload.release ? ev.payload.release.tag_name : ''}`; break;
+      default: desc = ev.type.replace('Event', '').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+    }
+    return `
+      <div class="item-card" onclick="openGh('/${esc(repo)}')">
+        <div style="flex:1">
+          <div class="item-title" style="color:var(--fg-default)">${esc(actor)} <span style="color:var(--fg-muted);font-weight:400">${esc(desc)}</span></div>
+          <div class="item-meta">
+            <span>${esc(repo)}</span>
+            <span>${timeAgo(ev.created_at)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ─── Theme ───
 function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
 if (gb) {
   gb.onThemeChanged((d) => applyTheme(d.theme));
@@ -254,30 +560,9 @@ if (gb) {
   }).catch(() => {});
 }
 
-// Localization
-if (gb && gb.getLocaleData) {
-  gb.getLocaleData().then(({ data: t }) => {
-    if (!t || !t.github) return;
-    const g = t.github;
-    document.querySelector('#login-view .title').textContent = g.title || 'GitHub Integration';
-    document.querySelector('#login-view .desc').textContent = g.desc || 'Connect via OAuth Device Flow';
-    document.querySelector('#login-view label').textContent = g.client_id_label || 'GitHub OAuth App Client ID';
-    const loginBtn = document.getElementById('btn-login');
-    loginBtn.childNodes[loginBtn.childNodes.length - 1].textContent = ' ' + (g.login || 'Sign in with GitHub');
-    document.querySelector('#device-view .title').textContent = g.authorize_title || 'Authorize GitBrowser';
-    document.querySelector('#device-view .desc').textContent = g.authorize_desc || 'Go to the link below and enter this code:';
-    document.getElementById('btn-logout').textContent = g.logout || 'Sign out';
-    const navItems = document.querySelectorAll('.nav-item');
-    if (navItems[0]) navItems[0].innerHTML = '<strong>' + (g.repositories || 'Repositories') + '</strong>' + (g.repos_desc || 'Your repos');
-    if (navItems[1]) navItems[1].innerHTML = '<strong>' + (g.notifications || 'Notifications') + '</strong>' + (g.notif_desc || 'Updates');
-    if (navItems[2]) navItems[2].innerHTML = '<strong>' + (g.pull_requests || 'Pull Requests') + '</strong>' + (g.prs_desc || 'Open PRs');
-    if (navItems[3]) navItems[3].innerHTML = '<strong>' + (g.gists || 'Gists') + '</strong>' + (g.gists_desc || 'Code snippets');
-    const features = document.querySelectorAll('.feature-text');
-    if (features[0] && g.feature_access) features[0].innerHTML = '<strong>' + g.feature_access.split(' ')[0] + ' ' + g.feature_access.split(' ')[1] + '</strong> ' + g.feature_access.split(' ').slice(2).join(' ');
-    if (features[1] && g.feature_secure) features[1].innerHTML = '<strong>' + g.feature_secure.split(' \u2014 ')[0] + '</strong> \u2014 ' + (g.feature_secure.split(' \u2014 ')[1] || '');
-    if (features[2] && g.feature_badges) features[2].innerHTML = '<strong>' + g.feature_badges.split(' ')[0] + ' ' + g.feature_badges.split(' ')[1] + '</strong> ' + g.feature_badges.split(' ').slice(2).join(' ');
-  }).catch(() => {});
-}
+// ─── Init ───
+document.getElementById('client-id').value = ghClientId;
+if (ghToken) loadProfile(ghToken);
 </script>
 </body>
 </html>

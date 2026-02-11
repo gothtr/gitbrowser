@@ -26,12 +26,13 @@ const INTERNAL_PAGES = {
   'gb://downloads': 'downloads.html',
   'gb://ai': 'ai.html',
   'gb://github': 'github.html',
+  'gb://passwords': 'passwords.html',
 };
 
 // Pages that need preload for IPC
 const NEEDS_PRELOAD = new Set([
   'gb://newtab', 'gb://settings', 'gb://bookmarks', 'gb://history',
-  'gb://downloads', 'gb://ai', 'gb://github',
+  'gb://downloads', 'gb://ai', 'gb://github', 'gb://passwords',
 ]);
 
 function createWindow() {
@@ -112,6 +113,10 @@ function createTab(url, activate = true) {
       navigateTab(id, normalizeUrl(title.substring('__gb_navigate:'.length)));
       return;
     }
+    if (title.startsWith('__gb_newtab:')) {
+      createTab(title.substring('__gb_newtab:'.length));
+      return;
+    }
     // Don't override internal page titles
     if (!isInternalUrl(tabData.url)) {
       tabData.title = title;
@@ -148,7 +153,22 @@ function createTab(url, activate = true) {
   view.webContents.session.on('will-download', (_e, item) => handleDownload(item));
 
   // Middle-click to open link in new tab
-  view.webContents.on('did-create-window', () => {}); // handled by setWindowOpenHandler
+  view.webContents.on('did-finish-load', () => {
+    if (!isInternalUrl(tabData.url)) {
+      view.webContents.executeJavaScript(`
+        document.addEventListener('auxclick', function(e) {
+          if (e.button === 1) {
+            const a = e.target.closest('a');
+            if (a && a.href && (a.href.startsWith('http://') || a.href.startsWith('https://'))) {
+              e.preventDefault();
+              e.stopPropagation();
+              document.title = '__gb_newtab:' + a.href;
+            }
+          }
+        }, true);
+      `).catch(() => {});
+    }
+  });
   
   // Custom context menu with AI actions
   view.webContents.on('context-menu', (_e, params) => {
@@ -162,7 +182,7 @@ function createTab(url, activate = true) {
 }
 
 function isInternalUrl(url) {
-  return url && (url.startsWith('gb://') || url.includes('newtab.html') || url.includes('settings.html') || url.includes('bookmarks.html') || url.includes('history.html') || url.includes('downloads.html') || url.includes('ai.html') || url.includes('github.html'));
+  return url && (url.startsWith('gb://') || url.includes('newtab.html') || url.includes('settings.html') || url.includes('bookmarks.html') || url.includes('history.html') || url.includes('downloads.html') || url.includes('ai.html') || url.includes('github.html') || url.includes('passwords.html'));
 }
 
 function getInternalTitle(url) {
@@ -174,6 +194,7 @@ function getInternalTitle(url) {
     'gb://downloads': ['downloads.title', 'Downloads'],
     'gb://ai': ['ai.title', 'AI Assistant'],
     'gb://github': ['github.title', 'GitHub'],
+    'gb://passwords': ['passwords.title', 'Passwords'],
   };
   const entry = keys[url];
   if (!entry) return null;
@@ -956,6 +977,50 @@ ipcMain.on('ai-clear-history', (_e, sessionId) => {
   aiChatHistories.delete(sessionId || 'default');
 });
 
+// ─── Password Manager ───
+
+ipcMain.handle('password-unlock', async (_e, { masterPassword }) => {
+  try { return await rustBridge.call('password.unlock', { master_password: masterPassword }); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.handle('password-lock', async () => {
+  try { return await rustBridge.call('password.lock', {}); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.handle('password-is-unlocked', async () => {
+  try { return await rustBridge.call('password.is_unlocked', {}); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.handle('password-list', async (_e, { url }) => {
+  try { return await rustBridge.call('password.list', { url: url || '' }); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.handle('password-save', async (_e, { url, username, password }) => {
+  try { return await rustBridge.call('password.save', { url, username, password }); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.handle('password-update', async (_e, { id, username, password }) => {
+  try { return await rustBridge.call('password.update', { id, username, password }); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.handle('password-delete', async (_e, { id }) => {
+  try { return await rustBridge.call('password.delete', { id }); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.handle('password-generate', async (_e, opts) => {
+  try { return await rustBridge.call('password.generate', opts || {}); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.on('open-passwords', () => createTab('gb://passwords'));
+
 // ─── GitHub Device Flow OAuth ───
 
 let githubToken = null;
@@ -983,6 +1048,29 @@ ipcMain.handle('github-device-login', async (_e, { clientId }) => {
   }
 });
 
+// ─── GitHub notification badge polling ───
+let ghNotifInterval = null;
+
+async function pollGhNotifications() {
+  if (!githubToken) return;
+  try {
+    const res = await net.fetch('https://api.github.com/notifications?per_page=50', {
+      headers: { 'Authorization': 'Bearer ' + githubToken, 'Accept': 'application/vnd.github+json' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const count = Array.isArray(data) ? data.length : 0;
+      sendToToolbar('gh-notif-count', { count });
+    }
+  } catch { /* ignore */ }
+}
+
+function startGhNotifPolling() {
+  if (ghNotifInterval) clearInterval(ghNotifInterval);
+  pollGhNotifications();
+  ghNotifInterval = setInterval(pollGhNotifications, 60000);
+}
+
 ipcMain.handle('github-device-poll', async (_e, { clientId, deviceCode }) => {
   try {
     const res = await net.fetch('https://github.com/login/oauth/access_token', {
@@ -993,6 +1081,7 @@ ipcMain.handle('github-device-poll', async (_e, { clientId, deviceCode }) => {
     const data = await res.json();
     if (data.access_token) {
       githubToken = data.access_token;
+      startGhNotifPolling();
       return { status: 'ok', token: data.access_token };
     }
     if (data.error === 'authorization_pending') return { status: 'pending' };
