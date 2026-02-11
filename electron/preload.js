@@ -63,6 +63,8 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   pauseDownload: (id) => ipcRenderer.send('download-pause', id),
   resumeDownload: (id) => ipcRenderer.send('download-resume', id),
   cancelDownload: (id) => ipcRenderer.send('download-cancel', id),
+  openDownloadFile: (filepath) => ipcRenderer.send('download-open-file', filepath),
+  showDownloadInFolder: (filepath) => ipcRenderer.send('download-show-folder', filepath),
 
   // AI Assistant
   aiChat: (data) => ipcRenderer.invoke('ai-chat', data),

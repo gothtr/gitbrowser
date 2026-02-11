@@ -112,7 +112,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             let conn = a.db.connection();
             let mgr = HistoryManager::new(conn);
             let entries = mgr.search_history(query).map_err(|e| e.to_string())?;
-            let arr: Vec<Value> = entries.iter().map(|h| json!({"id":h.id,"url":h.url,"title":h.title,"visit_count":h.visit_count,"visit_time":h.visit_time})).collect();
+            let arr: Vec<Value> = entries.iter().map(|h| json!({"id":h.id,"url":h.url,"title":h.title,"visit_count":h.visit_count,"visit_time":h.visit_time * 1000})).collect();
             Ok(json!(arr))
         }
         "history.recent" => {
@@ -120,7 +120,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             let conn = a.db.connection();
             let mgr = HistoryManager::new(conn);
             let entries = mgr.list_history(None).map_err(|e| e.to_string())?;
-            let arr: Vec<Value> = entries.iter().map(|h| json!({"id":h.id,"url":h.url,"title":h.title,"visit_count":h.visit_count,"visit_time":h.visit_time})).collect();
+            let arr: Vec<Value> = entries.iter().map(|h| json!({"id":h.id,"url":h.url,"title":h.title,"visit_count":h.visit_count,"visit_time":h.visit_time * 1000})).collect();
             Ok(json!(arr))
         }
         "history.delete" => {

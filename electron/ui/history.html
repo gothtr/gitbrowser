@@ -39,12 +39,16 @@ body {
 }
 .btn-clear:hover { background: var(--danger-emphasis); color: #fff; border-color: var(--danger-emphasis); }
 .list { display: flex; flex-direction: column; gap: 1px; }
+.day-group { margin-top: 16px; }
+.day-group:first-child { margin-top: 0; }
+.day-label { font-size: 12px; font-weight: 600; color: var(--fg-muted); padding: 8px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
 .item {
   display: flex; align-items: center; padding: 10px 16px; gap: 12px;
   background: var(--bg-default); border-radius: 6px; cursor: pointer;
   transition: background 0.12s; border: 1px solid transparent;
 }
 .item:hover { background: var(--bg-subtle); border-color: var(--border-muted); }
+.item-favicon { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
 .item-info { flex: 1; min-width: 0; }
 .item-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .item-url { font-size: 11px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
@@ -97,11 +101,37 @@ async function load(query) {
     return;
   }
   listEl.innerHTML = '';
+  
+  // Group by day
+  const groups = {};
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterday = today - 86400000;
+  
   items.slice(0, 200).forEach(h => {
+    const ts = h.visit_time || 0;
+    let label;
+    if (ts >= today) label = _lt.today || 'Today';
+    else if (ts >= yesterday) label = _lt.yesterday || 'Yesterday';
+    else {
+      const d = new Date(ts);
+      label = d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    if (!groups[label]) groups[label] = [];
+    groups[label].push(h);
+  });
+  
+  Object.entries(groups).forEach(([label, entries]) => {
+    const group = document.createElement('div');
+    group.className = 'day-group';
+    group.innerHTML = `<div class="day-label">${esc(label)}</div>`;
+    entries.forEach(h => {
     const div = document.createElement('div');
     div.className = 'item';
     const time = h.visit_time ? formatTime(h.visit_time) : '';
+    const faviconUrl = h.url ? getFaviconUrl(h.url) : '';
     div.innerHTML = `
+      ${faviconUrl ? `<img class="item-favicon" src="${faviconUrl}" onerror="this.style.display='none'" />` : ''}
       <div class="item-info">
         <div class="item-title">${esc(h.title || h.url)}</div>
         <div class="item-url">${esc(h.url)}</div>
@@ -116,8 +146,17 @@ async function load(query) {
       div.style.opacity = '0'; div.style.transition = 'all 0.15s';
       setTimeout(() => div.remove(), 150);
     };
-    listEl.appendChild(div);
+    group.appendChild(div);
+    });
+    listEl.appendChild(group);
   });
+}
+
+function getFaviconUrl(url) {
+  try {
+    const u = new URL(url);
+    return 'https://www.google.com/s2/favicons?sz=16&domain=' + u.hostname;
+  } catch { return ''; }
 }
 
 function formatTime(t) {

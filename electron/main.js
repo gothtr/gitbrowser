@@ -106,15 +106,17 @@ function createTab(url, activate = true) {
     // Don't override internal page titles
     if (!isInternalUrl(tabData.url)) {
       tabData.title = title;
+      // Record history when we have the real title
+      const url = tabData.url;
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        rustBridge.call('history.record', { url, title }).catch(() => {});
+      }
     }
     sendTabsUpdate();
   });
 
   view.webContents.on('did-navigate', (_e, navUrl) => {
     tabData.url = navUrl;
-    if (navUrl.startsWith('http://') || navUrl.startsWith('https://')) {
-      rustBridge.call('history.record', { url: navUrl, title: tabData.title }).catch(() => {});
-    }
     sendToToolbar('tab-url-updated', { id, url: navUrl });
     sendTabsUpdate();
   });
@@ -152,13 +154,18 @@ function isInternalUrl(url) {
 }
 
 function getInternalTitle(url) {
-  const titles = {
-    'gb://newtab': 'New Tab', 'gb://settings': 'Settings',
-    'gb://bookmarks': 'Bookmarks', 'gb://history': 'History',
-    'gb://downloads': 'Downloads', 'gb://ai': 'AI Assistant',
-    'gb://github': 'GitHub',
+  const keys = {
+    'gb://newtab': ['tabs.new_tab', 'New Tab'],
+    'gb://settings': ['settings.title', 'Settings'],
+    'gb://bookmarks': ['bookmarks.title', 'Bookmarks'],
+    'gb://history': ['history.title', 'History'],
+    'gb://downloads': ['downloads.title', 'Downloads'],
+    'gb://ai': ['ai.title', 'AI Assistant'],
+    'gb://github': ['github.title', 'GitHub'],
   };
-  return titles[url] || null;
+  const entry = keys[url];
+  if (!entry) return null;
+  return cmL(entry[0], entry[1]);
 }
 
 function loadUrlInView(view, url) {
@@ -310,6 +317,9 @@ function handleDownload(item) {
     dl.eta = 0;
     downloadItems.delete(dlId);
     sendToToolbar('download-done', { id: dlId, state, savePath: dl.savePath, filename: dl.filename });
+    if (state === 'completed') {
+      sendToToolbar('toast', { message: `Downloaded: ${dl.filename}` });
+    }
   });
 }
 
@@ -557,6 +567,8 @@ ipcMain.handle('downloads-list', () => Array.from(downloads.values()));
 ipcMain.on('download-pause', (_e, id) => { const item = downloadItems.get(id); if (item) item.pause(); });
 ipcMain.on('download-resume', (_e, id) => { const item = downloadItems.get(id); if (item && item.canResume()) item.resume(); });
 ipcMain.on('download-cancel', (_e, id) => { const item = downloadItems.get(id); if (item) item.cancel(); });
+ipcMain.on('download-open-file', (_e, filepath) => { const { shell } = require('electron'); shell.openPath(filepath); });
+ipcMain.on('download-show-folder', (_e, filepath) => { const { shell } = require('electron'); shell.showItemInFolder(filepath); });
 
 // Navigation from internal pages
 ipcMain.on('open-url', (_e, url) => {

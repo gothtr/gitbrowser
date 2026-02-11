@@ -47,7 +47,16 @@ body {
 .dl-btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
 .dl-btn.cancel:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
 .progress { height: 4px; background: var(--bg-subtle); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-.progress-bar { height: 100%; background: var(--accent-emphasis); border-radius: 2px; transition: width 0.3s; }
+.progress-bar { height: 100%; background: var(--accent-emphasis); border-radius: 2px; transition: width 0.3s; position: relative; }
+.progress-bar.pulse { animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.done-actions { display: flex; gap: 6px; margin-left: 8px; }
+.done-btn {
+  padding: 4px 10px; border: 1px solid var(--border-default); background: var(--bg-subtle);
+  color: var(--fg-muted); cursor: pointer; border-radius: 4px; font-size: 11px;
+  font-family: inherit; transition: all 0.12s; white-space: nowrap;
+}
+.done-btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
 .empty { padding: 48px; text-align: center; color: var(--fg-muted); font-size: 14px; }
 .empty svg { margin-bottom: 12px; color: var(--fg-subtle); }
 </style>
@@ -83,19 +92,26 @@ function renderItem(dl) {
   const isDone = dl.state === 'completed';
   const isFailed = dl.state === 'cancelled' || dl.state === 'interrupted';
   const isActive = !isDone && !isFailed;
+  const speedStr = dl.speed > 0 ? formatBytes(dl.speed) + '/s' : '';
+  const etaStr = dl.eta > 0 ? formatEta(dl.eta) : '';
+  const statusText = isDone ? 'Completed' : isFailed ? 'Failed' : (dl.paused ? 'Paused — ' : '') + pct + '%' + (speedStr ? ' — ' + speedStr : '') + (etaStr ? ' — ' + etaStr : '') + ' — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes);
   div.innerHTML = `
     <div class="item-top">
       <div class="item-icon"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg></div>
       <div class="item-info">
         <div class="item-name">${esc(dl.filename)}</div>
-        <div class="item-status ${isDone ? 'done' : isFailed ? 'error' : ''}">${isDone ? 'Completed' : isFailed ? 'Failed' : (dl.paused ? 'Paused — ' : '') + pct + '% — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes)}</div>
+        <div class="item-status ${isDone ? 'done' : isFailed ? 'error' : ''}">${statusText}</div>
       </div>
       ${isActive ? `<div class="dl-controls">
         <button class="dl-btn" title="${dl.paused ? 'Resume' : 'Pause'}" data-action="${dl.paused ? 'resume' : 'pause'}" data-id="${dl.id}">${dl.paused ? '\u25B6' : '\u23F8'}</button>
         <button class="dl-btn cancel" title="Cancel" data-action="cancel" data-id="${dl.id}">\u2715</button>
       </div>` : ''}
+      ${isDone && dl.savePath ? `<div class="done-actions">
+        <button class="done-btn" data-open-file="${esc(dl.savePath)}">Open file</button>
+        <button class="done-btn" data-show-folder="${esc(dl.savePath)}">Show in folder</button>
+      </div>` : ''}
     </div>
-    ${isActive ? `<div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>` : ''}
+    ${isActive ? `<div class="progress"><div class="progress-bar pulse" style="width:${pct}%"></div></div>` : ''}
   `;
   // Wire up buttons
   div.querySelectorAll('.dl-btn').forEach(btn => {
@@ -105,6 +121,12 @@ function renderItem(dl) {
       if (action === 'pause') gb.pauseDownload(id);
       else if (action === 'resume') gb.resumeDownload(id);
       else if (action === 'cancel') gb.cancelDownload(id);
+    };
+  });
+  div.querySelectorAll('.done-btn').forEach(btn => {
+    btn.onclick = () => {
+      if (btn.dataset.openFile) gb.openDownloadFile(btn.dataset.openFile);
+      else if (btn.dataset.showFolder) gb.showDownloadInFolder(btn.dataset.showFolder);
     };
   });
   listEl.appendChild(div);
@@ -119,7 +141,9 @@ gb.onDownloadProgress((dl) => {
     const status = el.querySelector('.item-status');
     const pct = dl.totalBytes > 0 ? Math.round((dl.receivedBytes / dl.totalBytes) * 100) : 0;
     if (bar) bar.style.width = pct + '%';
-    if (status) status.textContent = (dl.paused ? 'Paused — ' : '') + pct + '% — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes);
+    const speedStr = dl.speed > 0 ? formatBytes(dl.speed) + '/s' : '';
+    const etaStr = dl.eta > 0 ? formatEta(dl.eta) : '';
+    if (status) status.textContent = (dl.paused ? 'Paused — ' : '') + pct + '%' + (speedStr ? ' — ' + speedStr : '') + (etaStr ? ' — ' + etaStr : '') + ' — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes);
     // Update pause/resume button
     const pauseBtn = el.querySelector('.dl-btn[data-action="pause"], .dl-btn[data-action="resume"]');
     if (pauseBtn) {
@@ -134,8 +158,25 @@ gb.onDownloadDone((dl) => {
   if (el) {
     const status = el.querySelector('.item-status');
     const progress = el.querySelector('.progress');
+    const controls = el.querySelector('.dl-controls');
     if (status) { status.textContent = dl.state === 'completed' ? 'Completed' : 'Failed'; status.className = 'item-status ' + (dl.state === 'completed' ? 'done' : 'error'); }
     if (progress) progress.remove();
+    if (controls) controls.remove();
+    if (dl.state === 'completed' && dl.savePath) {
+      const top = el.querySelector('.item-top');
+      if (top) {
+        const actions = document.createElement('div');
+        actions.className = 'done-actions';
+        actions.innerHTML = `<button class="done-btn" data-open-file="${esc(dl.savePath)}">Open file</button><button class="done-btn" data-show-folder="${esc(dl.savePath)}">Show in folder</button>`;
+        actions.querySelectorAll('.done-btn').forEach(btn => {
+          btn.onclick = () => {
+            if (btn.dataset.openFile) gb.openDownloadFile(btn.dataset.openFile);
+            else if (btn.dataset.showFolder) gb.showDownloadInFolder(btn.dataset.showFolder);
+          };
+        });
+        top.appendChild(actions);
+      }
+    }
   }
 });
 
@@ -145,6 +186,11 @@ function formatBytes(b) {
   if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
   if (b < 1073741824) return (b / 1048576).toFixed(1) + ' MB';
   return (b / 1073741824).toFixed(1) + ' GB';
+}
+function formatEta(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 

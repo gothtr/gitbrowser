@@ -181,7 +181,10 @@
     "translate_ru": "Translate to Russian",
     "summarize": "Summarize",
     "explain": "Explain",
-    "inspect": "Inspect Element"
+    "inspect": "Inspect Element",
+    "save_image": "Save Image",
+    "copy_image_url": "Copy Image URL",
+    "open_image_new_tab": "Open Image in New Tab"
   },
   "newtab": {
     "subtitle": "Fast. Private. Open.",
@@ -207,5 +210,34 @@
     "loading": "Loading...",
     "error": "Error",
     "success": "Success"
+  },
+  "passwords": {
+    "title": "Passwords",
+    "desc": "Manage saved passwords",
+    "unlock": "Unlock",
+    "lock": "Lock",
+    "master_password": "Master Password",
+    "add": "Add Password",
+    "edit": "Edit",
+    "delete": "Delete",
+    "generate": "Generate Password",
+    "copy": "Copy",
+    "no_passwords": "No saved passwords",
+    "site": "Website",
+    "username": "Username",
+    "password": "Password",
+    "save_prompt": "Save password for this site?",
+    "autofill": "Autofill"
+  },
+  "extensions": {
+    "title": "Extensions",
+    "desc": "Manage browser extensions",
+    "install": "Install",
+    "uninstall": "Uninstall",
+    "enable": "Enable",
+    "disable": "Disable",
+    "no_extensions": "No extensions installed",
+    "details": "Details",
+    "permissions": "Permissions"
   }
 }
