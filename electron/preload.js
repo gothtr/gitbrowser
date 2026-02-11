@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   getTabs: () => ipcRenderer.send('get-tabs'),
   tabContextMenu: (id) => ipcRenderer.send('tab-context-menu', id),
 
+  // Ctrl+Tab / Ctrl+Shift+Tab navigation
+  nextTab: () => ipcRenderer.send('next-tab'),
+  prevTab: () => ipcRenderer.send('prev-tab'),
+
   // Zoom
   zoomIn: () => ipcRenderer.send('zoom-in'),
   zoomOut: () => ipcRenderer.send('zoom-out'),
@@ -89,4 +93,5 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   onDownloadProgress: (cb) => ipcRenderer.on('download-progress', (_e, d) => cb(d)),
   onDownloadDone: (cb) => ipcRenderer.on('download-done', (_e, d) => cb(d)),
   onThemeChanged: (cb) => ipcRenderer.on('theme-changed', (_e, d) => cb(d)),
+  onCloseFind: (cb) => ipcRenderer.on('close-find', (_e, d) => cb(d)),
 });

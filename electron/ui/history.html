@@ -23,13 +23,13 @@ body {
   background: var(--bg-canvas); color: var(--fg-default);
   padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
 }
-.page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
-.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 14px; }
+.page-title { font-size: 28px; font-weight: 600; margin-bottom: 4px; }
+.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 15px; }
 .top-bar { display: flex; gap: 8px; margin-bottom: 20px; }
 .search-box {
-  flex: 1; padding: 10px 14px; border: 1px solid var(--border-default);
-  border-radius: 8px; background: var(--bg-default); color: var(--fg-default);
-  font-family: inherit; font-size: 14px; outline: none; transition: border-color 0.15s;
+  flex: 1; padding: 12px 16px; border: 1px solid var(--border-default);
+  border-radius: 10px; background: var(--bg-default); color: var(--fg-default);
+  font-family: inherit; font-size: 15px; outline: none; transition: border-color 0.15s;
 }
 .search-box:focus { border-color: var(--accent-emphasis); box-shadow: 0 0 0 3px rgba(31,111,235,0.2); }
 .btn-clear {
@@ -46,7 +46,9 @@ body {
   display: flex; align-items: center; padding: 10px 16px; gap: 12px;
   background: var(--bg-default); border-radius: 6px; cursor: pointer;
   transition: background 0.12s; border: 1px solid transparent;
+  animation: itemIn 0.25s cubic-bezier(0.33,1,0.68,1) both;
 }
+@keyframes itemIn { from { opacity: 0; transform: translateY(8px); } }
 .item:hover { background: var(--bg-subtle); border-color: var(--border-muted); }
 .item-favicon { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
 .item-info { flex: 1; min-width: 0; }
@@ -84,8 +86,10 @@ searchEl.addEventListener('input', () => {
 });
 
 document.getElementById('btn-clear').onclick = () => {
+  const msg = _lt.clear_confirm || 'Are you sure you want to clear all history?';
+  if (!confirm(msg)) return;
   gb.clearHistory();
-  listEl.innerHTML = '<div class="empty">History cleared</div>';
+  listEl.innerHTML = `<div class="empty">${esc(_lt.cleared || 'History cleared')}</div>`;
 };
 
 async function load(query) {
@@ -97,7 +101,7 @@ async function load(query) {
   if (!Array.isArray(items)) items = [];
   
   if (items.length === 0) {
-    listEl.innerHTML = '<div class="empty">No history</div>';
+    listEl.innerHTML = `<div class="empty">${esc(_lt.no_history || 'No history')}</div>`;
     return;
   }
   listEl.innerHTML = '';

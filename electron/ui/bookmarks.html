@@ -25,12 +25,12 @@ body {
   background: var(--bg-canvas); color: var(--fg-default);
   padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
 }
-.page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
-.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 14px; }
+.page-title { font-size: 28px; font-weight: 600; margin-bottom: 4px; }
+.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 15px; }
 .search-box {
-  width: 100%; padding: 10px 14px; border: 1px solid var(--border-default);
-  border-radius: 8px; background: var(--bg-default); color: var(--fg-default);
-  font-family: inherit; font-size: 14px; outline: none; margin-bottom: 20px;
+  width: 100%; padding: 12px 16px; border: 1px solid var(--border-default);
+  border-radius: 10px; background: var(--bg-default); color: var(--fg-default);
+  font-family: inherit; font-size: 15px; outline: none; margin-bottom: 20px;
   transition: border-color 0.15s;
 }
 .search-box:focus { border-color: var(--accent-emphasis); box-shadow: 0 0 0 3px rgba(31,111,235,0.2); }
@@ -39,7 +39,9 @@ body {
   display: flex; align-items: center; padding: 12px 16px; gap: 12px;
   background: var(--bg-default); border-radius: 6px; cursor: pointer;
   transition: background 0.12s; border: 1px solid transparent;
+  animation: itemIn 0.25s cubic-bezier(0.33,1,0.68,1) both;
 }
+@keyframes itemIn { from { opacity: 0; transform: translateY(8px); } }
 .item:hover { background: var(--bg-subtle); border-color: var(--border-muted); }
 .item-icon {
   width: 32px; height: 32px; border-radius: 6px; background: var(--bg-subtle);
@@ -71,6 +73,7 @@ const gb = window.gitbrowser;
 const listEl = document.getElementById('list');
 const searchEl = document.getElementById('search');
 let debounce = null;
+let _bm = {}; // locale strings
 
 searchEl.addEventListener('input', () => {
   clearTimeout(debounce);
@@ -88,7 +91,7 @@ async function load(query) {
   if (items.length === 0) {
     listEl.innerHTML = `<div class="empty">
       <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
-      <div>${query ? 'No bookmarks match your search' : 'No bookmarks yet. Press Ctrl+D to add one.'}</div>
+      <div>${query ? (_bm.no_results || 'No bookmarks match your search') : (_bm.no_bookmarks || 'No bookmarks yet. Press Ctrl+D to add one.')}</div>
     </div>`;
     return;
   }
@@ -138,9 +141,11 @@ load('');
 if (gb && gb.getLocaleData) {
   gb.getLocaleData().then(({ data: t }) => {
     if (t && t.bookmarks) {
+      _bm = t.bookmarks;
       document.querySelector('.page-title').textContent = t.bookmarks.title || 'Bookmarks';
       document.querySelector('.page-desc').textContent = t.bookmarks.desc || 'Your saved pages';
       searchEl.placeholder = t.bookmarks.search_placeholder || 'Search bookmarks...';
+      load('');
     }
   }).catch(() => {});
 }

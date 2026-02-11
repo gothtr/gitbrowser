@@ -93,14 +93,14 @@ body {
 
 /* ─── Nav buttons ─── */
 .nav-btn {
-  width: 28px; height: 28px; border: none; background: none;
-  color: var(--fg-muted); cursor: pointer; border-radius: 6px;
+  width: 34px; height: 34px; border: none; background: none;
+  color: var(--fg-muted); cursor: pointer; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.12s cubic-bezier(0.33,1,0.68,1);
+  transition: all 0.15s cubic-bezier(0.33,1,0.68,1);
   -webkit-app-region: no-drag; flex-shrink: 0;
 }
-.nav-btn:hover { background: var(--bg-subtle); color: var(--fg-default); }
-.nav-btn:active { transform: scale(0.9); }
+.nav-btn:hover { background: var(--bg-subtle); color: var(--fg-default); transform: translateY(-1px); }
+.nav-btn:active { transform: scale(0.92) translateY(0); }
 
 /* ─── Address bar ─── */
 #addrbar {
@@ -289,6 +289,8 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 'h') { e.preventDefault(); gb.openHistory(); }
   if (e.ctrlKey && e.key === 'j') { e.preventDefault(); gb.openDownloads(); }
   if (e.ctrlKey && e.shiftKey && e.key === 'T') { e.preventDefault(); gb.reopenClosedTab(); }
+  if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); gb.nextTab(); }
+  if (e.ctrlKey && e.shiftKey && e.key === 'Tab') { e.preventDefault(); gb.prevTab(); }
   if (e.key === 'F5') { e.preventDefault(); gb.reload(); }
   if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); gb.zoomIn(); }
   if (e.ctrlKey && e.key === '-') { e.preventDefault(); gb.zoomOut(); }
@@ -415,6 +417,11 @@ const zoomEl = document.getElementById('zoom-indicator');
 gb.onZoomChanged((data) => {
   if (data.level === 0) { zoomEl.style.display = 'none'; }
   else { zoomEl.style.display = 'flex'; zoomEl.textContent = Math.round(100 * Math.pow(1.2, data.level)) + '%'; }
+});
+
+// Close find bar when switching tabs
+gb.onCloseFind(() => {
+  if (findOpen) toggleFindBar();
 });
 
 // ─── Theme ───

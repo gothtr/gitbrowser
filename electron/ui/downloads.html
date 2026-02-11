@@ -23,13 +23,15 @@ body {
   background: var(--bg-canvas); color: var(--fg-default);
   padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
 }
-.page-title { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
-.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 14px; }
+.page-title { font-size: 28px; font-weight: 600; margin-bottom: 4px; }
+.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 15px; }
 .list { display: flex; flex-direction: column; gap: 8px; }
 .item {
   padding: 14px 16px; background: var(--bg-default); border-radius: 8px;
   border: 1px solid var(--border-muted); transition: border-color 0.12s;
+  animation: itemIn 0.25s cubic-bezier(0.33,1,0.68,1) both;
 }
+@keyframes itemIn { from { opacity: 0; transform: translateY(8px); } }
 .item:hover { border-color: var(--border-default); }
 .item-top { display: flex; align-items: center; gap: 10px; }
 .item-icon { color: var(--accent-fg); flex-shrink: 0; }
@@ -69,6 +71,7 @@ body {
 <script>
 const gb = window.gitbrowser;
 const listEl = document.getElementById('list');
+let _dl = {}; // locale strings
 
 async function load() {
   let items;
@@ -76,7 +79,7 @@ async function load() {
   if (!Array.isArray(items) || items.length === 0) {
     listEl.innerHTML = `<div class="empty">
       <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>
-      <div>No downloads yet</div>
+      <div>${_dl.no_downloads || 'No downloads yet'}</div>
     </div>`;
     return;
   }
@@ -94,7 +97,7 @@ function renderItem(dl) {
   const isActive = !isDone && !isFailed;
   const speedStr = dl.speed > 0 ? formatBytes(dl.speed) + '/s' : '';
   const etaStr = dl.eta > 0 ? formatEta(dl.eta) : '';
-  const statusText = isDone ? 'Completed' : isFailed ? 'Failed' : (dl.paused ? 'Paused — ' : '') + pct + '%' + (speedStr ? ' — ' + speedStr : '') + (etaStr ? ' — ' + etaStr : '') + ' — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes);
+  const statusText = isDone ? (_dl.completed || 'Completed') : isFailed ? (_dl.failed || 'Failed') : (dl.paused ? ((_dl.paused || 'Paused') + ' — ') : '') + pct + '%' + (speedStr ? ' — ' + speedStr : '') + (etaStr ? ' — ' + etaStr : '') + ' — ' + formatBytes(dl.receivedBytes) + ' / ' + formatBytes(dl.totalBytes);
   div.innerHTML = `
     <div class="item-top">
       <div class="item-icon"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg></div>
@@ -103,12 +106,12 @@ function renderItem(dl) {
         <div class="item-status ${isDone ? 'done' : isFailed ? 'error' : ''}">${statusText}</div>
       </div>
       ${isActive ? `<div class="dl-controls">
-        <button class="dl-btn" title="${dl.paused ? 'Resume' : 'Pause'}" data-action="${dl.paused ? 'resume' : 'pause'}" data-id="${dl.id}">${dl.paused ? '\u25B6' : '\u23F8'}</button>
-        <button class="dl-btn cancel" title="Cancel" data-action="cancel" data-id="${dl.id}">\u2715</button>
+        <button class="dl-btn" title="${dl.paused ? (_dl.resume || 'Resume') : (_dl.pause || 'Pause')}" data-action="${dl.paused ? 'resume' : 'pause'}" data-id="${dl.id}">${dl.paused ? '\u25B6' : '\u23F8'}</button>
+        <button class="dl-btn cancel" title="${_dl.cancel || 'Cancel'}" data-action="cancel" data-id="${dl.id}">\u2715</button>
       </div>` : ''}
       ${isDone && dl.savePath ? `<div class="done-actions">
-        <button class="done-btn" data-open-file="${esc(dl.savePath)}">Open file</button>
-        <button class="done-btn" data-show-folder="${esc(dl.savePath)}">Show in folder</button>
+        <button class="done-btn" data-open-file="${esc(dl.savePath)}">${_dl.open_file || 'Open file'}</button>
+        <button class="done-btn" data-show-folder="${esc(dl.savePath)}">${_dl.open_folder || 'Show in folder'}</button>
       </div>` : ''}
     </div>
     ${isActive ? `<div class="progress"><div class="progress-bar pulse" style="width:${pct}%"></div></div>` : ''}
@@ -159,7 +162,7 @@ gb.onDownloadDone((dl) => {
     const status = el.querySelector('.item-status');
     const progress = el.querySelector('.progress');
     const controls = el.querySelector('.dl-controls');
-    if (status) { status.textContent = dl.state === 'completed' ? 'Completed' : 'Failed'; status.className = 'item-status ' + (dl.state === 'completed' ? 'done' : 'error'); }
+    if (status) { status.textContent = dl.state === 'completed' ? (_dl.completed || 'Completed') : (_dl.failed || 'Failed'); status.className = 'item-status ' + (dl.state === 'completed' ? 'done' : 'error'); }
     if (progress) progress.remove();
     if (controls) controls.remove();
     if (dl.state === 'completed' && dl.savePath) {
@@ -167,7 +170,7 @@ gb.onDownloadDone((dl) => {
       if (top) {
         const actions = document.createElement('div');
         actions.className = 'done-actions';
-        actions.innerHTML = `<button class="done-btn" data-open-file="${esc(dl.savePath)}">Open file</button><button class="done-btn" data-show-folder="${esc(dl.savePath)}">Show in folder</button>`;
+        actions.innerHTML = `<button class="done-btn" data-open-file="${esc(dl.savePath)}">${_dl.open_file || 'Open file'}</button><button class="done-btn" data-show-folder="${esc(dl.savePath)}">${_dl.open_folder || 'Show in folder'}</button>`;
         actions.querySelectorAll('.done-btn').forEach(btn => {
           btn.onclick = () => {
             if (btn.dataset.openFile) gb.openDownloadFile(btn.dataset.openFile);
@@ -213,8 +216,11 @@ load();
 if (gb && gb.getLocaleData) {
   gb.getLocaleData().then(({ data: t }) => {
     if (t && t.downloads) {
+      _dl = t.downloads;
       document.querySelector('.page-title').textContent = t.downloads.title || 'Downloads';
       document.querySelector('.page-desc').textContent = t.downloads.desc || 'Your downloaded files';
+      // Re-render with localized strings
+      load();
     }
   }).catch(() => {});
 }

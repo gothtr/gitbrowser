@@ -22,16 +22,26 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
   background: var(--bg-canvas); color: var(--fg-default);
   min-height: 100vh; display: flex; flex-direction: column;
-  align-items: center; padding-top: 15vh;
+  align-items: center; padding-top: 12vh;
   user-select: none;
 }
-.logo {
-  font-size: 48px; font-weight: 700; letter-spacing: -2px;
-  color: var(--fg-default);
-  margin-bottom: 8px;
+.greeting {
+  font-size: 32px; font-weight: 600; letter-spacing: -0.5px;
+  color: var(--fg-default); margin-bottom: 4px;
   animation: logoIn 0.5s cubic-bezier(0.33,1,0.68,1);
 }
 @keyframes logoIn { from { opacity:0; transform:scale(0.9); } }
+.clock {
+  font-size: 48px; font-weight: 700; letter-spacing: -2px;
+  color: var(--fg-default); margin-bottom: 4px;
+  animation: fadeIn 0.5s 0.05s both; font-variant-numeric: tabular-nums;
+}
+.logo {
+  font-size: 14px; font-weight: 500; letter-spacing: 1px;
+  color: var(--fg-subtle); text-transform: uppercase;
+  margin-bottom: 8px;
+  animation: fadeIn 0.5s 0.08s both;
+}
 .subtitle { color: var(--fg-muted); font-size: 15px; margin-bottom: 32px; animation: fadeIn 0.5s 0.1s both; }
 @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } }
 .search {
@@ -86,8 +96,9 @@ body {
   background: var(--bg-subtle); display: flex;
   align-items: center; justify-content: center;
   font-size: 16px; font-weight: 700; color: var(--accent-fg);
-  transition: all 0.2s;
+  transition: all 0.2s; overflow: hidden;
 }
+.quick-link-icon img { width: 20px; height: 20px; }
 .quick-link:hover .quick-link-icon {
   background: var(--accent-emphasis); color: white;
 }
@@ -124,6 +135,8 @@ body {
 </style>
 </head>
 <body>
+<div class="greeting" id="greeting">Good evening</div>
+<div class="clock" id="clock"></div>
 <div class="logo">GitBrowser</div>
 <div class="subtitle">Fast. Private. Open.</div>
 <div class="search">
@@ -157,7 +170,12 @@ function renderLinks() {
     const div = document.createElement('div');
     div.className = 'quick-link';
     const letter = (l.name || l.url || '?')[0].toUpperCase();
-    div.innerHTML = `<div class="quick-link-icon">${esc(letter)}</div>${esc(l.name)}<button class="ql-del" title="Remove">\u00D7</button>`;
+    let faviconUrl = '';
+    try { faviconUrl = 'https://www.google.com/s2/favicons?sz=32&domain=' + new URL(l.url).hostname; } catch {}
+    const iconContent = faviconUrl
+      ? `<img src="${esc(faviconUrl)}" onerror="this.parentElement.textContent='${esc(letter)}'" />`
+      : esc(letter);
+    div.innerHTML = `<div class="quick-link-icon">${iconContent}</div>${esc(l.name)}<button class="ql-del" title="Remove">\u00D7</button>`;
     div.addEventListener('click', (e) => {
       if (e.target.closest('.ql-del')) return;
       const gb = window.gitbrowser;
@@ -234,16 +252,36 @@ if (gb) {
 }
 
 // Localization
+let _nt = {};
 if (gb && gb.getLocaleData) {
   gb.getLocaleData().then(({ data: t }) => {
     if (!t || !t.newtab) return;
-    const n = t.newtab;
+    _nt = t.newtab;
     const sub = document.querySelector('.subtitle');
-    if (sub && n.subtitle) sub.textContent = n.subtitle;
+    if (sub && _nt.subtitle) sub.textContent = _nt.subtitle;
     const si = document.getElementById('search');
-    if (si && n.search_placeholder) si.placeholder = n.search_placeholder;
+    if (si && _nt.search_placeholder) si.placeholder = _nt.search_placeholder;
+    updateClock(); // re-apply greeting with locale
   }).catch(() => {});
 }
+
+// Clock and greeting
+function updateClock() {
+  const now = new Date();
+  const h = now.getHours();
+  const m = String(now.getMinutes()).padStart(2, '0');
+  document.getElementById('clock').textContent = h + ':' + m;
+  const greetEl = document.getElementById('greeting');
+  if (greetEl) {
+    let g;
+    if (h >= 5 && h < 12) g = _nt.good_morning || 'Good morning';
+    else if (h >= 12 && h < 18) g = _nt.good_afternoon || 'Good afternoon';
+    else g = _nt.good_evening || 'Good evening';
+    greetEl.textContent = g;
+  }
+}
+updateClock();
+setInterval(updateClock, 10000);
 </script>
 </body>
 </html>

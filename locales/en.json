@@ -47,7 +47,10 @@
     "delete_folder": "Delete Folder",
     "move_to": "Move to",
     "no_bookmarks": "No bookmarks yet. Press Ctrl+D to add one.",
-    "no_results": "No bookmarks match your search"
+    "no_results": "No bookmarks match your search",
+    "added_toast": "Bookmark added",
+    "failed_toast": "Failed to add bookmark",
+    "removed_toast": "Bookmark removed"
   },
   "history": {
     "title": "History",
@@ -195,7 +198,10 @@
     "url": "URL",
     "cancel": "Cancel",
     "add": "Add",
-    "remove": "Remove"
+    "remove": "Remove",
+    "good_morning": "Good morning",
+    "good_afternoon": "Good afternoon",
+    "good_evening": "Good evening"
   },
   "common": {
     "ok": "OK",

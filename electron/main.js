@@ -62,6 +62,15 @@ function createWindow() {
   }
   Menu.setApplicationMenu(null);
   setInterval(saveSession, 30000);
+  // Clean up old completed downloads every hour
+  setInterval(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours
+    for (const [dlId, dl] of downloads) {
+      if ((dl.state === 'completed' || dl.state === 'cancelled' || dl.state === 'interrupted') && dl.startTime < cutoff) {
+        downloads.delete(dlId);
+      }
+    }
+  }, 3600000);
   mainWindow.on('close', () => saveSession());
 }
 
@@ -138,6 +147,9 @@ function createTab(url, activate = true) {
 
   view.webContents.session.on('will-download', (_e, item) => handleDownload(item));
 
+  // Middle-click to open link in new tab
+  view.webContents.on('did-create-window', () => {}); // handled by setWindowOpenHandler
+  
   // Custom context menu with AI actions
   view.webContents.on('context-menu', (_e, params) => {
     buildPageContextMenu(view.webContents, params);
@@ -191,6 +203,10 @@ function switchTab(id) {
   sendTabsUpdate();
   const realUrl = view.webContents.getURL() || url || '';
   sendToToolbar('tab-url-updated', { id, url: realUrl });
+  // Update zoom indicator for the new tab
+  sendToToolbar('zoom-changed', { level: view.webContents.getZoomLevel() });
+  // Close find bar when switching tabs
+  sendToToolbar('close-find', {});
 }
 
 function closeTab(id) {
@@ -202,6 +218,8 @@ function closeTab(id) {
     if (closedTabsStack.length > MAX_CLOSED_TABS) closedTabsStack.shift();
   }
   mainWindow.contentView.removeChildView(view);
+  // Clean up all event listeners before closing
+  view.webContents.removeAllListeners();
   view.webContents.close();
   tabs.delete(id);
   tabOrder = tabOrder.filter(tid => tid !== id);
@@ -318,7 +336,7 @@ function handleDownload(item) {
     downloadItems.delete(dlId);
     sendToToolbar('download-done', { id: dlId, state, savePath: dl.savePath, filename: dl.filename });
     if (state === 'completed') {
-      sendToToolbar('toast', { message: `Downloaded: ${dl.filename}` });
+      sendToToolbar('toast', { message: cmL('downloads.completed', 'Downloaded') + ': ' + dl.filename });
     }
   });
 }
@@ -368,6 +386,18 @@ async function restoreSession() {
 ipcMain.on('new-tab', () => createTab('gb://newtab'));
 ipcMain.on('close-tab', (_e, id) => closeTab(id));
 ipcMain.on('switch-tab', (_e, id) => switchTab(id));
+ipcMain.on('next-tab', () => {
+  if (tabOrder.length < 2) return;
+  const idx = tabOrder.indexOf(activeTabId);
+  const next = (idx + 1) % tabOrder.length;
+  switchTab(tabOrder[next]);
+});
+ipcMain.on('prev-tab', () => {
+  if (tabOrder.length < 2) return;
+  const idx = tabOrder.indexOf(activeTabId);
+  const prev = (idx - 1 + tabOrder.length) % tabOrder.length;
+  switchTab(tabOrder[prev]);
+});
 ipcMain.on('reopen-closed-tab', () => {
   if (closedTabsStack.length > 0) {
     const { url } = closedTabsStack.pop();
@@ -497,9 +527,14 @@ ipcMain.on('navigate', (_e, input) => {
 // Bookmark
 ipcMain.on('add-bookmark', async (_e, data) => {
   try {
-    await rustBridge.call('bookmark.add', { url: data.url, title: data.title });
-    sendToToolbar('toast', { message: 'Bookmark added' });
-  } catch { sendToToolbar('toast', { message: 'Failed to add bookmark' }); }
+    // If title is empty, get it from the active tab
+    let title = data.title;
+    if (!title && activeTabId && tabs.has(activeTabId)) {
+      title = tabs.get(activeTabId).title || '';
+    }
+    await rustBridge.call('bookmark.add', { url: data.url, title });
+    sendToToolbar('toast', { message: cmL('bookmarks.added_toast', 'Bookmark added') });
+  } catch { sendToToolbar('toast', { message: cmL('bookmarks.failed_toast', 'Failed to add bookmark') }); }
 });
 
 ipcMain.handle('bookmark-list', async () => {
@@ -509,7 +544,7 @@ ipcMain.handle('bookmark-search', async (_e, query) => {
   try { return await rustBridge.call('bookmark.search', { query }); } catch { return []; }
 });
 ipcMain.on('bookmark-delete', async (_e, id) => {
-  try { await rustBridge.call('bookmark.delete', { id }); sendToToolbar('toast', { message: 'Bookmark removed' }); } catch {}
+  try { await rustBridge.call('bookmark.delete', { id }); sendToToolbar('toast', { message: cmL('bookmarks.removed_toast', 'Bookmark removed') }); } catch {}
 });
 
 // History
@@ -520,7 +555,7 @@ ipcMain.handle('history-search', async (_e, query) => {
   try { return await rustBridge.call('history.search', { query }); } catch { return []; }
 });
 ipcMain.on('history-clear', async () => {
-  try { await rustBridge.call('history.clear', {}); sendToToolbar('toast', { message: 'History cleared' }); } catch {}
+  try { await rustBridge.call('history.clear', {}); sendToToolbar('toast', { message: cmL('history.cleared', 'History cleared') }); } catch {}
 });
 ipcMain.on('history-delete', async (_e, id) => {
   try { await rustBridge.call('history.delete', { id }); } catch {}
@@ -1053,11 +1088,13 @@ async function loadInitialTheme() {
   broadcastTheme(currentTheme);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   rustBridge.start();
+  // Load locale before creating window so context menu and titles are localized from the start
+  await loadContextMenuLocale();
   createWindow();
   // Load theme after window is ready
-  setTimeout(() => { loadInitialTheme(); loadContextMenuLocale(); }, 500);
+  setTimeout(() => { loadInitialTheme(); }, 500);
 
   // Listen for OS theme changes (for System mode)
   nativeTheme.on('updated', () => {

@@ -13,6 +13,8 @@ class RustBridge {
     this.pending = new Map(); // id -> {resolve, reject}
     this.ready = false;
     this.readyPromise = null;
+    this._reconnecting = false;
+    this._healthInterval = null;
   }
 
   start() {
@@ -34,8 +36,10 @@ class RustBridge {
         const msg = JSON.parse(line);
         if (msg.event === 'ready') {
           this.ready = true;
+          this._reconnecting = false;
           console.log(`[RustBridge] connected, version ${msg.version}`);
           if (this._readyResolve) this._readyResolve();
+          this._startHealthCheck();
           return;
         }
         if (msg.id !== undefined && this.pending.has(msg.id)) {
@@ -56,7 +60,37 @@ class RustBridge {
     this.process.on('exit', (code) => {
       console.log(`[RustBridge] exited with code ${code}`);
       this.ready = false;
+      this._stopHealthCheck();
+      // Reject all pending calls
+      for (const [id, { reject }] of this.pending) {
+        reject(new Error('RPC process exited'));
+      }
+      this.pending.clear();
+      // Auto-reconnect after 2s
+      if (!this._reconnecting) {
+        this._reconnecting = true;
+        console.log('[RustBridge] reconnecting in 2s...');
+        setTimeout(() => this.start(), 2000);
+      }
     });
+  }
+
+  _startHealthCheck() {
+    this._stopHealthCheck();
+    this._healthInterval = setInterval(() => {
+      if (this.ready) {
+        this.call('ping', {}).catch(() => {
+          console.warn('[RustBridge] health check failed');
+        });
+      }
+    }, 30000);
+  }
+
+  _stopHealthCheck() {
+    if (this._healthInterval) {
+      clearInterval(this._healthInterval);
+      this._healthInterval = null;
+    }
   }
 
   async call(method, params = {}) {
@@ -77,6 +111,8 @@ class RustBridge {
   }
 
   stop() {
+    this._reconnecting = true; // prevent auto-reconnect on intentional stop
+    this._stopHealthCheck();
     if (this.process) {
       this.process.stdin.end();
       this.process.kill();

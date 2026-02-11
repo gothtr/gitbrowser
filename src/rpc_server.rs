@@ -62,6 +62,10 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         "bookmark.add" => {
             let url = params.get("url").and_then(|v| v.as_str()).ok_or("missing url")?;
             let title = params.get("title").and_then(|v| v.as_str()).ok_or("missing title")?;
+            // Validate URL format
+            if !url.starts_with("http://") && !url.starts_with("https://") && !url.starts_with("gb://") {
+                return Err("invalid url: must start with http://, https://, or gb://".to_string());
+            }
             let folder = params.get("folder_id").and_then(|v| v.as_str());
             let a = app.borrow();
             let conn = a.db.connection();
@@ -100,6 +104,10 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         "history.record" => {
             let url = params.get("url").and_then(|v| v.as_str()).ok_or("missing url")?;
             let title = params.get("title").and_then(|v| v.as_str()).ok_or("missing title")?;
+            // Validate URL format
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                return Err("invalid url: must start with http:// or https://".to_string());
+            }
             let a = app.borrow();
             let conn = a.db.connection();
             let mut mgr = HistoryManager::new(conn);
