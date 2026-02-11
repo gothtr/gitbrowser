@@ -49,6 +49,12 @@ impl PasswordManager {
         }
     }
 
+    /// Returns a clone of the derived master key if the manager is unlocked.
+    /// Used by other services (GitHub, AI) to encrypt secrets with the master password.
+    pub fn get_derived_key(&self) -> Option<Vec<u8>> {
+        self.derived_key.clone()
+    }
+
     /// Ensures the master salt and verification token exist in the database.
     /// Returns the salt bytes.
     fn get_or_create_master_salt(&self) -> Result<Vec<u8>, CryptoError> {

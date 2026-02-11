@@ -89,6 +89,22 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   githubDeviceLogin: (data) => ipcRenderer.invoke('github-device-login', data),
   githubDevicePoll: (data) => ipcRenderer.invoke('github-device-poll', data),
   githubApi: (data) => ipcRenderer.invoke('github-api', data),
+  githubLogout: () => ipcRenderer.invoke('github-logout'),
+  githubSyncBookmarksUpload: (data) => ipcRenderer.invoke('github-sync-bookmarks-upload', data),
+  githubSyncBookmarksDownload: (data) => ipcRenderer.invoke('github-sync-bookmarks-download', data),
+
+  // Secure secret storage
+  secretStore: (key, value) => ipcRenderer.invoke('secret-store', { key, value }),
+  secretGet: (key) => ipcRenderer.invoke('secret-get', { key }),
+  secretDelete: (key) => ipcRenderer.invoke('secret-delete', { key }),
+
+  // Extensions
+  extensionList: () => ipcRenderer.invoke('extension-list'),
+  extensionInstall: (extPath) => ipcRenderer.invoke('extension-install', { path: extPath }),
+  extensionUninstall: (id) => ipcRenderer.invoke('extension-uninstall', { id }),
+  extensionEnable: (id) => ipcRenderer.invoke('extension-enable', { id }),
+  extensionDisable: (id) => ipcRenderer.invoke('extension-disable', { id }),
+  openExtensions: () => ipcRenderer.send('open-extensions'),
 
   // Navigation from internal pages
   openUrl: (url) => ipcRenderer.send('open-url', url),

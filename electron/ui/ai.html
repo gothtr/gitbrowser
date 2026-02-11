@@ -220,10 +220,12 @@ const MODS={
   deepseek:[{id:'deepseek-chat',n:'DeepSeek Chat'},{id:'deepseek-reasoner',n:'DeepSeek Reasoner'}]
 };
 function gk(p){return localStorage.getItem('ai_key_'+p)||''}
-function setk(p,k){localStorage.setItem('ai_key_'+p,k)}
-function rmk(p){localStorage.removeItem('ai_key_'+p)}
+function setk(p,k){localStorage.setItem('ai_key_'+p,k);if(gb&&gb.secretStore)gb.secretStore('ai_key_'+p,k).catch(()=>{})}
+function rmk(p){localStorage.removeItem('ai_key_'+p);if(gb&&gb.secretDelete)gb.secretDelete('ai_key_'+p).catch(()=>{})}
 function hk(p){return!!gk(p)}
 (function(){const o=localStorage.getItem('ai_api_key');if(o){const p=localStorage.getItem('ai_provider')||'openai';if(!hk(p))setk(p,o);localStorage.removeItem('ai_api_key')}})();
+// Migrate keys from secure storage on load
+(async function(){if(!gb||!gb.secretGet)return;for(const p of Object.keys(PROVS)){if(!gk(p)){try{const r=await gb.secretGet('ai_key_'+p);if(r&&r.value){localStorage.setItem('ai_key_'+p,r.value);bProv&&bProv()}}catch{}}}})();
 
 function bProv(){provEl.innerHTML='';for(const[id,i]of Object.entries(PROVS)){const o=document.createElement('option');o.value=id;o.textContent=i.n+(hk(id)?'':' \u26A0');provEl.appendChild(o)}}
 function uKI(){const h=hk(provEl.value);kdi.className='kd '+(h?'ok':'ms');kl.textContent=h?(t18('ai.key')||'Key')+' \u2713':(t18('ai.set_key')||'Set Key');kb.className='hb'+(h?'':' nk')}

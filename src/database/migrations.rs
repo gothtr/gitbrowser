@@ -114,6 +114,7 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             enabled INTEGER NOT NULL DEFAULT 1,
             install_path TEXT NOT NULL,
             permissions TEXT NOT NULL,
+            content_scripts TEXT NOT NULL DEFAULT '[]',
             installed_at INTEGER NOT NULL
         );
 
@@ -152,6 +153,16 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             sync_type TEXT NOT NULL,
             gist_id TEXT NOT NULL,
             last_synced_at INTEGER NOT NULL
+        );
+
+        -- ===== Secure secret store (master-password encrypted) =====
+        CREATE TABLE IF NOT EXISTS secure_store (
+            key TEXT PRIMARY KEY,
+            ciphertext BLOB NOT NULL,
+            iv BLOB NOT NULL,
+            auth_tag BLOB NOT NULL,
+            updated_at INTEGER NOT NULL,
+            uses_master INTEGER NOT NULL DEFAULT 0
         );
         ",
     )?;

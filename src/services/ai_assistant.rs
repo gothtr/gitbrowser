@@ -25,6 +25,8 @@ pub trait AIAssistantTrait {
     fn clear_chat_history(&mut self) -> Result<(), AIError>;
     fn get_token_usage(&self) -> TokenUsage;
     fn get_available_providers(&self) -> Vec<AIProviderConfig>;
+    /// Re-encrypt all stored API keys with a new master key.
+    fn rekey_with_master(&mut self, master_key: &[u8]) -> Result<(), CryptoError>;
 }
 
 /// AI assistant backed by SQLite + CryptoService.
@@ -32,17 +34,21 @@ pub struct AIAssistant {
     db: Arc<Database>,
     crypto: CryptoService,
     encryption_key: Vec<u8>,
+    #[allow(dead_code)]
+    fallback_key: Vec<u8>,
     active_provider: Option<AIProvider>,
 }
 
 impl AIAssistant {
     pub fn new(db: Arc<Database>) -> Result<Self, CryptoError> {
         let crypto = CryptoService::new();
-        let encryption_key = crypto.derive_key(AI_KEY_PASSPHRASE, AI_KEY_SALT)?;
+        let fallback_key = crypto.derive_key(AI_KEY_PASSPHRASE, AI_KEY_SALT)?;
+        let encryption_key = fallback_key.clone();
         Ok(Self {
             db,
             crypto,
             encryption_key,
+            fallback_key,
             active_provider: None,
         })
     }
@@ -221,5 +227,37 @@ impl AIAssistantTrait for AIAssistant {
                 supports_streaming: true,
             },
         ]
+    }
+
+    fn rekey_with_master(&mut self, master_key: &[u8]) -> Result<(), CryptoError> {
+        // Re-encrypt all AI API keys from current key to master key
+        let providers = vec!["openrouter", "openai", "anthropic", "deepseek"];
+        let conn = self.db.connection();
+        for provider in providers {
+            let key_id = format!("ai_key_{}", provider);
+            let result = conn.query_row(
+                "SELECT encrypted_password, iv, auth_tag FROM credentials WHERE id = ?1",
+                rusqlite::params![key_id],
+                |row| {
+                    Ok(EncryptedData {
+                        ciphertext: row.get(0)?,
+                        iv: row.get(1)?,
+                        auth_tag: row.get(2)?,
+                    })
+                },
+            );
+            if let Ok(encrypted) = result {
+                if let Ok(decrypted) = self.crypto.decrypt_aes256gcm(&encrypted, &self.encryption_key) {
+                    let re_encrypted = self.crypto.encrypt_aes256gcm(&decrypted, master_key)?;
+                    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
+                    let _ = conn.execute(
+                        "UPDATE credentials SET encrypted_password = ?1, iv = ?2, auth_tag = ?3, updated_at = ?4 WHERE id = ?5",
+                        rusqlite::params![re_encrypted.ciphertext, re_encrypted.iv, re_encrypted.auth_tag, now, key_id],
+                    );
+                }
+            }
+        }
+        self.encryption_key = master_key.to_vec();
+        Ok(())
     }
 }

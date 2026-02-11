@@ -92,8 +92,8 @@
 - [x] Показывать непрочитанные уведомления (badge на кнопке GitHub в тулбаре)
 - [x] Добавить Activity Feed (последние события пользователя)
 - [x] Добавить просмотр Issues и PRs с фильтрацией
-- [ ] Добавить синхронизацию закладок через GitHub Gists (encrypt → upload)
-- [ ] Перенести токен из localStorage в зашифрованное хранилище Rust backend
+- [x] Добавить синхронизацию закладок через GitHub Gists (encrypt → upload)
+- [x] Перенести токен из localStorage в зашифрованное хранилище Rust backend
 - [x] Добавить информацию профиля: bio, followers, following, public repos count
 - [x] Добавить быстрые действия: создать repo, создать gist, открыть GitHub Copilot
 
@@ -113,8 +113,8 @@
 - [x] Добавить preload API: `passwordUnlock()`, `passwordLock()`, `passwordList()`, `passwordSave()`, `passwordDelete()`, `passwordGenerate()`
 - [x] Добавить RPC handlers в rpc_server.rs
 - [x] Добавить кнопку "Пароли" в тулбар или в настройки
-- [ ] Добавить автозаполнение: при фокусе на поле пароля показывать popup с сохранёнными credentials
-- [ ] Добавить предложение сохранить пароль после логина на сайте
+- [x] Добавить автозаполнение: при фокусе на поле пароля показывать popup с сохранёнными credentials
+- [x] Добавить предложение сохранить пароль после логина на сайте
 
 ---
 
@@ -129,11 +129,11 @@
 - Session data не зашифрована
 
 ### Исправления
-- [ ] Перенести API ключи из localStorage в зашифрованное хранилище через Rust backend
-- [ ] Использовать master password от PasswordManager для шифрования всех секретов
-- [ ] Добавить CSP headers для внутренних страниц
+- [x] Перенести API ключи из localStorage в зашифрованное хранилище через Rust backend
+- [x] Использовать master password от PasswordManager для шифрования всех секретов
+- [x] Добавить CSP headers для внутренних страниц
 - [x] Валидация URL в RPC handlers
-- [ ] Шифровать session.json
+- [x] Шифровать session.json
 
 ---
 
@@ -146,13 +146,13 @@
 - Нет документации
 
 ### Исправления
-- [ ] Создать `electron/ui/extensions.html` — UI менеджера расширений
-- [ ] Добавить IPC handlers и preload API
-- [ ] Добавить RPC handlers в rpc_server.rs
-- [ ] Определить Extension API: manifest.json формат, доступные API (tabs, bookmarks, storage, notifications)
-- [ ] Создать документацию для разработчиков расширений (EXTENSIONS.md)
-- [ ] Добавить кнопку расширений в тулбар
-- [ ] Поддержка content scripts (инъекция JS/CSS в веб-страницы)
+- [x] Создать `electron/ui/extensions.html` — UI менеджера расширений
+- [x] Добавить IPC handlers и preload API
+- [x] Добавить RPC handlers в rpc_server.rs
+- [x] Определить Extension API: manifest.json формат, доступные API (tabs, bookmarks, storage, notifications)
+- [x] Создать документацию для разработчиков расширений (EXTENSIONS.md)
+- [x] Добавить кнопку расширений в тулбар
+- [x] Поддержка content scripts (инъекция JS/CSS в веб-страницы)
 
 ---
 
@@ -177,8 +177,8 @@
 ## 10. Мелкие баги и недоработки
 
 - [x] `getInternalTitle()` возвращает hardcoded английские названия — нужна локализация
-- [ ] Приватное окно не имеет отдельного tab management — это просто одна вкладка
-- [ ] Reader mode кнопка скрыта по умолчанию, но не появляется надёжно на всех страницах
+- [x] Приватное окно не имеет отдельного tab management — это просто одна вкладка
+- [x] Reader mode кнопка скрыта по умолчанию, но не появляется надёжно на всех страницах
 - [x] Bookmark добавляется с пустым title (передаётся `title: ''` из тулбара)
 - [x] Zoom indicator не показывает текущий уровень при переключении вкладок
 - [x] Find bar не закрывается при переключении вкладок

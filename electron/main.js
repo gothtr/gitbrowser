@@ -27,12 +27,13 @@ const INTERNAL_PAGES = {
   'gb://ai': 'ai.html',
   'gb://github': 'github.html',
   'gb://passwords': 'passwords.html',
+  'gb://extensions': 'extensions.html',
 };
 
 // Pages that need preload for IPC
 const NEEDS_PRELOAD = new Set([
   'gb://newtab', 'gb://settings', 'gb://bookmarks', 'gb://history',
-  'gb://downloads', 'gb://ai', 'gb://github', 'gb://passwords',
+  'gb://downloads', 'gb://ai', 'gb://github', 'gb://passwords', 'gb://extensions',
 ]);
 
 function createWindow() {
@@ -62,6 +63,25 @@ function createWindow() {
     toolbarView.webContents.openDevTools({ mode: 'detach' });
   }
   Menu.setApplicationMenu(null);
+
+  // Register will-download once on the default session (not per-tab!)
+  session.defaultSession.on('will-download', (_e, item) => handleDownload(item));
+
+  // CSP headers for internal pages
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const url = details.url || '';
+    if (url.startsWith('file://') || url.includes('/ui/')) {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': ["default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.github.com https://*.githubusercontent.com; font-src 'self' data:;"],
+        },
+      });
+    } else {
+      callback({ responseHeaders: details.responseHeaders });
+    }
+  });
+
   setInterval(saveSession, 30000);
   // Clean up old completed downloads every hour
   setInterval(() => {
@@ -117,6 +137,23 @@ function createTab(url, activate = true) {
       createTab(title.substring('__gb_newtab:'.length));
       return;
     }
+    if (title.startsWith('__gb_save_password:')) {
+      try {
+        const data = JSON.parse(title.substring('__gb_save_password:'.length));
+        // Check if already saved, then offer to save
+        rustBridge.call('password.is_unlocked', {}).then(res => {
+          if (res && res.unlocked) {
+            rustBridge.call('password.list', { url: data.url }).then(existing => {
+              const alreadySaved = Array.isArray(existing) && existing.some(c => c.username === data.username);
+              if (!alreadySaved) {
+                sendToToolbar('toast', { message: cmL('passwords.save_prompt', 'Save password?'), action: 'save-password', data });
+              }
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      } catch { /* ignore */ }
+      return;
+    }
     // Don't override internal page titles
     if (!isInternalUrl(tabData.url)) {
       tabData.title = title;
@@ -139,7 +176,13 @@ function createTab(url, activate = true) {
     sendToToolbar('tab-url-updated', { id, url: navUrl });
   });
 
-  view.webContents.on('did-start-loading', () => sendToToolbar('tab-loading', { id, loading: true }));
+  view.webContents.on('did-start-loading', () => {
+    sendToToolbar('tab-loading', { id, loading: true });
+    // Inject document_start content scripts early
+    if (!isInternalUrl(tabData.url)) {
+      injectContentScripts(view.webContents, tabData.url, 'document_start');
+    }
+  });
   view.webContents.on('did-stop-loading', () => sendToToolbar('tab-loading', { id, loading: false }));
 
   // Favicon
@@ -149,8 +192,6 @@ function createTab(url, activate = true) {
       sendTabsUpdate();
     }
   });
-
-  view.webContents.session.on('will-download', (_e, item) => handleDownload(item));
 
   // Middle-click to open link in new tab
   view.webContents.on('did-finish-load', () => {
@@ -167,6 +208,14 @@ function createTab(url, activate = true) {
           }
         }, true);
       `).catch(() => {});
+
+      // Password autofill: detect login forms and inject autofill UI
+      injectPasswordAutofill(view.webContents, tabData.url);
+      // Detect form submissions to offer saving passwords
+      setupPasswordSaveDetection(view.webContents, tabData.url);
+      // Inject extension content scripts matching this URL
+      injectContentScripts(view.webContents, tabData.url, 'document_end');
+      injectContentScripts(view.webContents, tabData.url, 'document_idle');
     }
   });
   
@@ -182,7 +231,7 @@ function createTab(url, activate = true) {
 }
 
 function isInternalUrl(url) {
-  return url && (url.startsWith('gb://') || url.includes('newtab.html') || url.includes('settings.html') || url.includes('bookmarks.html') || url.includes('history.html') || url.includes('downloads.html') || url.includes('ai.html') || url.includes('github.html') || url.includes('passwords.html'));
+  return url && (url.startsWith('gb://') || url.includes('newtab.html') || url.includes('settings.html') || url.includes('bookmarks.html') || url.includes('history.html') || url.includes('downloads.html') || url.includes('ai.html') || url.includes('github.html') || url.includes('passwords.html') || url.includes('extensions.html'));
 }
 
 function getInternalTitle(url) {
@@ -195,6 +244,7 @@ function getInternalTitle(url) {
     'gb://ai': ['ai.title', 'AI Assistant'],
     'gb://github': ['github.title', 'GitHub'],
     'gb://passwords': ['passwords.title', 'Passwords'],
+    'gb://extensions': ['extensions.title', 'Extensions'],
   };
   const entry = keys[url];
   if (!entry) return null;
@@ -372,15 +422,16 @@ function saveSession() {
       const url = t.view.webContents.getURL() || t.url;
       return { url, title: t.title };
     }).filter(Boolean);
-    // Save to both Rust RPC and local file as backup
+    // Save to Rust RPC
     rustBridge.call('session.save', { tabs: data }).catch(() => {});
-    try {
-      fs.writeFileSync(
-        path.join(__dirname, '..', 'session.json'),
-        JSON.stringify(data),
-        'utf8'
-      );
-    } catch {}
+    // Save encrypted local backup
+    const jsonStr = JSON.stringify(data);
+    rustBridge.call('github.encrypt_sync', { data: jsonStr }).then(encrypted => {
+      try { fs.writeFileSync(path.join(__dirname, '..', 'session.json'), JSON.stringify(encrypted), 'utf8'); } catch {}
+    }).catch(() => {
+      // Fallback: save unencrypted if encryption fails
+      try { fs.writeFileSync(path.join(__dirname, '..', 'session.json'), jsonStr, 'utf8'); } catch {}
+    });
   } catch {}
 }
 
@@ -390,8 +441,15 @@ async function restoreSession() {
     // Fallback to local file
     if (!Array.isArray(result) || result.length === 0) {
       try {
-        const data = fs.readFileSync(path.join(__dirname, '..', 'session.json'), 'utf8');
-        result = JSON.parse(data);
+        const raw = fs.readFileSync(path.join(__dirname, '..', 'session.json'), 'utf8');
+        const parsed = JSON.parse(raw);
+        // Check if encrypted (has ciphertext field) or plain array
+        if (parsed.ciphertext) {
+          const decrypted = await rustBridge.call('github.decrypt_sync', parsed);
+          result = JSON.parse(decrypted.data);
+        } else if (Array.isArray(parsed)) {
+          result = parsed;
+        }
       } catch {}
     }
     if (Array.isArray(result) && result.length > 0) {
@@ -476,24 +534,136 @@ ipcMain.on('open-private-window', () => {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false,
-      partition: 'private',
     },
   });
   privWin.contentView.addChildView(privToolbar);
   privToolbar.webContents.loadFile(path.join(__dirname, 'ui', 'toolbar.html'));
-  const privTab = new WebContentsView({
-    webPreferences: { contextIsolation: true, partition: 'private' },
-  });
-  privWin.contentView.addChildView(privTab);
-  privTab.webContents.loadFile(path.join(__dirname, 'ui', 'newtab.html'));
+
+  // Private window tab management
+  const privTabs = new Map();
+  let privTabOrder = [];
+  let privActiveTabId = null;
+  let privNextTabId = 1;
+
+  function privCreateTab(url, activate = true) {
+    const id = 'priv-tab-' + (privNextTabId++);
+    const view = new WebContentsView({
+      webPreferences: { contextIsolation: true, partition: 'private' },
+    });
+    const tabData = { view, url: url || 'gb://newtab', title: 'New Tab' };
+    privTabs.set(id, tabData);
+    privTabOrder.push(id);
+
+    view.webContents.on('page-title-updated', (_e, title) => {
+      if (title.startsWith('__gb_navigate:')) {
+        const navUrl = normalizeUrl(title.substring('__gb_navigate:'.length));
+        tabData.url = navUrl;
+        if (navUrl.startsWith('http://') || navUrl.startsWith('https://')) view.webContents.loadURL(navUrl);
+        return;
+      }
+      if (title.startsWith('__gb_newtab:')) { privCreateTab(title.substring('__gb_newtab:'.length)); return; }
+      tabData.title = title;
+      privSendTabsUpdate();
+    });
+    view.webContents.on('did-navigate', (_e, navUrl) => {
+      tabData.url = navUrl;
+      privToolbar.webContents.send('tab-url-updated', { id, url: navUrl });
+      privSendTabsUpdate();
+    });
+    view.webContents.on('did-start-loading', () => privToolbar.webContents.send('tab-loading', { id, loading: true }));
+    view.webContents.on('did-stop-loading', () => privToolbar.webContents.send('tab-loading', { id, loading: false }));
+    view.webContents.on('page-favicon-updated', (_e, favicons) => {
+      if (favicons && favicons.length > 0) { tabData.favicon = favicons[0]; privSendTabsUpdate(); }
+    });
+    view.webContents.setWindowOpenHandler(({ url: newUrl }) => {
+      if (newUrl && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) privCreateTab(newUrl);
+      return { action: 'deny' };
+    });
+
+    const page = INTERNAL_PAGES[url];
+    if (page) view.webContents.loadFile(path.join(__dirname, 'ui', page));
+    else if (url && (url.startsWith('http://') || url.startsWith('https://'))) view.webContents.loadURL(url);
+    else view.webContents.loadFile(path.join(__dirname, 'ui', 'newtab.html'));
+
+    if (activate) privSwitchTab(id);
+    privSendTabsUpdate();
+    return id;
+  }
+
+  function privSwitchTab(id) {
+    if (!privTabs.has(id)) return;
+    if (privActiveTabId && privTabs.has(privActiveTabId)) {
+      privWin.contentView.removeChildView(privTabs.get(privActiveTabId).view);
+    }
+    privActiveTabId = id;
+    const { view } = privTabs.get(id);
+    privWin.contentView.addChildView(view);
+    layoutPriv();
+    privSendTabsUpdate();
+  }
+
+  function privCloseTab(id) {
+    if (!privTabs.has(id)) return;
+    const { view } = privTabs.get(id);
+    privWin.contentView.removeChildView(view);
+    view.webContents.close();
+    privTabs.delete(id);
+    privTabOrder = privTabOrder.filter(t => t !== id);
+    if (privActiveTabId === id) {
+      if (privTabOrder.length > 0) privSwitchTab(privTabOrder[privTabOrder.length - 1]);
+      else privWin.close();
+    }
+    privSendTabsUpdate();
+  }
+
+  function privSendTabsUpdate() {
+    const list = privTabOrder.map(tid => {
+      if (!privTabs.has(tid)) return null;
+      const t = privTabs.get(tid);
+      return { id: tid, title: t.title, url: t.url, active: tid === privActiveTabId, favicon: t.favicon };
+    }).filter(Boolean);
+    privToolbar.webContents.send('tabs-update', list);
+  }
 
   function layoutPriv() {
     const { width: w, height: h } = privWin.getContentBounds();
     privToolbar.setBounds({ x: 0, y: 0, width: w, height: TOOLBAR_HEIGHT });
-    privTab.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width: w, height: h - TOOLBAR_HEIGHT });
+    if (privActiveTabId && privTabs.has(privActiveTabId)) {
+      privTabs.get(privActiveTabId).view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width: w, height: h - TOOLBAR_HEIGHT });
+    }
   }
+
+  // Handle IPC from private toolbar
+  privToolbar.webContents.on('ipc-message', (_e, channel, ...args) => {
+    if (channel === 'new-tab') privCreateTab('gb://newtab');
+    else if (channel === 'close-tab') privCloseTab(args[0]);
+    else if (channel === 'switch-tab') privSwitchTab(args[0]);
+    else if (channel === 'navigate') {
+      if (privActiveTabId && privTabs.has(privActiveTabId)) {
+        const url = normalizeUrl(args[0]);
+        const tabData = privTabs.get(privActiveTabId);
+        tabData.url = url;
+        if (url.startsWith('http://') || url.startsWith('https://')) tabData.view.webContents.loadURL(url);
+        else {
+          const page = INTERNAL_PAGES[url];
+          if (page) tabData.view.webContents.loadFile(path.join(__dirname, 'ui', page));
+        }
+      }
+    }
+    else if (channel === 'go-back') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.goBack(); }
+    else if (channel === 'go-forward') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.goForward(); }
+    else if (channel === 'reload') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.reload(); }
+  });
+
+  privCreateTab('gb://newtab');
   layoutPriv();
   privWin.on('resize', layoutPriv);
+  privWin.on('close', () => {
+    // Clean up all private tabs
+    for (const [, { view }] of privTabs) { try { view.webContents.close(); } catch {} }
+    privTabs.clear();
+    privTabOrder = [];
+  });
 });
 
 // Find in page
@@ -516,14 +686,39 @@ ipcMain.handle('reader-extract', async () => {
   try {
     const result = await wc.executeJavaScript(`
       (function() {
-        const article = document.querySelector('article') || document.querySelector('[role="main"]') || document.querySelector('main') || document.body;
-        // Remove scripts, styles, nav, footer, ads
+        // Try multiple selectors in priority order
+        const selectors = [
+          'article', '[role="article"]', '[itemprop="articleBody"]',
+          '.post-content', '.article-content', '.entry-content', '.post-body',
+          '.story-body', '.article-body', '.content-body',
+          '[role="main"]', 'main', '#content', '.content',
+          '#main-content', '.main-content',
+        ];
+        let article = null;
+        for (const sel of selectors) {
+          const el = document.querySelector(sel);
+          if (el && el.innerText.length > 200) { article = el; break; }
+        }
+        // Fallback: find the element with the most text content
+        if (!article) {
+          let best = null, bestLen = 0;
+          document.querySelectorAll('div, section').forEach(el => {
+            const len = el.innerText.length;
+            const childDivs = el.querySelectorAll('div, section').length;
+            // Prefer elements with lots of text but not too many nested divs
+            if (len > bestLen && len > 500 && childDivs < 20) { best = el; bestLen = len; }
+          });
+          article = best || document.body;
+        }
         const clone = article.cloneNode(true);
-        clone.querySelectorAll('script,style,nav,footer,aside,iframe,.ad,.ads,.advertisement').forEach(el => el.remove());
+        // Remove non-content elements
+        clone.querySelectorAll('script,style,nav,footer,aside,iframe,header,.ad,.ads,.advertisement,.sidebar,.nav,.menu,.social,.share,.comments,.related,.recommended,form,[role="navigation"],[role="banner"],[role="complementary"]').forEach(el => el.remove());
         const title = document.title;
         const text = clone.innerText;
         const html = clone.innerHTML;
-        return JSON.stringify({ title, text, html });
+        // Get site name for attribution
+        const siteName = (document.querySelector('meta[property="og:site_name"]') || {}).content || location.hostname;
+        return JSON.stringify({ title, text, html, siteName, url: location.href });
       })()
     `);
     return JSON.parse(result);
@@ -1021,9 +1216,40 @@ ipcMain.handle('password-generate', async (_e, opts) => {
 
 ipcMain.on('open-passwords', () => createTab('gb://passwords'));
 
+// Extensions
+ipcMain.handle('extension-list', async () => {
+  try { return await rustBridge.call('extension.list', {}); }
+  catch (err) { return []; }
+});
+ipcMain.handle('extension-install', async (_e, { path: extPath }) => {
+  try { return await rustBridge.call('extension.install', { path: extPath }); }
+  catch (err) { return { error: err.message }; }
+});
+ipcMain.handle('extension-uninstall', async (_e, { id }) => {
+  try { return await rustBridge.call('extension.uninstall', { id }); }
+  catch (err) { return { error: err.message }; }
+});
+ipcMain.handle('extension-enable', async (_e, { id }) => {
+  try { return await rustBridge.call('extension.enable', { id }); }
+  catch (err) { return { error: err.message }; }
+});
+ipcMain.handle('extension-disable', async (_e, { id }) => {
+  try { return await rustBridge.call('extension.disable', { id }); }
+  catch (err) { return { error: err.message }; }
+});
+ipcMain.on('open-extensions', () => createTab('gb://extensions'));
+
 // ─── GitHub Device Flow OAuth ───
 
 let githubToken = null;
+
+// Try to restore token from Rust backend on startup
+(async () => {
+  try {
+    const res = await rustBridge.call('github.get_token', {});
+    if (res && res.token) githubToken = res.token;
+  } catch { /* no stored token */ }
+})();
 
 ipcMain.handle('github-device-login', async (_e, { clientId }) => {
   try {
@@ -1081,6 +1307,8 @@ ipcMain.handle('github-device-poll', async (_e, { clientId, deviceCode }) => {
     const data = await res.json();
     if (data.access_token) {
       githubToken = data.access_token;
+      // Store token securely in Rust backend
+      rustBridge.call('github.store_token', { token: data.access_token, login: 'user', avatar_url: null }).catch(() => {});
       startGhNotifPolling();
       return { status: 'ok', token: data.access_token };
     }
@@ -1093,16 +1321,116 @@ ipcMain.handle('github-device-poll', async (_e, { clientId, deviceCode }) => {
   }
 });
 
-ipcMain.handle('github-api', async (_e, { endpoint, token }) => {
+ipcMain.handle('github-api', async (_e, { endpoint, token, method, body }) => {
   try {
-    const res = await net.fetch('https://api.github.com' + endpoint, {
+    const opts = {
+      method: method || 'GET',
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
-    });
+    };
+    if (body) {
+      opts.headers['Content-Type'] = 'application/json';
+      opts.body = JSON.stringify(body);
+    }
+    const res = await net.fetch('https://api.github.com' + endpoint, opts);
     if (!res.ok) return { error: res.status + ' ' + res.statusText };
     return await res.json();
   } catch (err) {
     return { error: err.message };
   }
+});
+
+// Secure secret storage (API keys, etc.)
+ipcMain.handle('secret-store', async (_e, { key, value }) => {
+  try { return await rustBridge.call('secret.store', { key, value }); }
+  catch (err) { return { error: err.message }; }
+});
+ipcMain.handle('secret-get', async (_e, { key }) => {
+  try { return await rustBridge.call('secret.get', { key }); }
+  catch (err) { return { error: err.message }; }
+});
+ipcMain.handle('secret-delete', async (_e, { key }) => {
+  try { return await rustBridge.call('secret.delete', { key }); }
+  catch (err) { return { error: err.message }; }
+});
+
+// GitHub bookmark sync via Gists
+ipcMain.handle('github-sync-bookmarks-upload', async (_e, { token }) => {
+  try {
+    // Get bookmarks from Rust
+    const bookmarks = await rustBridge.call('bookmark.list', {});
+    const data = JSON.stringify(bookmarks);
+    // Encrypt via Rust
+    const encrypted = await rustBridge.call('github.encrypt_sync', { data });
+    const content = JSON.stringify(encrypted);
+    // Check if sync gist already exists
+    const gistsRes = await net.fetch('https://api.github.com/gists', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
+    });
+    const gists = await gistsRes.json();
+    const syncGist = Array.isArray(gists) ? gists.find(g => g.description === 'GitBrowser Bookmark Sync') : null;
+    const gistPayload = {
+      description: 'GitBrowser Bookmark Sync',
+      public: false,
+      files: { 'bookmarks.enc.json': { content } },
+    };
+    if (syncGist) {
+      // Update existing gist
+      await net.fetch('https://api.github.com/gists/' + syncGist.id, {
+        method: 'PATCH',
+        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(gistPayload),
+      });
+    } else {
+      // Create new gist
+      await net.fetch('https://api.github.com/gists', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(gistPayload),
+      });
+    }
+    return { ok: true };
+  } catch (err) { return { error: err.message }; }
+});
+
+ipcMain.handle('github-sync-bookmarks-download', async (_e, { token }) => {
+  try {
+    const gistsRes = await net.fetch('https://api.github.com/gists', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
+    });
+    const gists = await gistsRes.json();
+    const syncGist = Array.isArray(gists) ? gists.find(g => g.description === 'GitBrowser Bookmark Sync') : null;
+    if (!syncGist) return { error: 'no_sync_gist' };
+    // Fetch full gist
+    const gistRes = await net.fetch('https://api.github.com/gists/' + syncGist.id, {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
+    });
+    const gist = await gistRes.json();
+    const file = gist.files && gist.files['bookmarks.enc.json'];
+    if (!file || !file.content) return { error: 'no_bookmark_file' };
+    const encrypted = JSON.parse(file.content);
+    // Decrypt via Rust
+    const decrypted = await rustBridge.call('github.decrypt_sync', encrypted);
+    const bookmarks = JSON.parse(decrypted.data);
+    // Import bookmarks (add missing ones)
+    let imported = 0;
+    for (const bm of bookmarks) {
+      try {
+        await rustBridge.call('bookmark.add', { url: bm.url, title: bm.title, folder_id: bm.folder_id || null });
+        imported++;
+      } catch { /* duplicate or error, skip */ }
+    }
+    return { ok: true, imported };
+  } catch (err) { return { error: err.message }; }
+});
+
+// GitHub logout (clear Rust backend token)
+ipcMain.handle('github-logout', async () => {
+  try {
+    githubToken = null;
+    if (ghNotifInterval) { clearInterval(ghNotifInterval); ghNotifInterval = null; }
+    await rustBridge.call('github.logout', {});
+    return { ok: true };
+  } catch (err) { return { error: err.message }; }
 });
 
 // Tab context menu
@@ -1135,6 +1463,108 @@ ipcMain.on('tab-context-menu', (_e, id) => {
 });
 
 // ─── Helpers ───
+
+// Password autofill injection for external pages
+async function injectPasswordAutofill(wc, pageUrl) {
+  try {
+    // Check if password manager is unlocked and has credentials for this URL
+    const unlocked = await rustBridge.call('password.is_unlocked', {});
+    if (!unlocked || !unlocked.unlocked) return;
+    const creds = await rustBridge.call('password.list', { url: pageUrl });
+    if (!Array.isArray(creds) || creds.length === 0) return;
+    // Inject autofill script
+    const credsJson = JSON.stringify(creds.map(c => ({ username: c.username, password: c.password })));
+    wc.executeJavaScript(`
+      (function() {
+        if (window.__gbAutofillInjected) return;
+        window.__gbAutofillInjected = true;
+        const creds = ${credsJson};
+        const pwFields = document.querySelectorAll('input[type="password"]');
+        if (pwFields.length === 0) return;
+        pwFields.forEach(pwField => {
+          const form = pwField.closest('form') || pwField.parentElement;
+          const userField = form ? form.querySelector('input[type="text"], input[type="email"], input[name*="user"], input[name*="login"], input[name*="email"], input[autocomplete="username"]') : null;
+          // Create autofill button
+          const btn = document.createElement('div');
+          btn.style.cssText = 'position:absolute;width:20px;height:20px;cursor:pointer;z-index:999999;display:flex;align-items:center;justify-content:center;border-radius:4px;background:#1f6feb;color:#fff;font-size:11px;font-weight:700;';
+          btn.textContent = '🔑';
+          btn.title = 'GitBrowser Autofill';
+          const rect = pwField.getBoundingClientRect();
+          btn.style.top = (window.scrollY + rect.top + (rect.height - 20) / 2) + 'px';
+          btn.style.left = (window.scrollX + rect.right - 24) + 'px';
+          document.body.appendChild(btn);
+          // Dropdown
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            let dd = document.getElementById('__gb_autofill_dd');
+            if (dd) { dd.remove(); return; }
+            dd = document.createElement('div');
+            dd.id = '__gb_autofill_dd';
+            dd.style.cssText = 'position:absolute;z-index:1000000;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:4px;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
+            dd.style.top = (window.scrollY + rect.bottom + 4) + 'px';
+            dd.style.left = (window.scrollX + rect.left) + 'px';
+            creds.forEach(c => {
+              const item = document.createElement('div');
+              item.style.cssText = 'padding:8px 12px;cursor:pointer;border-radius:4px;color:#e6edf3;font-size:13px;font-family:system-ui;';
+              item.textContent = c.username;
+              item.onmouseenter = () => item.style.background = '#1c2128';
+              item.onmouseleave = () => item.style.background = 'transparent';
+              item.onclick = () => {
+                if (userField) { userField.value = c.username; userField.dispatchEvent(new Event('input', {bubbles:true})); }
+                pwField.value = c.password; pwField.dispatchEvent(new Event('input', {bubbles:true}));
+                dd.remove();
+              };
+              dd.appendChild(item);
+            });
+            document.body.appendChild(dd);
+            document.addEventListener('click', () => { if (dd.parentNode) dd.remove(); }, { once: true });
+          };
+        });
+      })();
+    `).catch(() => {});
+  } catch { /* password manager not available */ }
+}
+
+// Detect form submissions to offer saving passwords
+function setupPasswordSaveDetection(wc, pageUrl) {
+  wc.executeJavaScript(`
+    (function() {
+      if (window.__gbSaveDetected) return;
+      window.__gbSaveDetected = true;
+      document.addEventListener('submit', function(e) {
+        const form = e.target;
+        const pw = form.querySelector('input[type="password"]');
+        if (!pw || !pw.value) return;
+        const user = form.querySelector('input[type="text"], input[type="email"], input[name*="user"], input[name*="login"], input[name*="email"]');
+        const data = JSON.stringify({ url: location.href, username: user ? user.value : '', password: pw.value });
+        document.title = '__gb_save_password:' + data;
+      }, true);
+    })();
+  `).catch(() => {});
+}
+
+async function injectContentScripts(wc, pageUrl, runAt) {
+  try {
+    const scripts = await rustBridge.call('extension.content_scripts', { url: pageUrl });
+    if (!Array.isArray(scripts) || scripts.length === 0) return;
+    const targetRunAt = runAt || 'document_idle';
+    for (const script of scripts) {
+      if (script.run_at !== targetRunAt) continue;
+      // Inject CSS
+      if (script.css && script.css.length > 0) {
+        for (const cssCode of script.css) {
+          wc.insertCSS(cssCode).catch(() => {});
+        }
+      }
+      // Inject JS
+      if (script.js && script.js.length > 0) {
+        for (const jsCode of script.js) {
+          wc.executeJavaScript(`(function() { ${jsCode} })();`).catch(() => {});
+        }
+      }
+    }
+  } catch {}
+}
 
 function normalizeUrl(input) {
   const trimmed = (input || '').trim();

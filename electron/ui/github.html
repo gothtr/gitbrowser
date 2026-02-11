@@ -177,6 +177,8 @@ body {
     <button class="quick-action" id="qa-new-repo">+ New Repo</button>
     <button class="quick-action" id="qa-new-gist">+ New Gist</button>
     <button class="quick-action" id="qa-profile">View Profile</button>
+    <button class="quick-action" id="qa-sync-upload" title="Upload bookmarks to GitHub Gist">⬆ Sync Bookmarks</button>
+    <button class="quick-action" id="qa-sync-download" title="Download bookmarks from GitHub Gist">⬇ Import Bookmarks</button>
   </div>
   <div class="tab-bar" id="tab-bar">
     <button class="tab-btn active" data-tab="repos">Repos</button>
@@ -199,6 +201,20 @@ let activeTab = 'repos';
 let cachedData = {};
 let issueFilter = 'assigned';
 let prFilter = 'assigned';
+
+// Try to load token from secure Rust backend
+(async () => {
+  if (!ghToken && gb && gb.secretGet) {
+    try {
+      const res = await gb.secretGet('github_token');
+      if (res && res.value) {
+        ghToken = res.value;
+        localStorage.setItem('gh_token', ghToken);
+      }
+    } catch {}
+  }
+  init();
+})();
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 function timeAgo(d) {
@@ -248,6 +264,8 @@ async function pollForToken(clientId, deviceCode, interval) {
     if (res.status === 'ok') {
       ghToken = res.token;
       localStorage.setItem('gh_token', ghToken);
+      // Also store securely in Rust backend
+      if (gb && gb.secretStore) gb.secretStore('github_token', ghToken).catch(() => {});
       loadProfile(ghToken);
       return;
     }
@@ -294,6 +312,24 @@ async function loadProfile(token) {
   document.getElementById('qa-new-repo').onclick = () => openGh('/new');
   document.getElementById('qa-new-gist').onclick = () => openGh('https://gist.github.com');
   document.getElementById('qa-profile').onclick = () => openGh('/' + user.login);
+  document.getElementById('qa-sync-upload').onclick = async () => {
+    const btn = document.getElementById('qa-sync-upload');
+    btn.textContent = '⏳ Syncing...'; btn.disabled = true;
+    try {
+      const res = await gb.githubSyncBookmarksUpload({ token: ghToken });
+      btn.textContent = res.ok ? '✓ Synced' : '✕ Error';
+    } catch { btn.textContent = '✕ Error'; }
+    setTimeout(() => { btn.textContent = '⬆ Sync Bookmarks'; btn.disabled = false; }, 2000);
+  };
+  document.getElementById('qa-sync-download').onclick = async () => {
+    const btn = document.getElementById('qa-sync-download');
+    btn.textContent = '⏳ Importing...'; btn.disabled = true;
+    try {
+      const res = await gb.githubSyncBookmarksDownload({ token: ghToken });
+      btn.textContent = res.ok ? '✓ Imported ' + (res.imported || 0) : '✕ ' + (res.error || 'Error');
+    } catch { btn.textContent = '✕ Error'; }
+    setTimeout(() => { btn.textContent = '⬇ Import Bookmarks'; btn.disabled = false; }, 3000);
+  };
 
   // Tab bar
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -306,6 +342,9 @@ async function loadProfile(token) {
     ghToken = null;
     currentUser = null;
     cachedData = {};
+    // Clear from Rust backend too
+    if (gb && gb.secretDelete) gb.secretDelete('github_token').catch(() => {});
+    if (gb && gb.githubLogout) gb.githubLogout().catch(() => {});
     showView('login-view');
   };
 
@@ -562,7 +601,9 @@ if (gb) {
 
 // ─── Init ───
 document.getElementById('client-id').value = ghClientId;
-if (ghToken) loadProfile(ghToken);
+function init() {
+  if (ghToken) loadProfile(ghToken);
+}
 </script>
 </body>
 </html>

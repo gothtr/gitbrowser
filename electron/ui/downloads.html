@@ -48,10 +48,21 @@ body {
 }
 .dl-btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
 .dl-btn.cancel:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
-.progress { height: 4px; background: var(--bg-subtle); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-.progress-bar { height: 100%; background: var(--accent-emphasis); border-radius: 2px; transition: width 0.3s; position: relative; }
-.progress-bar.pulse { animation: pulse 1.5s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+.progress { height: 6px; background: var(--bg-subtle); border-radius: 3px; margin-top: 8px; overflow: hidden; position: relative; }
+.progress-bar {
+  height: 100%; background: var(--accent-emphasis); border-radius: 3px;
+  transition: width 0.3s ease; position: relative; overflow: hidden;
+}
+.progress-bar::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent);
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+.progress-bar.done { background: var(--success-fg); }
+.progress-bar.done::after { display: none; }
+.progress-bar.error { background: var(--danger-fg); }
+.progress-bar.error::after { display: none; }
 .done-actions { display: flex; gap: 6px; margin-left: 8px; }
 .done-btn {
   padding: 4px 10px; border: 1px solid var(--border-default); background: var(--bg-subtle);
@@ -114,7 +125,9 @@ function renderItem(dl) {
         <button class="done-btn" data-show-folder="${esc(dl.savePath)}">${_dl.open_folder || 'Show in folder'}</button>
       </div>` : ''}
     </div>
-    ${isActive ? `<div class="progress"><div class="progress-bar pulse" style="width:${pct}%"></div></div>` : ''}
+    ${isActive ? `<div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>` : ''}
+    ${isDone ? `<div class="progress"><div class="progress-bar done" style="width:100%"></div></div>` : ''}
+    ${isFailed ? `<div class="progress"><div class="progress-bar error" style="width:${pct}%"></div></div>` : ''}
   `;
   // Wire up buttons
   div.querySelectorAll('.dl-btn').forEach(btn => {
@@ -163,7 +176,13 @@ gb.onDownloadDone((dl) => {
     const progress = el.querySelector('.progress');
     const controls = el.querySelector('.dl-controls');
     if (status) { status.textContent = dl.state === 'completed' ? (_dl.completed || 'Completed') : (_dl.failed || 'Failed'); status.className = 'item-status ' + (dl.state === 'completed' ? 'done' : 'error'); }
-    if (progress) progress.remove();
+    if (progress) {
+      const bar = progress.querySelector('.progress-bar');
+      if (bar) {
+        bar.style.width = '100%';
+        bar.className = 'progress-bar ' + (dl.state === 'completed' ? 'done' : 'error');
+      }
+    }
     if (controls) controls.remove();
     if (dl.state === 'completed' && dl.savePath) {
       const top = el.querySelector('.item-top');
