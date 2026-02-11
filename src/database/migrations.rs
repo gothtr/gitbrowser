@@ -167,5 +167,26 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
         ",
     )?;
 
+    // ─── Incremental migrations for existing databases ───
+    // Add content_scripts column to extensions table if missing
+    let has_cs_col: bool = conn
+        .prepare("SELECT content_scripts FROM extensions LIMIT 0")
+        .is_ok();
+    if !has_cs_col {
+        let _ = conn.execute_batch(
+            "ALTER TABLE extensions ADD COLUMN content_scripts TEXT NOT NULL DEFAULT '[]';"
+        );
+    }
+
+    // Add uses_master column to secure_store if missing
+    let has_um_col: bool = conn
+        .prepare("SELECT uses_master FROM secure_store LIMIT 0")
+        .is_ok();
+    if !has_um_col {
+        let _ = conn.execute_batch(
+            "ALTER TABLE secure_store ADD COLUMN uses_master INTEGER NOT NULL DEFAULT 0;"
+        );
+    }
+
     Ok(())
 }

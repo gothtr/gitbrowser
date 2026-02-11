@@ -53,9 +53,35 @@ impl ExtensionFramework {
 
     fn load_from_db(&mut self) {
         let conn = self.db.connection();
-        let mut stmt = conn.prepare(
+        let stmt = conn.prepare(
             "SELECT id, name, version, enabled, permissions, COALESCE(install_path, ''), COALESCE(content_scripts, '[]') FROM extensions ORDER BY name"
-        ).unwrap();
+        );
+
+        let mut stmt = match stmt {
+            Ok(s) => s,
+            Err(_) => {
+                // Fallback: try without content_scripts column for older DBs
+                let mut stmt2 = conn.prepare(
+                    "SELECT id, name, version, enabled, permissions FROM extensions ORDER BY name"
+                ).unwrap();
+                self.extensions = stmt2.query_map([], |row| {
+                    let perms_json: String = row.get(4)?;
+                    let permissions: Vec<ExtensionPermission> =
+                        serde_json::from_str(&perms_json).unwrap_or_default();
+                    Ok(ExtensionInfo {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        version: row.get(2)?,
+                        enabled: row.get::<_, i32>(3)? != 0,
+                        permissions,
+                        performance_impact_ms: 0,
+                        install_path: String::new(),
+                        content_scripts: Vec::new(),
+                    })
+                }).unwrap().filter_map(|r| r.ok()).collect();
+                return;
+            }
+        };
 
         self.extensions = stmt.query_map([], |row| {
             let perms_json: String = row.get(4)?;
