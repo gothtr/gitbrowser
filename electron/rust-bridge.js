@@ -24,9 +24,9 @@ class RustBridge {
     // Find the Rust binary — check multiple locations
     let rpcBin = null;
     const candidates = [
-      // Packaged app: binary is in the app directory
-      path.join(__dirname, 'gitbrowser-rpc.exe'),
-      // Packaged app: binary next to the asar
+      // Packaged app: extraResources directory
+      path.join(process.resourcesPath || '', 'gitbrowser-rpc.exe'),
+      // Packaged app: next to the asar
       path.join(path.dirname(app.getAppPath()), 'gitbrowser-rpc.exe'),
       // Development: debug build
       path.join(__dirname, '..', 'target', 'debug', 'gitbrowser-rpc.exe'),

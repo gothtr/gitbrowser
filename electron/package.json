@@ -21,8 +21,7 @@
       "preload.js",
       "rust-bridge.js",
       "ui/**/*",
-      "node_modules/**/*",
-      "gitbrowser-rpc.exe"
+      "node_modules/**/*"
     ],
     "extraResources": [
       {
@@ -32,6 +31,10 @@
       {
         "from": "../locales",
         "to": "locales"
+      },
+      {
+        "from": "gitbrowser-rpc.exe",
+        "to": "gitbrowser-rpc.exe"
       }
     ],
     "win": {
