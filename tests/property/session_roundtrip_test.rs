@@ -18,7 +18,11 @@ use proptest::prelude::*;
 
 fn arb_scroll_position() -> impl Strategy<Value = ScrollPosition> {
     (-1e6f64..1e6f64, -1e6f64..1e6f64)
-        .prop_map(|(x, y)| ScrollPosition { x, y })
+        .prop_map(|(x, y)| ScrollPosition {
+            // Round to avoid f64 precision loss during JSON serialization roundtrip
+            x: (x * 1e6).round() / 1e6,
+            y: (y * 1e6).round() / 1e6,
+        })
 }
 
 fn arb_window_bounds() -> impl Strategy<Value = WindowBounds> {

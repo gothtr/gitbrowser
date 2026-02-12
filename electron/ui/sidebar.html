@@ -396,23 +396,31 @@ function showNameInput(placeholder, callback) {
   input.className = 'group-name-input';
   input.placeholder = placeholder || 'Group name...';
   input.spellcheck = false;
+  input.autocomplete = 'off';
+  input.setAttribute('autocomplete', 'off');
+  input.setAttribute('data-form-type', 'other');
   const tabsSection = document.getElementById('tabs-section');
   tabsSection.insertBefore(input, tabsSection.firstChild);
-  input.focus();
+  let finished = false;
   function finish(val) {
+    if (finished) return;
+    finished = true;
     input.remove();
     if (val && val.trim()) callback(val.trim());
   }
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') finish(input.value);
-    if (e.key === 'Escape') input.remove();
+    if (e.key === 'Escape') { finished = true; input.remove(); }
   });
   input.addEventListener('blur', () => finish(input.value));
+  input.focus();
 }
 
 document.getElementById('group-add-btn').onclick = () => {
   showNameInput('New group name...', (name) => {
-    createGroup(name);
+    const g = createGroup(name);
+    // Auto-add active tab to the new group
+    if (currentActiveId) addTabToGroup(g.id, currentActiveId);
     gb.getTabs();
   });
 };

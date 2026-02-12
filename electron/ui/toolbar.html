@@ -225,10 +225,9 @@ document.getElementById('back').onclick = () => gb.goBack();
 document.getElementById('fwd').onclick = () => gb.goForward();
 document.getElementById('rl').onclick = () => gb.reload();
 document.getElementById('bmark-inline').onclick = () => gb.addBookmark({ url: currentUrl || urlEl.value, title: '' });
-document.getElementById('more-btn').onclick = () => {
-  // More menu — open reader mode, private window, etc.
-  // For now, open settings as a fallback
-  gb.openSettings();
+document.getElementById('more-btn').onclick = (e) => {
+  const rect = e.target.closest('#more-btn').getBoundingClientRect();
+  gb.showMoreMenu(rect.left, rect.bottom);
 };
 
 // ─── Window controls ───

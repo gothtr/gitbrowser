@@ -18,12 +18,37 @@ class RustBridge {
   }
 
   start() {
-    // Find the Rust binary
-    const rpcBin = path.join(__dirname, '..', 'target', 'debug', 'gitbrowser-rpc.exe');
+    const fs = require('fs');
+    const { app } = require('electron');
+
+    // Find the Rust binary — check multiple locations
+    let rpcBin = null;
+    const candidates = [
+      // Packaged app: binary is in the app directory
+      path.join(__dirname, 'gitbrowser-rpc.exe'),
+      // Packaged app: binary next to the asar
+      path.join(path.dirname(app.getAppPath()), 'gitbrowser-rpc.exe'),
+      // Development: debug build
+      path.join(__dirname, '..', 'target', 'debug', 'gitbrowser-rpc.exe'),
+      // Development: release build
+      path.join(__dirname, '..', 'target', 'release', 'gitbrowser-rpc.exe'),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) { rpcBin = c; break; }
+    }
+    if (!rpcBin) {
+      console.error('[RustBridge] gitbrowser-rpc binary not found, tried:', candidates);
+      return;
+    }
+
+    // Working directory: use app data dir for packaged, project root for dev
+    const cwd = app.isPackaged
+      ? path.dirname(rpcBin)
+      : path.join(__dirname, '..');
 
     this.process = spawn(rpcBin, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      cwd: path.join(__dirname, '..'),
+      cwd,
     });
 
     this.readyPromise = new Promise((resolve) => {

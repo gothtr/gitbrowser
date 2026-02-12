@@ -118,6 +118,9 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   // Sidebar quick nav context menu
   sidebarQuickNavMenu: (navId, x, y) => ipcRenderer.send('sidebar-quick-nav-menu', navId, x, y),
 
+  // Toolbar more menu
+  showMoreMenu: (x, y) => ipcRenderer.send('toolbar-more-menu', x, y),
+
   // Navigation from internal pages
   openUrl: (url) => ipcRenderer.send('open-url', url),
   openUrlNewTab: (url) => ipcRenderer.send('open-url-new-tab', url),

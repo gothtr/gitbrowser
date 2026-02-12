@@ -3,6 +3,23 @@ const path = require('path');
 const fs = require('fs');
 const rustBridge = require('./rust-bridge');
 
+// Resolve paths that work both in dev and packaged app
+// In packaged app, extraResources are at process.resourcesPath
+function resolvePath(...segments) {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, ...segments);
+  }
+  return path.join(__dirname, '..', ...segments);
+}
+
+// User data path for writable files (session.json, database, etc.)
+function userDataPath(...segments) {
+  if (app.isPackaged) {
+    return path.join(app.getPath('userData'), ...segments);
+  }
+  return path.join(__dirname, '..', ...segments);
+}
+
 let currentTheme = 'Dark'; // Track current theme
 
 let mainWindow = null;
@@ -45,7 +62,7 @@ function createWindow() {
     width: 1280, height: 800,
     title: 'GitBrowser',
     backgroundColor: '#0a0e14',
-    icon: path.join(__dirname, '..', 'resources', 'icons', 'app.ico'),
+    icon: resolvePath('resources', 'icons', 'app.ico'),
     minWidth: 800, minHeight: 600,
     frame: false,
   });
@@ -488,10 +505,10 @@ function saveSession() {
     // Save encrypted local backup
     const jsonStr = JSON.stringify(data);
     rustBridge.call('github.encrypt_sync', { data: jsonStr }).then(encrypted => {
-      try { fs.writeFileSync(path.join(__dirname, '..', 'session.json'), JSON.stringify(encrypted), 'utf8'); } catch {}
+      try { fs.writeFileSync(userDataPath('session.json'), JSON.stringify(encrypted), 'utf8'); } catch {}
     }).catch(() => {
       // Fallback: save unencrypted if encryption fails
-      try { fs.writeFileSync(path.join(__dirname, '..', 'session.json'), jsonStr, 'utf8'); } catch {}
+      try { fs.writeFileSync(userDataPath('session.json'), jsonStr, 'utf8'); } catch {}
     });
   } catch {}
 }
@@ -502,7 +519,7 @@ async function restoreSession() {
     // Fallback to local file
     if (!Array.isArray(result) || result.length === 0) {
       try {
-        const raw = fs.readFileSync(path.join(__dirname, '..', 'session.json'), 'utf8');
+        const raw = fs.readFileSync(userDataPath('session.json'), 'utf8');
         const parsed = JSON.parse(raw);
         // Check if encrypted (has ciphertext field) or plain array
         if (parsed.ciphertext) {
@@ -972,7 +989,8 @@ ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
     menu.style.left=mx+'px';menu.style.top=my+'px';
   })();`);
 
-  const navHandler = (_e, _level, message) => {
+  const navHandler = (event) => {
+    const message = event.message;
     if (!message || !message.startsWith('__gb_nav_ctx:')) return;
     tabView.webContents.removeListener('console-message', navHandler);
     try {
@@ -995,6 +1013,139 @@ function handleNavAction(action, data) {
   else if (action === 'nav_history_clear') rustBridge.call('history.clear', {}).catch(() => {});
   else if (action === 'nav_password_lock') rustBridge.call('password.lock', {}).catch(() => {});
 }
+
+// ─── Toolbar "More" menu ───
+ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
+  if (!activeTabId || !tabs.has(activeTabId)) return;
+
+  const items = [
+    { label: cmL('toolbar.new_tab', 'Новая вкладка'), accel: 'Ctrl+T', action: 'nav_open', data: 'gb://newtab', icon: '⊕' },
+    { label: cmL('toolbar.private_window', 'Приватное окно'), accel: 'Ctrl+Shift+N', action: 'more_private', icon: '🕶' },
+    { type: 'separator' },
+    { label: cmL('toolbar.find', 'Найти на странице'), accel: 'Ctrl+F', action: 'more_find', icon: '🔍' },
+    { label: cmL('toolbar.zoom_in', 'Увеличить'), accel: 'Ctrl++', action: 'more_zoom_in', icon: '＋' },
+    { label: cmL('toolbar.zoom_out', 'Уменьшить'), accel: 'Ctrl+-', action: 'more_zoom_out', icon: '－' },
+    { label: cmL('toolbar.zoom_reset', 'Сбросить масштаб'), accel: 'Ctrl+0', action: 'more_zoom_reset', icon: '⊙' },
+    { type: 'separator' },
+    { label: cmL('toolbar.fullscreen', 'Полный экран'), accel: 'F11', action: 'more_fullscreen', icon: '⛶' },
+    { label: cmL('toolbar.reader_mode', 'Режим чтения'), action: 'more_reader', icon: '📖' },
+    { type: 'separator' },
+    { label: cmL('bookmarks.title', 'Закладки'), accel: 'Ctrl+B', action: 'nav_open', data: 'gb://bookmarks', icon: '★' },
+    { label: cmL('history.title', 'История'), accel: 'Ctrl+H', action: 'nav_open', data: 'gb://history', icon: '⏱' },
+    { label: cmL('downloads.title', 'Загрузки'), action: 'nav_open', data: 'gb://downloads', icon: '↓' },
+    { label: cmL('passwords.title', 'Пароли'), action: 'nav_open', data: 'gb://passwords', icon: '🔒' },
+    { label: cmL('extensions.title', 'Расширения'), action: 'nav_open', data: 'gb://extensions', icon: '⚙' },
+    { type: 'separator' },
+    { label: cmL('settings.title', 'Настройки'), accel: 'Ctrl+,', action: 'nav_open', data: 'gb://settings', icon: '⚙' },
+  ];
+
+  const tabView = tabs.get(activeTabId).view;
+  const tabBounds = tabView.getBounds();
+  const toolbarBounds = toolbarView ? toolbarView.getBounds() : { x: 0, y: 0 };
+
+  const tabLocalX = (clientX || 0) + toolbarBounds.x - tabBounds.x;
+  const tabLocalY = (clientY || 0) + toolbarBounds.y - tabBounds.y;
+
+  const menuData = JSON.stringify(items);
+
+  tabView.webContents.executeJavaScript(`(function(){
+    var old=document.getElementById('__gb-ctx');if(old)old.remove();
+    var oldS=document.getElementById('__gb-ctx-style');if(oldS)oldS.remove();
+    var oldOv=document.getElementById('__gb-ctx-ov');if(oldOv)oldOv.remove();
+
+    var style=document.createElement('style');style.id='__gb-ctx-style';
+    style.textContent=\`
+      #__gb-ctx-ov{position:fixed;inset:0;z-index:2147483646;}
+      #__gb-ctx{position:fixed;z-index:2147483647;
+        background:rgba(18,22,30,0.92);
+        backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+        border:1px solid rgba(255,255,255,0.08);border-radius:12px;
+        padding:6px;min-width:240px;max-height:80vh;overflow-y:auto;
+        box-shadow:0 12px 48px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#e2e8f0;
+        animation:__gbCtxIn 0.15s cubic-bezier(0.16,1,0.3,1);
+        user-select:none;-webkit-user-select:none;
+        scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.06) transparent;}
+      #__gb-ctx::-webkit-scrollbar{width:4px;}
+      #__gb-ctx::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:2px;}
+      @keyframes __gbCtxIn{from{opacity:0;transform:scale(0.96) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+      #__gb-ctx .ctx-item{display:flex;align-items:center;
+        padding:7px 12px;border-radius:8px;cursor:pointer;transition:background 0.1s,color 0.1s;gap:10px;}
+      #__gb-ctx .ctx-item:hover{background:rgba(96,165,250,0.12);color:#fff;}
+      #__gb-ctx .ctx-icon{width:20px;text-align:center;font-size:14px;flex-shrink:0;opacity:0.6;}
+      #__gb-ctx .ctx-item:hover .ctx-icon{opacity:1;}
+      #__gb-ctx .ctx-label{flex:1;}
+      #__gb-ctx .ctx-accel{font-size:11px;color:rgba(255,255,255,0.3);font-weight:500;margin-left:auto;}
+      #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(255,255,255,0.5);}
+      #__gb-ctx .ctx-sep{height:1px;background:rgba(255,255,255,0.06);margin:4px 8px;}
+      @media (prefers-color-scheme:light){
+        #__gb-ctx{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.08);color:#1e293b;
+          box-shadow:0 12px 48px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.8);}
+        #__gb-ctx .ctx-item:hover{background:rgba(37,99,235,0.1);}
+        #__gb-ctx .ctx-accel{color:rgba(0,0,0,0.3);}
+        #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(0,0,0,0.5);}
+        #__gb-ctx .ctx-sep{background:rgba(0,0,0,0.06);}
+      }
+      html.light #__gb-ctx{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.08);color:#1e293b;
+        box-shadow:0 12px 48px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.8);}
+      html.light #__gb-ctx .ctx-item:hover{background:rgba(37,99,235,0.1);}
+      html.light #__gb-ctx .ctx-accel{color:rgba(0,0,0,0.3);}
+      html.light #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(0,0,0,0.5);}
+      html.light #__gb-ctx .ctx-sep{background:rgba(0,0,0,0.06);}
+    \`;
+    document.documentElement.appendChild(style);
+
+    var ov=document.createElement('div');ov.id='__gb-ctx-ov';
+    ov.onclick=function(){ov.remove();menu.remove();style.remove();};
+    ov.oncontextmenu=function(e){e.preventDefault();ov.remove();menu.remove();style.remove();};
+    document.documentElement.appendChild(ov);
+
+    var menu=document.createElement('div');menu.id='__gb-ctx';
+    var items=${menuData};
+    items.forEach(function(it){
+      if(it.type==='separator'){var s=document.createElement('div');s.className='ctx-sep';menu.appendChild(s);return;}
+      var d=document.createElement('div');d.className='ctx-item';
+      d.innerHTML=(it.icon?'<span class="ctx-icon">'+it.icon+'</span>':'')+'<span class="ctx-label">'+it.label+'</span>'+(it.accel?'<span class="ctx-accel">'+it.accel+'</span>':'');
+      d.dataset.action=it.action||'';
+      d.dataset.data=it.data||'';
+      d.onclick=function(){
+        ov.remove();menu.remove();style.remove();
+        console.log('__gb_more_ctx:'+JSON.stringify({action:this.dataset.action,data:this.dataset.data}));
+      };
+      menu.appendChild(d);
+    });
+    document.documentElement.appendChild(menu);
+
+    var mx=${tabLocalX},my=${tabLocalY};
+    var r=menu.getBoundingClientRect();
+    if(mx+r.width>window.innerWidth)mx=window.innerWidth-r.width-8;
+    if(my+r.height>window.innerHeight)my=window.innerHeight-r.height-8;
+    if(mx<0)mx=4;if(my<0)my=4;
+    menu.style.left=mx+'px';menu.style.top=my+'px';
+  })();`);
+
+  const moreHandler = (event) => {
+    const message = event.message;
+    if (!message || !message.startsWith('__gb_more_ctx:')) return;
+    tabView.webContents.removeListener('console-message', moreHandler);
+    try {
+      const { action, data } = JSON.parse(message.replace('__gb_more_ctx:', ''));
+      if (action === 'nav_open') createTab(data);
+      else if (action === 'more_private') { ipcMain.emit('open-private-window', { sender: null }); }
+      else if (action === 'more_find') { if (toolbarView) toolbarView.webContents.executeJavaScript('toggleFindBar()').catch(() => {}); }
+      else if (action === 'more_zoom_in') { if (activeTabId && tabs.has(activeTabId)) { const wc = tabs.get(activeTabId).view.webContents; wc.setZoomLevel(wc.getZoomLevel() + 1); sendToToolbar('zoom-changed', { level: wc.getZoomLevel() }); } }
+      else if (action === 'more_zoom_out') { if (activeTabId && tabs.has(activeTabId)) { const wc = tabs.get(activeTabId).view.webContents; wc.setZoomLevel(wc.getZoomLevel() - 1); sendToToolbar('zoom-changed', { level: wc.getZoomLevel() }); } }
+      else if (action === 'more_zoom_reset') { if (activeTabId && tabs.has(activeTabId)) { const wc = tabs.get(activeTabId).view.webContents; wc.setZoomLevel(0); sendToToolbar('zoom-changed', { level: 0 }); } }
+      else if (action === 'more_fullscreen') { if (mainWindow) { mainWindow.isFullScreen() ? mainWindow.setFullScreen(false) : mainWindow.setFullScreen(true); } }
+      else if (action === 'more_reader') {
+        // Reader mode — trigger via existing IPC
+        sendToToolbar('toast', { message: 'Режим чтения (в разработке)' });
+      }
+    } catch {}
+  };
+  tabView.webContents.on('console-message', moreHandler);
+  setTimeout(() => tabView.webContents.removeListener('console-message', moreHandler), 10000);
+});
 
 ipcMain.on('navigate', (_e, input) => {
   if (!activeTabId) return;
@@ -1048,12 +1199,12 @@ ipcMain.handle('get-locale-data', async () => {
   try {
     const settings = await rustBridge.call('settings.get', {});
     const lang = (settings && settings.general && settings.general.language) || 'en';
-    const localePath = path.join(__dirname, '..', 'locales', lang + '.json');
+    const localePath = resolvePath('locales', lang + '.json');
     const data = fs.readFileSync(localePath, 'utf8');
     return { locale: lang, data: JSON.parse(data) };
   } catch {
     try {
-      const fallback = path.join(__dirname, '..', 'locales', 'en.json');
+      const fallback = resolvePath('locales', 'en.json');
       const data = fs.readFileSync(fallback, 'utf8');
       return { locale: 'en', data: JSON.parse(data) };
     } catch { return { locale: 'en', data: {} }; }
@@ -1099,12 +1250,12 @@ async function loadContextMenuLocale() {
   try {
     const settings = await rustBridge.call('settings.get', {});
     const lang = (settings && settings.general && settings.general.language) || 'en';
-    const localePath = path.join(__dirname, '..', 'locales', lang + '.json');
+    const localePath = resolvePath('locales', lang + '.json');
     const data = fs.readFileSync(localePath, 'utf8');
     cachedLocale = JSON.parse(data);
   } catch {
     try {
-      const fallback = path.join(__dirname, '..', 'locales', 'en.json');
+      const fallback = resolvePath('locales', 'en.json');
       const data = fs.readFileSync(fallback, 'utf8');
       cachedLocale = JSON.parse(data);
     } catch {}
@@ -1233,7 +1384,8 @@ function showOverlayContextMenu(sourceWc, params, viewOffsetX, viewOffsetY) {
   })();`);
 
   // Listen for overlay menu actions
-  const overlayHandler = (_e, _level, message) => {
+  const overlayHandler = (event) => {
+    const message = event.message;
     if (!message || !message.startsWith('__gb_ctx_overlay:')) return;
     tabView.webContents.removeListener('console-message', overlayHandler);
     try {
@@ -1442,7 +1594,8 @@ function buildPageContextMenu(wc, params) {
   })();`);
 
   // Listen for context menu actions via console message
-  const consoleHandler = (_e, _level, message) => {
+  const consoleHandler = (event) => {
+    const message = event.message;
     if (!message || !message.startsWith('__gb_ctx:')) return;
     wc.removeListener('console-message', consoleHandler);
     try {

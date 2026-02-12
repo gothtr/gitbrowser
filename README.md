@@ -2,7 +2,7 @@
 
 A privacy-focused minimal web browser with GitHub-style UI, built with Rust + Electron.
 
-> 🚧 **Work in progress** — actively in development, not yet ready for release builds.
+> 🚧 **Work in progress** — actively in development.
 
 ## Architecture
 
@@ -23,7 +23,7 @@ A privacy-focused minimal web browser with GitHub-style UI, built with Rust + El
 - 🐙 GitHub integration
 - 🤖 AI assistant
 - 📖 Reader mode
-- 🧩 Extension framework (WIP)
+- 🧩 Extension framework — [документация для разработчиков](EXTENSIONS.md)
 
 ## Tech Stack
 

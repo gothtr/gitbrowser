@@ -1,23 +1,42 @@
-# GitBrowser Extension API — Developer Guide
+# GitBrowser Extension API — Руководство разработчика
 
-## Overview
+## Обзор
 
-GitBrowser extensions are directories containing a `manifest.json` file and associated scripts/styles. Extensions can inject content scripts into web pages, add toolbar buttons, and access browser APIs for tabs, bookmarks, storage, and notifications.
+Расширения GitBrowser — это директории с файлом `manifest.json` и связанными скриптами/стилями. Расширения могут инжектировать контент-скрипты в веб-страницы, добавлять кнопки в тулбар и использовать API браузера для работы с вкладками, закладками, хранилищем и уведомлениями.
+
+## Быстрый старт
+
+1. Создайте директорию для расширения
+2. Добавьте `manifest.json`
+3. Напишите контент-скрипты (JS/CSS)
+4. Установите через страницу Расширения в браузере (выберите директорию)
+
+## Структура расширения
+
+```
+my-extension/
+├── manifest.json          # Обязательный — метаданные и конфигурация
+├── background.js          # Опционально — фоновый скрипт
+├── content.js             # Опционально — контент-скрипт (JS)
+├── content.css            # Опционально — контент-скрипт (CSS)
+├── icon.svg               # Опционально — иконка для тулбара
+└── popup.html             # Опционально — попап тулбар-кнопки
+```
 
 ## manifest.json
 
-Every extension must have a `manifest.json` in its root directory.
+Каждое расширение должно содержать `manifest.json` в корневой директории.
 
 ```json
 {
   "id": "my-extension",
   "name": "My Extension",
   "version": "1.0.0",
-  "description": "A sample GitBrowser extension",
-  "author": "Your Name",
+  "description": "Описание расширения",
+  "author": "Имя автора",
   "homepage_url": "https://github.com/you/my-extension",
   "min_browser_version": "1.0.0",
-  "permissions": ["pageContent", "storage", "tabs", "bookmarks", "notifications"],
+  "permissions": ["pageContent", "storage"],
   "background": "background.js",
   "content_scripts": [
     {
@@ -35,192 +54,159 @@ Every extension must have a `manifest.json` in its root directory.
 }
 ```
 
-## Manifest Fields
+## Поля манифеста
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Unique extension identifier |
-| `name` | string | Yes | Display name |
-| `version` | string | Yes | Semver version string |
-| `description` | string | No | Short description |
-| `author` | string | No | Author name |
-| `homepage_url` | string | No | Extension homepage URL |
-| `min_browser_version` | string | No | Minimum GitBrowser version |
-| `permissions` | string[] | Yes | Required permissions (see below) |
-| `background` | string | No | Path to background script |
-| `content_scripts` | object[] | No | Content scripts to inject |
-| `toolbar_button` | object | No | Toolbar button config |
+| Поле | Тип | Обязательно | Описание |
+|------|-----|-------------|----------|
+| `id` | string | Да | Уникальный идентификатор расширения (латиница, дефисы) |
+| `name` | string | Да | Отображаемое имя |
+| `version` | string | Да | Версия в формате semver (1.0.0) |
+| `description` | string | Нет | Краткое описание |
+| `author` | string | Нет | Имя автора |
+| `homepage_url` | string | Нет | URL домашней страницы расширения |
+| `min_browser_version` | string | Нет | Минимальная версия GitBrowser |
+| `permissions` | string[] | Да | Запрашиваемые разрешения |
+| `background` | string | Нет | Путь к фоновому скрипту |
+| `content_scripts` | object[] | Нет | Контент-скрипты для инжекции |
+| `toolbar_button` | object | Нет | Конфигурация кнопки тулбара |
 
-## Permissions
+## Разрешения (Permissions)
 
-| Permission | Description |
-|------------|-------------|
-| `pageContent` | Access page DOM via content scripts |
-| `storage` | Local key-value storage for the extension |
-| `toolbar` | Add a button to the browser toolbar |
-| `tabs` | Access tab management APIs |
-| `network` | Make network requests from background scripts |
-| `bookmarks` | Read and modify bookmarks |
-| `notifications` | Show desktop notifications |
+| Разрешение | Описание |
+|------------|----------|
+| `pageContent` | Доступ к DOM страницы через контент-скрипты |
+| `storage` | Локальное key-value хранилище для расширения |
+| `toolbar` | Добавление кнопки в тулбар браузера |
+| `tabs` | Доступ к API управления вкладками |
+| `network` | Сетевые запросы из фоновых скриптов |
+| `bookmarks` | Чтение и изменение закладок |
+| `notifications` | Показ десктопных уведомлений |
 
-## Content Scripts
+## Контент-скрипты
 
-Content scripts are JavaScript and CSS files injected into web pages that match specified URL patterns.
+Контент-скрипты — это JS и CSS файлы, инжектируемые в веб-страницы, соответствующие указанным URL-паттернам.
 
-### URL Match Patterns
+### URL-паттерны (matches)
 
-Patterns follow the format: `<scheme>://<host>/<path>`
+Паттерны следуют формату: `<scheme>://<host>/<path>`
 
-| Pattern | Matches |
-|---------|---------|
-| `*://*.github.com/*` | All pages on github.com and subdomains |
-| `https://example.com/*` | All HTTPS pages on example.com |
-| `*://*/api/*` | Any page with `/api/` in the path |
-| `<all_urls>` | All HTTP and HTTPS pages |
+| Паттерн | Совпадает с |
+|---------|-------------|
+| `*://*.github.com/*` | Все страницы github.com и поддоменов |
+| `https://example.com/*` | Все HTTPS-страницы example.com |
+| `*://*/api/*` | Любая страница с `/api/` в пути |
+| `<all_urls>` | Все HTTP и HTTPS страницы |
 
-### run_at
+Поддерживается glob-синтаксис: `*` заменяет любую последовательность символов.
 
-Controls when the content script is injected:
+### run_at — момент инжекции
 
-| Value | Description |
-|-------|-------------|
-| `document_start` | Injected before any page scripts run (DOM not ready) |
-| `document_end` | Injected after DOM is ready but before all resources load |
-| `document_idle` | (Default) Injected after the page fully loads |
+| Значение | Описание |
+|----------|----------|
+| `document_start` | До выполнения скриптов страницы (DOM ещё не готов) |
+| `document_end` | После готовности DOM, до загрузки всех ресурсов |
+| `document_idle` | (По умолчанию) После полной загрузки страницы |
 
-### Example Content Script
+### Как работает инжекция
 
-**manifest.json:**
-```json
-{
-  "content_scripts": [
-    {
-      "matches": ["*://*.github.com/*"],
-      "js": ["github-enhancer.js"],
-      "css": ["github-styles.css"],
-      "run_at": "document_idle"
-    }
-  ]
-}
-```
+1. При загрузке страницы GitBrowser запрашивает у Rust-бэкенда список контент-скриптов, соответствующих URL
+2. CSS инжектируется через `webContents.insertCSS()`
+3. JS оборачивается в IIFE и выполняется через `webContents.executeJavaScript()`
+4. Скрипты выполняются в изолированном контексте — доступ к DOM есть, к JS-переменным страницы — нет
 
-**github-enhancer.js:**
-```javascript
-// Content scripts run in an isolated scope
-(function() {
-  // Access the page DOM
-  const header = document.querySelector('.Header');
-  if (header) {
-    console.log('[MyExtension] GitHub header found');
-  }
-
-  // Communicate with the extension background via custom events
-  document.dispatchEvent(new CustomEvent('gb-ext-message', {
-    detail: { type: 'page-loaded', url: location.href }
-  }));
-})();
-```
-
-**github-styles.css:**
-```css
-/* Injected into matching pages */
-.Header {
-  border-bottom: 2px solid #0366d6;
-}
-```
-
-## Available APIs
-
-Extensions can access browser functionality through the APIs below. These are available in background scripts and (where noted) in content scripts.
+## Доступные API
 
 ### Tabs API
 
-Requires `tabs` permission.
+Требует разрешение `tabs`.
 
 ```javascript
-// Available via RPC from background scripts
-// Methods: tabs.query, tabs.get, tabs.create, tabs.update, tabs.remove
-
-// Example: create a new tab
+// Создать новую вкладку
 gb.tabs.create({ url: 'https://example.com' });
 
-// Example: get all tabs
+// Получить все вкладки
 const tabs = await gb.tabs.query({});
+
+// Получить конкретную вкладку
+const tab = await gb.tabs.get({ id: 'tab-1' });
+
+// Закрыть вкладку
+gb.tabs.remove({ id: 'tab-1' });
 ```
 
 ### Bookmarks API
 
-Requires `bookmarks` permission.
+Требует разрешение `bookmarks`.
 
 ```javascript
-// Methods: bookmark.add, bookmark.list, bookmark.search, bookmark.delete
-
-// Example: add a bookmark
+// Добавить закладку
 gb.bookmarks.create({ url: 'https://example.com', title: 'Example' });
 
-// Example: search bookmarks
+// Получить все закладки
+const list = await gb.bookmarks.list({});
+
+// Поиск закладок
 const results = await gb.bookmarks.search({ query: 'github' });
+
+// Удалить закладку
+gb.bookmarks.delete({ id: 'bookmark-id' });
 ```
 
 ### Storage API
 
-Requires `storage` permission.
+Требует разрешение `storage`.
 
 ```javascript
-// Methods: storage.get, storage.set, storage.remove
-
-// Example: store data
+// Сохранить данные
 await gb.storage.set({ key: 'my-setting', value: 'dark-mode' });
 
-// Example: retrieve data
+// Получить данные
 const result = await gb.storage.get({ key: 'my-setting' });
 console.log(result.value); // 'dark-mode'
+
+// Удалить данные
+await gb.storage.remove({ key: 'my-setting' });
 ```
 
 ### Notifications API
 
-Requires `notifications` permission.
+Требует разрешение `notifications`.
 
 ```javascript
-// Methods: notifications.create, notifications.clear
-
-// Example: show a notification
+// Показать уведомление
 gb.notifications.create({
-  title: 'Download Complete',
-  message: 'file.zip has been downloaded'
+  title: 'Загрузка завершена',
+  message: 'file.zip успешно загружен'
 });
 ```
 
-## Extension Lifecycle
+## Жизненный цикл расширения
 
-1. **Install**: User selects extension directory via Extensions page. GitBrowser reads `manifest.json`, validates permissions, and registers the extension.
+1. **Установка** — пользователь выбирает директорию расширения через страницу Расширения. GitBrowser читает `manifest.json`, валидирует разрешения и регистрирует расширение в базе данных.
 
-2. **Enable/Disable**: Extensions can be toggled on/off from the Extensions page. Disabled extensions do not inject content scripts or run background scripts.
+2. **Включение/Отключение** — расширения можно переключать на странице Расширения. Отключённые расширения не инжектируют скрипты и не запускают фоновые процессы.
 
-3. **Content Script Injection**: When a page loads, GitBrowser checks all enabled extensions for matching content script patterns. Matched scripts are injected according to their `run_at` timing.
+3. **Инжекция контент-скриптов** — при загрузке страницы GitBrowser проверяет все включённые расширения на совпадение URL-паттернов. Совпавшие скрипты инжектируются согласно `run_at`.
 
-4. **Uninstall**: Removes the extension registration. Content scripts already injected into open pages remain until those pages are reloaded.
+4. **Удаление** — удаляет регистрацию расширения. Уже инжектированные скрипты остаются до перезагрузки страницы.
 
-## Example Extension: Dark Mode
+## Примеры расширений
 
-A complete example extension that adds dark mode to all websites.
-
-### Directory Structure
+### Пример 1: Тёмная тема для всех сайтов
 
 ```
-dark-mode-extension/
+dark-mode/
 ├── manifest.json
-├── darkmode.js
 └── darkmode.css
 ```
 
-### manifest.json
+**manifest.json:**
 ```json
 {
   "id": "dark-mode",
   "name": "Universal Dark Mode",
   "version": "1.0.0",
-  "description": "Applies dark mode to all websites",
+  "description": "Тёмная тема для всех сайтов",
   "permissions": ["pageContent"],
   "content_scripts": [
     {
@@ -232,19 +218,151 @@ dark-mode-extension/
 }
 ```
 
-### darkmode.css
+**darkmode.css:**
 ```css
 html {
   filter: invert(1) hue-rotate(180deg);
 }
-img, video, canvas, svg {
+img, video, canvas, svg, [style*="background-image"] {
   filter: invert(1) hue-rotate(180deg);
 }
 ```
 
-## Security Model
+### Пример 2: GitHub-улучшения
 
-- Content scripts run in an isolated JavaScript context — they can access the page DOM but not the page's JavaScript variables.
-- Extensions must declare all required permissions in `manifest.json`.
-- Network requests from extensions are subject to the same CORS rules as regular web pages.
-- Extension files are read from the local filesystem; only files within the extension directory are accessible.
+```
+github-enhancer/
+├── manifest.json
+├── enhancer.js
+└── styles.css
+```
+
+**manifest.json:**
+```json
+{
+  "id": "github-enhancer",
+  "name": "GitHub Enhancer",
+  "version": "1.0.0",
+  "description": "Улучшения для GitHub",
+  "permissions": ["pageContent"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.github.com/*"],
+      "js": ["enhancer.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
+```
+
+**enhancer.js:**
+```javascript
+(function() {
+  // Добавить кнопку "Скопировать имя файла" к каждому файлу
+  document.querySelectorAll('.js-navigation-open').forEach(link => {
+    const btn = document.createElement('button');
+    btn.textContent = '📋';
+    btn.title = 'Скопировать имя';
+    btn.style.cssText = 'margin-left:4px;cursor:pointer;background:none;border:none;font-size:12px;';
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      navigator.clipboard.writeText(link.textContent.trim());
+    };
+    link.parentElement.appendChild(btn);
+  });
+})();
+```
+
+### Пример 3: Блокировщик элементов
+
+```
+element-blocker/
+├── manifest.json
+└── blocker.css
+```
+
+**manifest.json:**
+```json
+{
+  "id": "element-blocker",
+  "name": "Ad Element Blocker",
+  "version": "1.0.0",
+  "description": "Скрывает рекламные элементы",
+  "permissions": ["pageContent"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "css": ["blocker.css"],
+      "run_at": "document_start"
+    }
+  ]
+}
+```
+
+**blocker.css:**
+```css
+[class*="ad-"], [class*="ads-"], [id*="ad-"],
+[class*="banner"], [class*="popup"],
+iframe[src*="ads"], iframe[src*="doubleclick"] {
+  display: none !important;
+}
+```
+
+### Пример 4: Кастомный CSS для конкретного сайта
+
+```
+custom-youtube/
+├── manifest.json
+└── youtube.css
+```
+
+**manifest.json:**
+```json
+{
+  "id": "custom-youtube",
+  "name": "Custom YouTube",
+  "version": "1.0.0",
+  "description": "Кастомизация YouTube",
+  "permissions": ["pageContent"],
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "css": ["youtube.css"],
+      "run_at": "document_end"
+    }
+  ]
+}
+```
+
+**youtube.css:**
+```css
+/* Скрыть комментарии */
+#comments { display: none !important; }
+
+/* Скрыть рекомендации на главной */
+ytd-rich-grid-renderer { max-width: 1200px; margin: 0 auto; }
+```
+
+## Модель безопасности
+
+- Контент-скрипты выполняются в изолированном JavaScript-контексте — доступ к DOM страницы есть, к JS-переменным страницы — нет
+- Расширения должны объявить все необходимые разрешения в `manifest.json`
+- Сетевые запросы из расширений подчиняются тем же правилам CORS, что и обычные веб-страницы
+- Файлы расширений читаются из локальной файловой системы; доступны только файлы внутри директории расширения
+- Расширения не могут инжектировать скрипты во внутренние страницы браузера (`gb://`)
+
+## Отладка
+
+1. Запустите GitBrowser с флагом `--dev` для доступа к DevTools
+2. Контент-скрипты видны в консоли DevTools на соответствующей странице
+3. Ошибки инжекции логируются в консоль main process
+4. Используйте `console.log()` в контент-скриптах для отладки
+
+## Ограничения
+
+- Фоновые скрипты пока не поддерживают полноценный event-driven API
+- Toolbar-кнопки с попапами находятся в разработке
+- Межпроцессное взаимодействие между контент-скриптами и фоновыми скриптами через `CustomEvent`
+- Максимальный размер данных в Storage API — 5 МБ на расширение

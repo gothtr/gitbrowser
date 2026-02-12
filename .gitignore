@@ -1,5 +1,7 @@
 # Build artifacts
 /target/
+electron/dist/
+electron/gitbrowser-rpc.exe
 
 # Database files (runtime data)
 *.db
@@ -15,7 +17,6 @@ session.json
 
 # Node.js
 electron/node_modules/
-electron/package-lock.json
 
 # OS files
 Thumbs.db

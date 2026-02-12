@@ -5,9 +5,54 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.gitbrowser.app",
+    "productName": "GitBrowser",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "rust-bridge.js",
+      "ui/**/*",
+      "node_modules/**/*",
+      "gitbrowser-rpc.exe"
+    ],
+    "extraResources": [
+      {
+        "from": "../resources",
+        "to": "resources"
+      },
+      {
+        "from": "../locales",
+        "to": "locales"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../resources/icons/app.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "../resources/icons/app.ico",
+      "uninstallerIcon": "../resources/icons/app.ico",
+      "installerHeaderIcon": "../resources/icons/app.ico"
+    }
   },
   "devDependencies": {
-    "electron": "^35.0.0"
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
   }
 }
