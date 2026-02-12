@@ -2,6 +2,8 @@
   "name": "gitbrowser",
   "version": "0.1.0",
   "description": "A privacy-focused minimal web browser with GitHub-style UI",
+  "author": "gothtr",
+  "repository": "github:gothtr/gitbrowser",
   "main": "main.js",
   "scripts": {
     "start": "electron .",

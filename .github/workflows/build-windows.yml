@@ -50,9 +50,7 @@ jobs:
 
       - name: Build Electron app (Windows)
         working-directory: electron
-        run: npx electron-builder --win --x64
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win --x64 --publish never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
