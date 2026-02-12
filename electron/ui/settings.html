@@ -122,21 +122,22 @@ body { display: flex; height: 100vh; overflow: hidden; }
 .row-desc { font-size: var(--text-sm); color: var(--fg-muted); margin-top: 2px; }
 
 select, input[type="number"] {
-  background: var(--glass-bg-hover);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--glass-border);
   color: var(--fg-default);
   padding: 6px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-family: var(--font-sans);
   font-size: var(--text-base);
   cursor: pointer;
   transition: all var(--duration-fast) var(--ease-out);
   outline: none;
+  box-shadow: var(--glass-inner-glow);
 }
 
 select:focus, input[type="number"]:focus {
   border-color: var(--accent-emphasis);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-glow), var(--glass-inner-glow);
 }
 
 .saved-indicator {

@@ -116,17 +116,18 @@ body {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-sm);
-  background: var(--glass-bg-hover);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--fg-default);
   font-family: var(--font-sans);
   font-size: var(--text-md);
   outline: none;
   transition: all var(--duration-fast) var(--ease-out);
+  box-shadow: var(--glass-inner-glow);
 }
 .input:focus {
   border-color: var(--accent-emphasis);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-glow), var(--glass-inner-glow);
 }
 .input::placeholder { color: var(--fg-subtle); }
 
@@ -134,10 +135,11 @@ body {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
+  box-shadow: var(--glass-inner-glow);
 }
 .input-glass:focus {
   border-color: var(--accent-emphasis);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-glow), var(--glass-inner-glow);
 }
 
 /* ─── Toggle switch (iOS style) ─── */
