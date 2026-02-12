@@ -2,6 +2,8 @@
 /target/
 electron/dist/
 electron/gitbrowser-rpc.exe
+installer/dist/
+installer/node_modules/
 
 # Database files (runtime data)
 *.db

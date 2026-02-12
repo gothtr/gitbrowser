@@ -38,9 +38,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: electron/package-lock.json
 
+      # ─── Build main app (unpacked directory) ───
       - name: Install Electron dependencies
         working-directory: electron
         run: npm ci
@@ -48,21 +47,39 @@ jobs:
       - name: Copy Rust binary to electron
         run: copy target\release\gitbrowser-rpc.exe electron\gitbrowser-rpc.exe
 
-      - name: Build Electron app (Windows)
+      - name: Build Electron app (unpacked + nsis)
         working-directory: electron
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      # ─── Build custom installer ───
+      - name: Install installer dependencies
+        working-directory: installer
+        run: npm install
+
+      - name: Build custom installer
+        working-directory: installer
         run: npx electron-builder --win --x64 --publish never
 
-      - name: Upload artifacts
+      # ─── Upload & Release ───
+      - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
-          name: gitbrowser-windows
+          name: gitbrowser-windows-nsis
           path: electron/dist/*.exe
+
+      - name: Upload custom installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitbrowser-windows-setup
+          path: installer/dist/*.exe
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: electron/dist/*.exe
+          files: |
+            electron/dist/*.exe
+            installer/dist/*.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,29 @@
+{
+  "name": "gitbrowser-installer",
+  "version": "0.1.0",
+  "description": "GitBrowser Installer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.gitbrowser.installer",
+    "productName": "GitBrowser Setup",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.js", "installer.html"],
+    "extraResources": [
+      { "from": "../resources/icons/app-icon.png", "to": "icon.png" },
+      { "from": "../resources/icons/app.ico", "to": "app.ico" }
+    ],
+    "win": {
+      "target": [{ "target": "portable", "arch": ["x64"] }],
+      "icon": "../resources/icons/app.ico"
+    },
+    "portable": { "artifactName": "GitBrowser-Setup-${version}.exe" }
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}
