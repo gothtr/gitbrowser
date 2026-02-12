@@ -1,13 +1,26 @@
 const { app, BrowserWindow, ipcMain, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { execSync, spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 const GITHUB_REPO = 'gothtr/gitbrowser';
-const CURRENT_VERSION = app.isPackaged ? require('./package.json').version : '0.1.0';
+const CURRENT_VERSION = app.isPackaged ? require('./package.json').version : '0.2.0';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'GitBrowser');
 
 let win = null;
+
+// ── Prevent multiple instances (fixes double window) ──
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+}
 
 function createWindow() {
   win = new BrowserWindow({
@@ -63,17 +76,44 @@ ipcMain.handle('check-update', async () => {
   }
 });
 
+// ── Install handler (non-blocking download + install) ──
 ipcMain.handle('install', async (_e, { downloadUrl }) => {
   try {
     fs.mkdirSync(INSTALL_DIR, { recursive: true });
 
     if (downloadUrl) {
-      const tmp = path.join(app.getPath('temp'), 'gitbrowser-latest.exe');
+      // Use unique temp filename to avoid EBUSY conflicts
+      const tmp = path.join(app.getPath('temp'), 'gitbrowser-setup-' + Date.now() + '.exe');
+
+      // Clean up any leftover temp files from previous attempts
+      try {
+        const tempDir = app.getPath('temp');
+        const oldFiles = fs.readdirSync(tempDir).filter(f => f.startsWith('gitbrowser-setup-') || f === 'gitbrowser-latest.exe');
+        for (const f of oldFiles) {
+          try { fs.unlinkSync(path.join(tempDir, f)); } catch {}
+        }
+      } catch {}
+
+      // Download
       const resp = await net.fetch(downloadUrl);
-      if (!resp.ok) throw new Error('Download failed: ' + resp.status);
-      fs.writeFileSync(tmp, Buffer.from(await resp.arrayBuffer()));
-      execSync(`"${tmp}" /S /D=${INSTALL_DIR}`, { timeout: 180000 });
-      try { fs.unlinkSync(tmp); } catch {}
+      if (!resp.ok) throw new Error('Download failed: HTTP ' + resp.status);
+      const buffer = Buffer.from(await resp.arrayBuffer());
+      fs.writeFileSync(tmp, buffer);
+
+      // Run installer in a child process (non-blocking, won't freeze UI)
+      await new Promise((resolve, reject) => {
+        const child = execFile(tmp, ['/S', '/D=' + INSTALL_DIR], { timeout: 300000 }, (err) => {
+          // Clean up temp file
+          try { fs.unlinkSync(tmp); } catch {}
+          if (err) reject(new Error('Installer exited with error: ' + (err.message || err.code)));
+          else resolve();
+        });
+        // If the child process is killed by timeout
+        child.on('error', (err) => {
+          try { fs.unlinkSync(tmp); } catch {}
+          reject(err);
+        });
+      });
     }
     return { ok: true };
   } catch (e) {
@@ -81,33 +121,41 @@ ipcMain.handle('install', async (_e, { downloadUrl }) => {
   }
 });
 
+// ── Shortcuts & registry (non-blocking) ──
 ipcMain.handle('create-shortcuts', async () => {
   try {
     const exe = path.join(INSTALL_DIR, 'GitBrowser.exe');
-    if (!fs.existsSync(exe)) return { ok: false, error: 'GitBrowser.exe not found in ' + INSTALL_DIR };
+    if (!fs.existsSync(exe)) return { ok: false, error: 'GitBrowser.exe not found' };
     const desktop = app.getPath('desktop');
     const startMenu = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
 
+    const runPS = (cmd) => new Promise((resolve) => {
+      execFile('powershell', ['-NoProfile', '-Command', cmd], { timeout: 10000 }, (err) => resolve(!err));
+    });
+
     const mkLnk = (lnkPath) => {
       const ps = `$s=(New-Object -COM WScript.Shell).CreateShortcut('${lnkPath.replace(/'/g, "''")}');$s.TargetPath='${exe.replace(/'/g, "''")}';$s.WorkingDirectory='${INSTALL_DIR.replace(/'/g, "''")}';$s.Save()`;
-      execSync(`powershell -NoProfile -Command "${ps}"`, { timeout: 10000 });
+      return runPS(ps);
     };
-    mkLnk(path.join(desktop, 'GitBrowser.lnk'));
+
+    await mkLnk(path.join(desktop, 'GitBrowser.lnk'));
     fs.mkdirSync(startMenu, { recursive: true });
-    mkLnk(path.join(startMenu, 'GitBrowser.lnk'));
+    await mkLnk(path.join(startMenu, 'GitBrowser.lnk'));
 
     // Registry entry for Add/Remove Programs
     const rk = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\GitBrowser';
     const regAdd = (name, value) => {
-      try { execSync(`reg add "${rk}" /v ${name} /t REG_SZ /d "${value}" /f`, { timeout: 5000 }); } catch {}
+      return new Promise((resolve) => {
+        execFile('reg', ['add', rk, '/v', name, '/t', 'REG_SZ', '/d', value, '/f'], { timeout: 5000 }, () => resolve());
+      });
     };
-    regAdd('DisplayName', 'GitBrowser');
-    regAdd('InstallLocation', INSTALL_DIR);
-    regAdd('DisplayIcon', exe);
-    regAdd('Publisher', 'gothtr');
-    regAdd('DisplayVersion', CURRENT_VERSION);
-    regAdd('UninstallString', `"${exe}" --uninstall`);
-    regAdd('URLInfoAbout', 'https://github.com/gothtr/gitbrowser');
+    await regAdd('DisplayName', 'GitBrowser');
+    await regAdd('InstallLocation', INSTALL_DIR);
+    await regAdd('DisplayIcon', exe);
+    await regAdd('Publisher', 'gothtr');
+    await regAdd('DisplayVersion', CURRENT_VERSION);
+    await regAdd('UninstallString', `"${exe}" --uninstall`);
+    await regAdd('URLInfoAbout', 'https://github.com/gothtr/gitbrowser');
 
     return { ok: true };
   } catch (e) {
@@ -116,7 +164,6 @@ ipcMain.handle('create-shortcuts', async () => {
 });
 
 ipcMain.handle('launch-app', () => {
-  // Try multiple possible exe locations
   const candidates = [
     path.join(INSTALL_DIR, 'GitBrowser.exe'),
     path.join(INSTALL_DIR, 'gitbrowser.exe'),
@@ -126,18 +173,14 @@ ipcMain.handle('launch-app', () => {
     if (fs.existsSync(exe)) {
       try {
         spawn(exe, [], { detached: true, stdio: 'ignore', cwd: INSTALL_DIR }).unref();
-        setTimeout(() => app.quit(), 500);
-        return { ok: true };
-      } catch (e) {
-        // Try shell.openPath as fallback
+      } catch {
         shell.openPath(exe);
-        setTimeout(() => app.quit(), 500);
-        return { ok: true };
       }
+      setTimeout(() => app.quit(), 500);
+      return { ok: true };
     }
   }
 
-  // Fallback: open install directory
   shell.openPath(INSTALL_DIR);
   setTimeout(() => app.quit(), 500);
   return { ok: false, error: 'Executable not found' };
@@ -145,5 +188,7 @@ ipcMain.handle('launch-app', () => {
 
 ipcMain.handle('close-installer', () => app.quit());
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  if (gotLock) createWindow();
+});
 app.on('window-all-closed', () => app.quit());
