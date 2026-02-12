@@ -121,7 +121,7 @@ body { display: flex; height: 100vh; overflow: hidden; }
 .row-label { font-size: var(--text-md); font-weight: 500; }
 .row-desc { font-size: var(--text-sm); color: var(--fg-muted); margin-top: 2px; }
 
-select, input[type="number"] {
+select, input[type="number"], input[type="text"], input[type="url"] {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--glass-border);
   color: var(--fg-default);
@@ -135,7 +135,7 @@ select, input[type="number"] {
   box-shadow: var(--glass-inner-glow);
 }
 
-select:focus, input[type="number"]:focus {
+select:focus, input[type="number"]:focus, input[type="text"]:focus, input[type="url"]:focus {
   border-color: var(--accent-emphasis);
   box-shadow: 0 0 0 3px var(--accent-glow), var(--glass-inner-glow);
 }
@@ -157,6 +157,92 @@ select:focus, input[type="number"]:focus {
   margin-top: var(--space-lg);
   text-align: center;
 }
+
+/* Color palette */
+.color-palette {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.color-swatch:hover, .color-swatch.active {
+  border-color: var(--accent-fg);
+  transform: scale(1.15);
+}
+.color-swatch.reset-swatch {
+  background: var(--bg-canvas);
+  border: 2px dashed var(--border-default);
+}
+
+/* About section */
+.about-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) 0;
+}
+.about-logo img { width: 80px; height: 80px; border-radius: var(--radius-md); }
+.about-name { font-size: var(--text-2xl); font-weight: 700; letter-spacing: -0.5px; }
+.about-version { color: var(--fg-muted); font-size: var(--text-md); }
+
+/* Donate section */
+.donate-amounts {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.donate-btn {
+  padding: 8px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fg-default);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.donate-btn:hover, .donate-btn.active {
+  background: var(--accent-emphasis);
+  color: #fff;
+  border-color: var(--accent-emphasis);
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+.donate-custom {
+  width: 80px;
+  padding: 8px 12px;
+  text-align: center;
+}
+.donate-submit {
+  padding: 10px 24px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--accent-emphasis);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  margin-top: var(--space-md);
+  width: 100%;
+}
+.donate-submit:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
+.donate-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.donate-status { font-size: var(--text-sm); color: var(--fg-muted); margin-top: var(--space-sm); text-align: center; }
+.donate-status.error { color: var(--danger-fg); }
+
+.link-row { cursor: pointer; }
+.link-row span { color: var(--fg-subtle); font-size: var(--text-base); }
 </style>
 </head>
 <body>
@@ -164,9 +250,10 @@ select:focus, input[type="number"]:focus {
 <nav class="settings-nav">
   <div class="nav-title">Settings</div>
   <button class="nav-item active" data-section="general"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.1-.303c.652-.18 1.34.03 1.73.545a8.042 8.042 0 0 1 1.088 1.89c.238.572.1 1.252-.337 1.71l-.812.804a.395.395 0 0 0-.112.29c.013.26.013.52 0 .78a.394.394 0 0 0 .112.29l.812.804c.436.458.575 1.138.337 1.71a8.04 8.04 0 0 1-1.088 1.89c-.39.515-1.078.725-1.73.545l-1.1-.303a.352.352 0 0 0-.3.071 5.834 5.834 0 0 1-.667.386.35.35 0 0 0-.212.224l-.289 1.106c-.169.646-.715 1.196-1.458 1.26a8.28 8.28 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106a.35.35 0 0 0-.212-.224 5.738 5.738 0 0 1-.668-.386.352.352 0 0 0-.299-.071l-1.1.303c-.652.18-1.34-.03-1.73-.545a8.042 8.042 0 0 1-1.088-1.89c-.238-.572-.1-1.252.337-1.71l.812-.804a.395.395 0 0 0 .112-.29 6.046 6.046 0 0 1 0-.78.394.394 0 0 0-.112-.29l-.812-.804c-.436-.458-.575-1.138-.337-1.71a8.04 8.04 0 0 1 1.088-1.89c.39-.515 1.078-.725 1.73-.545l1.1.303a.352.352 0 0 0 .3-.071c.214-.143.437-.272.667-.386a.35.35 0 0 0 .212-.224l.289-1.106C6.01.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.046-.219.29-.411.6-.573.925-.014.028-.042.112.017.182l.812.803c.407.404.63.953.63 1.52s-.223 1.116-.63 1.52l-.812.803c-.059.07-.031.154-.017.182.162.325.354.634.573.925.02.03.086.077.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.16.107.327.204.5.29.449.222.851.628.998 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.03.175-.016.195-.046.219-.29.411-.6.573-.925.014-.028.042-.112-.017-.182l-.812-.803a2.15 2.15 0 0 1-.63-1.52c0-.567.223-1.116.63-1.52l.812-.803c.059-.07.031-.154.017-.182a6.588 6.588 0 0 0-.573-.925c-.02-.03-.086-.077-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.5-.29c-.449-.222-.851-.628-.998-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/></svg></span> General</button>
-  <button class="nav-item" data-section="privacy"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M7.467.133a1.748 1.748 0 0 1 1.066 0l5.25 1.68A1.75 1.75 0 0 1 15 3.48V7c0 1.566-.32 3.182-1.303 4.682-.983 1.498-2.585 2.813-5.032 3.855a1.697 1.697 0 0 1-1.33 0c-2.447-1.042-4.049-2.357-5.032-3.855C1.32 10.182 1 8.566 1 7V3.48a1.75 1.75 0 0 1 1.217-1.667Zm.61 1.429a.25.25 0 0 0-.153 0l-5.25 1.68a.25.25 0 0 0-.174.238V7c0 1.358.275 2.666 1.057 3.86.784 1.194 2.121 2.34 4.366 3.297a.196.196 0 0 0 .154 0c2.245-.956 3.582-2.104 4.366-3.298C13.225 9.666 13.5 8.36 13.5 7V3.48a.251.251 0 0 0-.174-.237l-5.25-1.68ZM8.75 4.75v3a.75.75 0 0 1-1.5 0v-3a.75.75 0 0 1 1.5 0ZM9 10.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg></span> Privacy</button>
   <button class="nav-item" data-section="appearance"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3a1 1 0 0 0-1 1v4a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1Zm3.5 1.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg></span> Appearance</button>
+  <button class="nav-item" data-section="privacy"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M7.467.133a1.748 1.748 0 0 1 1.066 0l5.25 1.68A1.75 1.75 0 0 1 15 3.48V7c0 1.566-.32 3.182-1.303 4.682-.983 1.498-2.585 2.813-5.032 3.855a1.697 1.697 0 0 1-1.33 0c-2.447-1.042-4.049-2.357-5.032-3.855C1.32 10.182 1 8.566 1 7V3.48a1.75 1.75 0 0 1 1.217-1.667Zm.61 1.429a.25.25 0 0 0-.153 0l-5.25 1.68a.25.25 0 0 0-.174.238V7c0 1.358.275 2.666 1.057 3.86.784 1.194 2.121 2.34 4.366 3.297a.196.196 0 0 0 .154 0c2.245-.956 3.582-2.104 4.366-3.298C13.225 9.666 13.5 8.36 13.5 7V3.48a.251.251 0 0 0-.174-.237l-5.25-1.68ZM8.75 4.75v3a.75.75 0 0 1-1.5 0v-3a.75.75 0 0 1 1.5 0ZM9 10.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg></span> Privacy</button>
   <button class="nav-item" data-section="advanced"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M5.433 2.304A4.492 4.492 0 0 0 3.5 6c0 1.598.832 3.002 2.09 3.802.518.328.929.923.902 1.64v.008l-.164 3.337a.75.75 0 1 1-1.498-.073l.163-3.33c.002-.085-.05-.216-.25-.348A5.992 5.992 0 0 1 2 6a5.993 5.993 0 0 1 2.567-4.92.598.598 0 0 1 .866.224Zm5.134 0A.598.598 0 0 1 11.433 2.08 5.993 5.993 0 0 1 14 6a5.992 5.992 0 0 1-2.743 5.036c-.2.132-.252.263-.25.348l.164 3.33a.75.75 0 0 1-1.499.074l-.163-3.337v-.008c-.027-.717.384-1.312.902-1.64A4.495 4.495 0 0 0 12.5 6a4.492 4.492 0 0 0-1.933-3.696ZM8.005 1c-.462 0-.826.02-.826.02A.75.75 0 0 0 6.5 1.77v1a.75.75 0 0 0 1.5 0V2.5s.164-.001.005-.001c-.159 0 .005.001.005.001v.269a.75.75 0 0 0 1.5 0v-1A.75.75 0 0 0 8.831 1.02S8.467 1 8.005 1Z"/></svg></span> Advanced</button>
+  <button class="nav-item" data-section="about"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg></span> About</button>
 </nav>
 
 <div class="settings-content">
@@ -175,73 +262,138 @@ select:focus, input[type="number"]:focus {
 
     <!-- General -->
     <div class="settings-section active" id="sec-general">
-      <div class="section-title">General</div>
-      <div class="section-desc">Basic browser preferences</div>
+      <div class="section-title" data-i18n="settings.general">General</div>
+      <div class="section-desc" data-i18n="settings.general_desc">Basic browser preferences</div>
       <div class="settings-card">
         <div class="row">
-          <div class="row-info"><div class="row-label">Language</div><div class="row-desc">Interface language</div></div>
-          <select id="s-language"><option value="en">English</option><option value="ru">Russian</option></select>
+          <div class="row-info"><div class="row-label" data-i18n="settings.language_label">Language</div><div class="row-desc" data-i18n="settings.language_desc">Interface language</div></div>
+          <select id="s-language"><option value="en">English</option><option value="ru">Русский</option></select>
         </div>
         <div class="row">
-          <div class="row-info"><div class="row-label">On Startup</div><div class="row-desc">What to show when browser starts</div></div>
-          <select id="s-startup"><option value="Restore">Restore session</option><option value="NewTab">New tab</option></select>
+          <div class="row-info"><div class="row-label" data-i18n="settings.startup_behavior">On Startup</div><div class="row-desc" data-i18n="settings.startup_desc">What to show when browser starts</div></div>
+          <select id="s-startup"><option value="Restore" data-i18n="settings.startup_restore">Restore session</option><option value="NewTab" data-i18n="settings.startup_new_tab">New tab</option></select>
         </div>
         <div class="row">
-          <div class="row-info"><div class="row-label">Search Engine</div><div class="row-desc">Default search provider</div></div>
-          <select id="s-search-engine"><option value="google">Google</option><option value="duckduckgo">DuckDuckGo</option><option value="bing">Bing</option></select>
+          <div class="row-info"><div class="row-label" data-i18n="settings.search_engine">Search Engine</div><div class="row-desc" data-i18n="settings.search_engine_desc">Default search provider</div></div>
+          <select id="s-search-engine"><option value="google">Google</option><option value="duckduckgo">DuckDuckGo</option><option value="bing">Bing</option><option value="yandex">Yandex</option></select>
         </div>
-      </div>
-    </div>
-
-    <!-- Privacy -->
-    <div class="settings-section" id="sec-privacy">
-      <div class="section-title">Privacy & Security</div>
-      <div class="section-desc">Control tracking, encryption, and data</div>
-      <div class="settings-card">
-        <div class="row"><div class="row-info"><div class="row-label">Block Trackers</div><div class="row-desc">Prevent tracking scripts</div></div>
-          <div class="toggle on" id="s-trackers" data-key="privacy.tracker_blocking"></div></div>
-        <div class="row"><div class="row-info"><div class="row-label">Block Ads</div><div class="row-desc">Remove advertisements</div></div>
-          <div class="toggle on" id="s-ads" data-key="privacy.ad_blocking"></div></div>
-        <div class="row"><div class="row-info"><div class="row-label">Force HTTPS</div><div class="row-desc">Upgrade insecure connections</div></div>
-          <div class="toggle on" id="s-https" data-key="privacy.https_enforcement"></div></div>
-        <div class="row"><div class="row-info"><div class="row-label">DNS over HTTPS</div><div class="row-desc">Encrypt DNS queries</div></div>
-          <div class="toggle on" id="s-doh" data-key="privacy.dns_over_https"></div></div>
-        <div class="row"><div class="row-info"><div class="row-label">Anti-Fingerprinting</div><div class="row-desc">Protect against browser fingerprinting</div></div>
-          <div class="toggle on" id="s-fingerprint" data-key="privacy.anti_fingerprinting"></div></div>
-        <div class="row"><div class="row-info"><div class="row-label">Clear Data on Exit</div><div class="row-desc">Remove browsing data when closing</div></div>
-          <div class="toggle" id="s-clear-exit" data-key="privacy.clear_data_on_exit"></div></div>
-      </div>
-      <div class="settings-card">
-        <div class="row" style="cursor:pointer" id="open-passwords">
-          <div class="row-info"><div class="row-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M6.5 5.5a4 4 0 1 1 2.731 3.795l-1.96 1.96a.25.25 0 0 1-.177.073H6.5v.75a.75.75 0 0 1-.75.75h-.75v.75a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1-.75-.75v-2.086a.75.75 0 0 1 .22-.53l3.435-3.437A4.001 4.001 0 0 1 6.5 5.5ZM10.5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>Password Manager</div><div class="row-desc">Manage saved credentials</div></div>
-          <span style="color:var(--fg-subtle);font-size:var(--text-base)">→</span>
+        <div class="row">
+          <div class="row-info"><div class="row-label" data-i18n="settings.homepage">Homepage</div><div class="row-desc" data-i18n="settings.homepage_desc">Page to open as homepage</div></div>
+          <input type="url" id="s-homepage" placeholder="https://..." style="width:180px" />
         </div>
       </div>
     </div>
 
     <!-- Appearance -->
     <div class="settings-section" id="sec-appearance">
-      <div class="section-title">Appearance</div>
-      <div class="section-desc">Customize how GitBrowser looks</div>
+      <div class="section-title" data-i18n="settings.appearance">Appearance</div>
+      <div class="section-desc" data-i18n="settings.appearance_desc">Customize how GitBrowser looks</div>
       <div class="settings-card">
-        <div class="row"><div class="row-info"><div class="row-label">Theme</div></div>
-          <select id="s-theme"><option value="Dark">Dark</option><option value="Light">Light</option><option value="System">System</option></select></div>
-        <div class="row"><div class="row-info"><div class="row-label">Font Size</div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.theme">Theme</div></div>
+          <select id="s-theme"><option value="Dark" data-i18n="settings.theme_dark">Dark</option><option value="Light" data-i18n="settings.theme_light">Light</option><option value="System" data-i18n="settings.theme_system">System</option></select></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.font_size">Font Size</div></div>
           <input type="number" id="s-fontsize" value="14" min="10" max="24" style="width:60px" /></div>
+        <div class="row">
+          <div class="row-info"><div class="row-label" data-i18n="settings.newtab_bg">New Tab Background</div><div class="row-desc" data-i18n="settings.newtab_bg_desc">Background color for new tab page</div></div>
+        </div>
+        <div class="row">
+          <div class="color-palette" id="bg-palette"></div>
+        </div>
+        <div class="row">
+          <div class="row-info"><div class="row-label" data-i18n="settings.accent_color">Accent Color</div><div class="row-desc" data-i18n="settings.accent_color_desc">Interface accent color</div></div>
+        </div>
+        <div class="row">
+          <div class="color-palette" id="accent-palette"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacy -->
+    <div class="settings-section" id="sec-privacy">
+      <div class="section-title" data-i18n="settings.privacy">Privacy & Security</div>
+      <div class="section-desc" data-i18n="settings.privacy_desc">Control tracking, encryption, and data</div>
+      <div class="settings-card">
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.tracker_blocking">Block Trackers</div><div class="row-desc" data-i18n="settings.tracker_desc">Prevent tracking scripts</div></div>
+          <div class="toggle on" id="s-trackers" data-key="privacy.tracker_blocking"></div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.ad_blocking">Block Ads</div><div class="row-desc" data-i18n="settings.ad_desc">Remove advertisements</div></div>
+          <div class="toggle on" id="s-ads" data-key="privacy.ad_blocking"></div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.https_enforcement">Force HTTPS</div><div class="row-desc" data-i18n="settings.https_desc">Upgrade insecure connections</div></div>
+          <div class="toggle on" id="s-https" data-key="privacy.https_enforcement"></div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.dns_over_https">DNS over HTTPS</div><div class="row-desc" data-i18n="settings.dns_desc">Encrypt DNS queries</div></div>
+          <div class="toggle on" id="s-doh" data-key="privacy.dns_over_https"></div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.anti_fingerprinting">Anti-Fingerprinting</div><div class="row-desc" data-i18n="settings.fingerprint_desc">Protect against browser fingerprinting</div></div>
+          <div class="toggle on" id="s-fingerprint" data-key="privacy.anti_fingerprinting"></div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.clear_data_on_exit">Clear Data on Exit</div><div class="row-desc" data-i18n="settings.clear_exit_desc">Remove browsing data when closing</div></div>
+          <div class="toggle" id="s-clear-exit" data-key="privacy.clear_data_on_exit"></div></div>
+      </div>
+      <div class="settings-card">
+        <div class="row link-row" id="open-passwords">
+          <div class="row-info"><div class="row-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M6.5 5.5a4 4 0 1 1 2.731 3.795l-1.96 1.96a.25.25 0 0 1-.177.073H6.5v.75a.75.75 0 0 1-.75.75h-.75v.75a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1-.75-.75v-2.086a.75.75 0 0 1 .22-.53l3.435-3.437A4.001 4.001 0 0 1 6.5 5.5ZM10.5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg><span data-i18n="passwords.title">Password Manager</span></div><div class="row-desc" data-i18n="passwords.desc">Manage saved credentials</div></div>
+          <span>→</span>
+        </div>
       </div>
     </div>
 
     <!-- Advanced -->
     <div class="settings-section" id="sec-advanced">
-      <div class="section-title">Advanced</div>
-      <div class="section-desc">Reset and debug options</div>
+      <div class="section-title" data-i18n="settings.advanced">Advanced</div>
+      <div class="section-desc" data-i18n="settings.advanced_desc">Reset and cleanup options</div>
       <div class="settings-card">
         <div class="row">
-          <div class="row-info"><div class="row-label">Reset All Settings</div><div class="row-desc">Restore all settings to their default values</div></div>
-          <button class="btn btn-danger btn-pill" id="btn-reset">Reset</button>
+          <div class="row-info"><div class="row-label" data-i18n="settings.reset">Reset All Settings</div><div class="row-desc" data-i18n="settings.reset_desc">Restore all settings to their default values</div></div>
+          <button class="btn btn-danger btn-pill" id="btn-reset" data-i18n="settings.reset_btn">Reset</button>
+        </div>
+        <div class="row">
+          <div class="row-info"><div class="row-label" data-i18n="settings.clear_cache">Clear Cache</div><div class="row-desc" data-i18n="settings.clear_cache_desc">Remove cached files and data</div></div>
+          <button class="btn btn-pill" id="btn-clear-cache" data-i18n="settings.clear_btn">Clear</button>
+        </div>
+        <div class="row">
+          <div class="row-info"><div class="row-label" data-i18n="settings.clear_history">Clear History</div><div class="row-desc" data-i18n="settings.clear_history_desc">Remove all browsing history</div></div>
+          <button class="btn btn-pill" id="btn-clear-history" data-i18n="settings.clear_btn">Clear</button>
+        </div>
+        <div class="row">
+          <div class="row-info"><div class="row-label" data-i18n="settings.clear_cookies">Clear Cookies</div><div class="row-desc" data-i18n="settings.clear_cookies_desc">Remove all cookies and site data</div></div>
+          <button class="btn btn-pill" id="btn-clear-cookies" data-i18n="settings.clear_btn">Clear</button>
         </div>
       </div>
-      <div class="version" id="version-info">GitBrowser v0.1.0</div>
+    </div>
+
+    <!-- About -->
+    <div class="settings-section" id="sec-about">
+      <div class="section-title" data-i18n="settings.about">About</div>
+      <div class="section-desc" data-i18n="settings.about_desc">About GitBrowser</div>
+      <div class="settings-card">
+        <div class="about-logo">
+          <img src="../../resources/icons/logo-icon.png" alt="GitBrowser" />
+          <div class="about-name">GitBrowser</div>
+          <div class="about-version" id="about-version">v0.1.0</div>
+        </div>
+      </div>
+      <div class="settings-card">
+        <div class="row link-row" id="open-github">
+          <div class="row-info"><div class="row-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>GitHub</div><div class="row-desc">https://github.com/gothtr/gitbrowser</div></div>
+          <span>→</span>
+        </div>
+        <div class="row">
+          <div class="row-info"><div class="row-label" data-i18n="settings.license">License</div><div class="row-desc">MIT License</div></div>
+        </div>
+      </div>
+
+      <!-- Donate -->
+      <div class="settings-card" id="donate-card">
+        <div class="row" style="flex-direction:column;align-items:stretch;">
+          <div class="row-label" style="margin-bottom:var(--space-sm);font-size:var(--text-lg);" data-i18n="settings.donate_title">💜 Support the Project</div>
+          <div class="row-desc" style="margin-bottom:var(--space-md);" data-i18n="settings.donate_desc">Help us keep GitBrowser free and open-source</div>
+          <div class="donate-amounts">
+            <button class="donate-btn" data-amount="1">$1</button>
+            <button class="donate-btn active" data-amount="5">$5</button>
+            <button class="donate-btn" data-amount="10">$10</button>
+            <input type="number" class="donate-custom" id="donate-custom" placeholder="$..." min="1" max="1000" />
+          </div>
+          <button class="donate-submit" id="btn-donate" data-i18n="settings.donate_btn">Donate via CryptoBot</button>
+          <div class="donate-status" id="donate-status"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -274,6 +426,7 @@ async function loadSettings() {
       setVal('s-language', s.general.language);
       setVal('s-startup', s.general.startup_behavior);
       setVal('s-search-engine', s.general.default_search_engine);
+      if (s.general.homepage) document.getElementById('s-homepage').value = s.general.homepage;
     }
     if (s.privacy) {
       setToggle('s-trackers', s.privacy.tracker_blocking);
@@ -310,7 +463,12 @@ async function saveSetting(key, value) {
   } catch (e) { console.error('Failed to save setting:', e); }
 }
 
-function applyTheme(theme) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', theme === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
+function applyTheme(theme) {
+  document.documentElement.classList.add('theme-transition');
+  document.documentElement.classList.toggle('light', theme === 'Light');
+  setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300);
+  renderBgPalette();
+}
 if (gb && gb.onThemeChanged) gb.onThemeChanged((data) => applyTheme(data.theme));
 
 // Wire up selects
@@ -319,6 +477,7 @@ document.getElementById('s-startup').onchange = function() { saveSetting('genera
 document.getElementById('s-search-engine').onchange = function() { saveSetting('general.default_search_engine', this.value); };
 document.getElementById('s-theme').onchange = function() { saveSetting('appearance.theme', this.value); };
 document.getElementById('s-fontsize').onchange = function() { saveSetting('appearance.font_size', parseInt(this.value)); };
+document.getElementById('s-homepage').onchange = function() { saveSetting('general.homepage', this.value); };
 
 // Wire up toggles
 document.querySelectorAll('.toggle').forEach(t => {
@@ -330,12 +489,68 @@ document.querySelectorAll('.toggle').forEach(t => {
 });
 
 document.getElementById('open-passwords').onclick = () => { if (gb) gb.openPasswords(); };
+document.getElementById('open-github').onclick = () => { if (gb) gb.openUrlNewTab('https://github.com/gothtr/gitbrowser'); };
 
+// Background color palette
+const BG_COLORS_DARK = [null, '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f', '#2d132c', '#1c1c1c', '#212121', '#263238', '#1b262c', '#0a1931', '#2c3333', '#3c1642'];
+const BG_COLORS_LIGHT = [null, '#f0f4f8', '#e8eaf6', '#e3f2fd', '#fce4ec', '#f3e5f5', '#e0f2f1', '#fff8e1', '#efebe9', '#eceff1', '#f1f8e9', '#e8f5e9', '#fafafa'];
+
+function renderBgPalette() {
+  const palette = document.getElementById('bg-palette');
+  if (!palette) return;
+  palette.innerHTML = '';
+  const isLight = document.documentElement.classList.contains('light');
+  const colors = isLight ? BG_COLORS_LIGHT : BG_COLORS_DARK;
+  const saved = localStorage.getItem('newtab_bg');
+  colors.forEach((c, i) => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (i === 0 ? ' reset-swatch' : '') + ((c === saved || (i === 0 && !saved)) ? ' active' : '');
+    if (c) sw.style.background = c;
+    sw.title = i === 0 ? 'Default' : c;
+    sw.onclick = () => {
+      if (c) localStorage.setItem('newtab_bg', c);
+      else localStorage.removeItem('newtab_bg');
+      palette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      showSaved();
+    };
+    palette.appendChild(sw);
+  });
+}
+
+// Accent color palette
+const ACCENT_COLORS = ['#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#f472b6', '#fb7185', '#f97316', '#facc15', '#4ade80', '#2dd4bf', '#22d3ee', '#38bdf8'];
+
+function renderAccentPalette() {
+  const palette = document.getElementById('accent-palette');
+  if (!palette) return;
+  palette.innerHTML = '';
+  const saved = localStorage.getItem('accent_color') || '#60a5fa';
+  ACCENT_COLORS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (c === saved ? ' active' : '');
+    sw.style.background = c;
+    sw.title = c;
+    sw.onclick = () => {
+      localStorage.setItem('accent_color', c);
+      palette.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      showSaved();
+    };
+    palette.appendChild(sw);
+  });
+}
+
+renderBgPalette();
+renderAccentPalette();
+
+// Advanced: Reset
 document.getElementById('btn-reset').onclick = async () => {
   if (!gb) return;
   await gb.setSetting('general.language', 'en');
   await gb.setSetting('general.startup_behavior', 'Restore');
   await gb.setSetting('general.default_search_engine', 'google');
+  await gb.setSetting('general.homepage', '');
   await gb.setSetting('privacy.tracker_blocking', true);
   await gb.setSetting('privacy.ad_blocking', true);
   await gb.setSetting('privacy.https_enforcement', true);
@@ -344,8 +559,68 @@ document.getElementById('btn-reset').onclick = async () => {
   await gb.setSetting('privacy.clear_data_on_exit', false);
   await gb.setSetting('appearance.theme', 'System');
   await gb.setSetting('appearance.font_size', 14);
+  localStorage.removeItem('newtab_bg');
+  localStorage.removeItem('accent_color');
   loadSettings();
+  renderBgPalette();
+  renderAccentPalette();
   showSaved();
+};
+
+// Advanced: Clear cache/history/cookies
+document.getElementById('btn-clear-cache').onclick = async () => {
+  if (!gb || !gb.clearCache) return;
+  try { await gb.clearCache(); showSaved(); } catch {}
+};
+document.getElementById('btn-clear-history').onclick = async () => {
+  if (!gb) return;
+  try { gb.clearHistory(); showSaved(); } catch {}
+};
+document.getElementById('btn-clear-cookies').onclick = async () => {
+  if (!gb || !gb.clearCookies) return;
+  try { await gb.clearCookies(); showSaved(); } catch {}
+};
+
+// Donate
+let selectedAmount = 5;
+document.querySelectorAll('.donate-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.donate-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedAmount = parseFloat(btn.dataset.amount);
+    document.getElementById('donate-custom').value = '';
+  };
+});
+document.getElementById('donate-custom').oninput = function() {
+  if (this.value) {
+    document.querySelectorAll('.donate-btn').forEach(b => b.classList.remove('active'));
+    selectedAmount = parseFloat(this.value) || 5;
+  }
+};
+
+document.getElementById('btn-donate').onclick = async () => {
+  if (!gb || !gb.createDonateInvoice) return;
+  const amount = selectedAmount;
+  if (!amount || amount < 1) return;
+  const statusEl = document.getElementById('donate-status');
+  const btn = document.getElementById('btn-donate');
+  btn.disabled = true;
+  statusEl.textContent = '...';
+  statusEl.className = 'donate-status';
+  try {
+    const result = await gb.createDonateInvoice(amount);
+    if (result && result.bot_invoice_url) {
+      gb.openUrlNewTab(result.bot_invoice_url);
+      statusEl.textContent = '✓';
+    } else if (result && result.error) {
+      statusEl.textContent = result.error;
+      statusEl.className = 'donate-status error';
+    }
+  } catch (e) {
+    statusEl.textContent = 'Error';
+    statusEl.className = 'donate-status error';
+  }
+  btn.disabled = false;
 };
 
 loadSettings();
@@ -355,38 +630,26 @@ async function loadLocale() {
   if (!gb || !gb.getLocaleData) return;
   try {
     const { data: t } = await gb.getLocaleData();
-    if (!t || !t.settings) return;
-    const s = t.settings;
-    document.querySelector('.nav-title').textContent = s.title || 'Settings';
-    document.getElementById('saved').textContent = s.saved || 'Saved';
-    // Nav items
+    if (!t) return;
+    // Apply all data-i18n attributes
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      const parts = key.split('.');
+      let val = t;
+      for (const p of parts) { val = val && val[p]; }
+      if (val) el.textContent = val;
+    });
+    // Nav items (have icons + text)
     const navItems = document.querySelectorAll('.nav-item');
-    if (navItems[0] && s.general) { const lbl = navItems[0].querySelector('.nav-icon'); navItems[0].childNodes[navItems[0].childNodes.length - 1].textContent = ' ' + s.general; }
-    if (navItems[1] && s.privacy) { navItems[1].childNodes[navItems[1].childNodes.length - 1].textContent = ' ' + s.privacy; }
-    if (navItems[2] && s.appearance) { navItems[2].childNodes[navItems[2].childNodes.length - 1].textContent = ' ' + s.appearance; }
-    if (navItems[3] && s.advanced) { navItems[3].childNodes[navItems[3].childNodes.length - 1].textContent = ' ' + s.advanced; }
-    // Section titles
-    const sections = document.querySelectorAll('.section-title');
-    if (sections[0] && s.general) sections[0].textContent = s.general;
-    if (sections[1] && s.privacy) sections[1].textContent = s.privacy;
-    if (sections[2] && s.appearance) sections[2].textContent = s.appearance;
-    if (sections[3] && s.advanced) sections[3].textContent = s.advanced;
-    // Row labels
-    const labels = [
-      [s.language_label, s.language_desc],
-      [s.startup_behavior, s.startup_desc],
-      [s.search_engine, s.search_engine_desc],
-    ];
-    const generalRows = document.querySelectorAll('#sec-general .row');
-    generalRows.forEach((row, i) => {
-      if (labels[i]) {
-        const lbl = row.querySelector('.row-label');
-        const desc = row.querySelector('.row-desc');
-        if (lbl && labels[i][0]) lbl.textContent = labels[i][0];
-        if (desc && labels[i][1]) desc.textContent = labels[i][1];
+    const navKeys = ['general', 'appearance', 'privacy', 'advanced', 'about'];
+    navItems.forEach((item, i) => {
+      if (t.settings && t.settings[navKeys[i]]) {
+        const textNode = item.childNodes[item.childNodes.length - 1];
+        if (textNode) textNode.textContent = ' ' + t.settings[navKeys[i]];
       }
     });
-    if (s.reset) document.getElementById('btn-reset').textContent = s.reset;
+    // Saved indicator
+    if (t.settings && t.settings.saved) document.getElementById('saved').textContent = t.settings.saved;
   } catch {}
 }
 loadLocale();

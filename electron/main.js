@@ -2168,6 +2168,69 @@ ipcMain.handle('password-generate', async (_e, opts) => {
 
 ipcMain.on('open-passwords', () => openOrSwitchTab('gb://passwords'));
 
+// ─── CryptoBot Donate ───
+// XOR-obfuscated token (deobfuscated only in main process, never sent to renderer)
+const _OBF_TOKEN = 'YmRnb2VmbRYWJmY7IzU4EhAWFhUkJDFkDRQyHSRhZjUmbwUlEi00AgA1';
+const _OBF_KEY = 0x57;
+function _deobfToken(b64, key) {
+  try {
+    const buf = Buffer.from(b64, 'base64');
+    return Array.from(buf).map(b => b ^ key).map(b => String.fromCharCode(b)).join('');
+  } catch { return ''; }
+}
+
+ipcMain.handle('donate-create-invoice', async (_e, { amount }) => {
+  try {
+    const token = _deobfToken(_OBF_TOKEN, _OBF_KEY);
+    if (!token) return { error: 'Token not configured' };
+    const resp = await net.fetch('https://pay.crypt.bot/api/createInvoice', {
+      method: 'POST',
+      headers: {
+        'Crypto-Pay-API-Token': token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currency_type: 'fiat',
+        fiat: 'USD',
+        accepted_assets: 'USDT,TON,BTC,ETH',
+        amount: String(amount),
+        description: 'GitBrowser Donation',
+        paid_btn_name: 'callback',
+        paid_btn_url: 'https://github.com/gothtr/gitbrowser',
+      }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      return { error: 'API error: ' + (resp.status || '') + ' ' + text.slice(0, 200) };
+    }
+    const text = await resp.text();
+    if (!text) return { error: 'Empty response from API' };
+    let data;
+    try { data = JSON.parse(text); } catch { return { error: 'Invalid response from API' }; }
+    if (data && data.ok && data.result) {
+      return { bot_invoice_url: data.result.bot_invoice_url || data.result.mini_app_invoice_url };
+    }
+    return { error: (data && data.error && data.error.message) || 'Failed to create invoice' };
+  } catch (err) {
+    return { error: err.message || 'Network error' };
+  }
+});
+
+// ─── Clear data handlers ───
+ipcMain.handle('clear-cache', async () => {
+  try {
+    await session.defaultSession.clearCache();
+    return { ok: true };
+  } catch { return { error: 'Failed' }; }
+});
+
+ipcMain.handle('clear-cookies', async () => {
+  try {
+    await session.defaultSession.clearStorageData({ storages: ['cookies'] });
+    return { ok: true };
+  } catch { return { error: 'Failed' }; }
+});
+
 // Extensions
 ipcMain.handle('extension-list', async () => {
   try { return await rustBridge.call('extension.list', {}); }

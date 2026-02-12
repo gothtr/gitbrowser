@@ -118,6 +118,13 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   // Context menu action from injected glass menu
   ctxAction: (action, data) => ipcRenderer.send('ctx-menu-action', action, data),
 
+  // Donate
+  createDonateInvoice: (amount) => ipcRenderer.invoke('donate-create-invoice', { amount }),
+
+  // Clear data
+  clearCache: () => ipcRenderer.invoke('clear-cache'),
+  clearCookies: () => ipcRenderer.invoke('clear-cookies'),
+
   // Sidebar context menu (when collapsed, show via overlay)
   sidebarContextMenu: (x, y) => ipcRenderer.send('sidebar-context-menu', x, y),
 

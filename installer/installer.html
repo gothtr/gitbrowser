@@ -7,20 +7,21 @@
 html,body{
   width:520px;height:580px;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;
-  background:#08090d;color:#e2e8f0;
+  background:#0a0e14;color:#e2e8f0;
   user-select:none;-webkit-user-select:none;
+  -webkit-font-smoothing:antialiased;
 }
 body{display:flex;flex-direction:column;position:relative}
 
-/* ── Ambient background ── */
+/* ── Ambient glow (matches GitBrowser glass aesthetic) ── */
 .bg-glow{
   position:absolute;inset:0;pointer-events:none;overflow:hidden;
 }
 .bg-glow::before{
   content:'';position:absolute;top:-40%;left:-20%;
   width:140%;height:100%;
-  background:radial-gradient(ellipse at 30% 20%,rgba(99,102,241,0.06) 0%,transparent 60%),
-             radial-gradient(ellipse at 70% 80%,rgba(59,130,246,0.04) 0%,transparent 50%);
+  background:radial-gradient(ellipse at 30% 20%,rgba(59,130,246,0.06) 0%,transparent 60%),
+             radial-gradient(ellipse at 70% 80%,rgba(59,130,246,0.03) 0%,transparent 50%);
   animation:glowDrift 12s ease-in-out infinite alternate;
 }
 @keyframes glowDrift{
@@ -38,12 +39,12 @@ body{display:flex;flex-direction:column;position:relative}
 .tb-btn{
   -webkit-app-region:no-drag;
   width:30px;height:30px;border:none;background:none;
-  color:#3a3f4d;cursor:pointer;border-radius:8px;
+  color:#4a5168;cursor:pointer;border-radius:8px;
   display:flex;align-items:center;justify-content:center;
-  transition:all 150ms;
+  transition:all 150ms cubic-bezier(0.16,1,0.3,1);
 }
-.tb-btn:hover{background:rgba(255,255,255,0.06);color:#8b92a5}
-.tb-btn.close-btn:hover{background:rgba(239,68,68,0.15);color:#ef4444}
+.tb-btn:hover{background:rgba(255,255,255,0.06);color:#7c8494}
+.tb-btn.close-btn:hover{background:rgba(220,38,38,0.12);color:#f87171}
 .tb-btn:active{transform:scale(0.9)}
 
 /* ── Content ── */
@@ -60,22 +61,23 @@ body{display:flex;flex-direction:column;position:relative}
 }
 .logo-wrap img{
   height:72px;width:auto;
-  filter:drop-shadow(0 4px 24px rgba(99,102,241,0.15));
+  filter:drop-shadow(0 4px 24px rgba(59,130,246,0.12));
 }
 @keyframes logoEnter{
   from{opacity:0;transform:scale(0.8) translateY(12px)}
   to{opacity:1;transform:none}
 }
 
-/* ── Version badge ── */
+/* ── Version badge (glass style) ── */
 .version{
   display:inline-flex;align-items:center;gap:6px;
-  padding:4px 12px;border-radius:20px;
-  background:rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.06);
-  font-size:11px;color:#5a6178;font-weight:500;
+  padding:4px 12px;border-radius:9999px;
+  background:rgba(18,22,30,0.88);
+  border:1px solid rgba(255,255,255,0.07);
+  font-size:11px;color:#7c8494;font-weight:500;
   animation:fadeUp 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both;
   margin-bottom:32px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .version .dot{width:5px;height:5px;border-radius:50%;background:#3b82f6}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -87,29 +89,29 @@ body{display:flex;flex-direction:column;position:relative}
 }
 .step{
   display:flex;align-items:center;gap:8px;
-  font-size:11px;font-weight:500;color:#2e3340;
+  font-size:11px;font-weight:500;color:#4a5168;
   transition:color 0.4s;
 }
-.step.active{color:#7c8da5}
+.step.active{color:#7c8494}
 .step.done{color:#34d399}
 .step-dot{
   width:24px;height:24px;border-radius:50%;
-  border:1.5px solid #1e2230;
+  border:1.5px solid rgba(255,255,255,0.08);
   display:flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:700;color:#2e3340;
+  font-size:10px;font-weight:700;color:#4a5168;
   transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
   position:relative;
 }
 .step.active .step-dot{
-  border-color:rgba(59,130,246,0.4);color:#60a5fa;
+  border-color:rgba(59,130,246,0.35);color:#60a5fa;
   box-shadow:0 0 12px rgba(59,130,246,0.15);
 }
 .step.done .step-dot{
-  border-color:rgba(52,211,153,0.4);color:#34d399;
-  background:rgba(52,211,153,0.08);
+  border-color:rgba(52,211,153,0.35);color:#34d399;
+  background:rgba(52,211,153,0.06);
 }
 .step-line{
-  width:32px;height:1px;background:#1a1e28;margin:0 4px;
+  width:32px;height:1px;background:rgba(255,255,255,0.05);margin:0 4px;
   position:relative;overflow:hidden;
 }
 .step-line::after{
@@ -126,32 +128,32 @@ body{display:flex;flex-direction:column;position:relative}
   animation:fadeUp 0.5s 0.2s cubic-bezier(0.16,1,0.3,1) both;
 }
 .status-text{
-  font-size:13px;color:#4a5168;
+  font-size:13px;color:#7c8494;
   transition:color 0.3s;
 }
 .status-sub{
-  font-size:11px;color:#2e3340;margin-top:4px;
+  font-size:11px;color:#4a5168;margin-top:4px;
   transition:color 0.3s;
 }
 
-/* ── Progress bar ── */
+/* ── Progress bar (glass card) ── */
 .progress-wrap{
   width:100%;max-width:320px;margin-bottom:28px;
   animation:fadeUp 0.5s 0.25s cubic-bezier(0.16,1,0.3,1) both;
 }
 .progress-track{
   width:100%;height:4px;
-  background:rgba(255,255,255,0.03);border-radius:4px;
+  background:rgba(255,255,255,0.04);border-radius:4px;
   overflow:hidden;opacity:0;
   transition:opacity 0.3s;
 }
 .progress-track.on{opacity:1}
 .progress-bar{
   height:100%;width:0%;border-radius:4px;
-  background:linear-gradient(90deg,#6366f1,#3b82f6,#60a5fa);
+  background:linear-gradient(90deg,#3b82f6,#60a5fa);
   background-size:200% 100%;
   animation:shimmer 2s linear infinite;
-  box-shadow:0 0 12px rgba(59,130,246,0.3);
+  box-shadow:0 0 12px rgba(59,130,246,0.25);
   transition:width 0.5s cubic-bezier(0.16,1,0.3,1);
 }
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -161,42 +163,42 @@ body{display:flex;flex-direction:column;position:relative}
 }
 @keyframes barPulse{0%{transform:translateX(-100%)}100%{transform:translateX(433%)}}
 .progress-bar.success{
-  background:linear-gradient(90deg,#059669,#34d399,#6ee7b7);
-  box-shadow:0 0 12px rgba(52,211,153,0.3);
+  background:linear-gradient(90deg,#059669,#34d399);
+  box-shadow:0 0 12px rgba(52,211,153,0.25);
 }
 .progress-bar.error{
   background:linear-gradient(90deg,#dc2626,#f87171);
-  box-shadow:0 0 12px rgba(239,68,68,0.3);
+  box-shadow:0 0 12px rgba(220,38,38,0.25);
 }
 .progress-pct{
-  text-align:right;font-size:10px;color:#2e3340;
+  text-align:right;font-size:10px;color:#4a5168;
   margin-top:6px;height:14px;
   transition:color 0.3s;
 }
 
-/* ── Button ── */
+/* ── Button (GitBrowser accent style) ── */
 .action-btn{
   width:200px;height:44px;
   border:none;border-radius:12px;
   font-family:inherit;font-size:14px;font-weight:600;
   cursor:pointer;letter-spacing:0.2px;
   position:relative;overflow:hidden;
-  transition:all 0.25s cubic-bezier(0.16,1,0.3,1);
+  transition:all 250ms cubic-bezier(0.16,1,0.3,1);
   animation:fadeUp 0.5s 0.3s cubic-bezier(0.16,1,0.3,1) both;
   -webkit-app-region:no-drag;
-  background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(59,130,246,0.12));
-  border:1px solid rgba(99,102,241,0.2);
-  color:#818cf8;
+  background:rgba(59,130,246,0.12);
+  border:1px solid rgba(59,130,246,0.2);
+  color:#60a5fa;
 }
 .action-btn::before{
   content:'';position:absolute;inset:0;
-  background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(59,130,246,0.05));
-  opacity:0;transition:opacity 0.25s;
+  background:rgba(59,130,246,0.06);
+  opacity:0;transition:opacity 250ms;
 }
 .action-btn:hover::before{opacity:1}
 .action-btn:hover{
-  border-color:rgba(99,102,241,0.35);
-  box-shadow:0 4px 24px rgba(99,102,241,0.12),0 0 0 1px rgba(99,102,241,0.1);
+  border-color:rgba(59,130,246,0.35);
+  box-shadow:0 4px 24px rgba(59,130,246,0.12),0 0 0 1px rgba(59,130,246,0.08);
   transform:translateY(-1px);
 }
 .action-btn:active{transform:translateY(0) scale(0.98)}
@@ -205,13 +207,13 @@ body{display:flex;flex-direction:column;position:relative}
 }
 .action-btn:disabled::before{display:none}
 .action-btn.success{
-  background:linear-gradient(135deg,rgba(52,211,153,0.15),rgba(16,185,129,0.12));
-  border-color:rgba(52,211,153,0.25);
+  background:rgba(52,211,153,0.12);
+  border-color:rgba(52,211,153,0.2);
   color:#34d399;
 }
 .action-btn.success:hover{
-  border-color:rgba(52,211,153,0.4);
-  box-shadow:0 4px 24px rgba(52,211,153,0.12),0 0 0 1px rgba(52,211,153,0.1);
+  border-color:rgba(52,211,153,0.35);
+  box-shadow:0 4px 24px rgba(52,211,153,0.12),0 0 0 1px rgba(52,211,153,0.08);
 }
 
 /* ── Install path ── */
@@ -226,6 +228,17 @@ body{display:flex;flex-direction:column;position:relative}
 /* ── Checkmark animation ── */
 .check-icon{display:inline-block;vertical-align:middle;margin-right:2px}
 @keyframes checkDraw{from{stroke-dashoffset:16}to{stroke-dashoffset:0}}
+
+/* ── Error card ── */
+.error-detail{
+  margin-top:8px;padding:8px 14px;
+  background:rgba(220,38,38,0.06);
+  border:1px solid rgba(220,38,38,0.12);
+  border-radius:8px;
+  font-size:11px;color:#f87171;
+  max-width:320px;word-break:break-word;
+  text-align:center;
+}
 </style>
 </head>
 <body>
@@ -253,22 +266,22 @@ body{display:flex;flex-direction:column;position:relative}
   <div class="steps">
     <div class="step active" id="s1">
       <div class="step-dot">1</div>
-      <span>Проверка</span>
+      <span id="s1-label">Check</span>
     </div>
     <div class="step-line" id="line1"></div>
     <div class="step" id="s2">
       <div class="step-dot">2</div>
-      <span>Установка</span>
+      <span id="s2-label">Install</span>
     </div>
     <div class="step-line" id="line2"></div>
     <div class="step" id="s3">
       <div class="step-dot">3</div>
-      <span>Готово</span>
+      <span id="s3-label">Done</span>
     </div>
   </div>
 
   <div class="status-area">
-    <div class="status-text" id="st">Проверка обновлений…</div>
+    <div class="status-text" id="st">Checking for updates…</div>
     <div class="status-sub" id="sub"></div>
   </div>
 
@@ -279,7 +292,7 @@ body{display:flex;flex-direction:column;position:relative}
     <div class="progress-pct" id="pct"></div>
   </div>
 
-  <button class="action-btn" id="btn" disabled>Установить</button>
+  <button class="action-btn" id="btn" disabled>Install</button>
 </div>
 
 <div class="install-path" id="pathEl"></div>
@@ -290,6 +303,52 @@ const $ = id => document.getElementById(id);
 
 let downloadUrl = null;
 let latestVer = null;
+
+// Detect system language for installer UI
+const lang = (navigator.language || '').startsWith('ru') ? 'ru' : 'en';
+const L = {
+  en: {
+    s1: 'Check', s2: 'Install', s3: 'Done',
+    checking: 'Checking for updates\u2026',
+    newVersion: 'New version available',
+    readyToInstall: 'Ready to install',
+    latestVersion: 'Latest version',
+    install: 'Install',
+    downloading: 'Downloading\u2026',
+    installing: 'Installing\u2026',
+    shortcuts: 'Creating shortcuts\u2026',
+    configuring: 'Configuring system\u2026',
+    errorInstall: 'Installation failed',
+    retry: 'Retry',
+    done: 'Installation complete',
+    ready: 'GitBrowser is ready',
+    launch: 'Launch',
+  },
+  ru: {
+    s1: 'Проверка', s2: 'Установка', s3: 'Готово',
+    checking: 'Проверка обновлений\u2026',
+    newVersion: 'Доступна новая версия',
+    readyToInstall: 'Готов к установке',
+    latestVersion: 'Последняя версия',
+    install: 'Установить',
+    downloading: 'Загрузка\u2026',
+    installing: 'Установка\u2026',
+    shortcuts: 'Создание ярлыков\u2026',
+    configuring: 'Настройка системы\u2026',
+    errorInstall: 'Ошибка установки',
+    retry: 'Повторить',
+    done: 'Установка завершена',
+    ready: 'GitBrowser готов к работе',
+    launch: 'Запустить',
+  },
+}[lang];
+
+// Apply language
+$('s1-label').textContent = L.s1;
+$('s2-label').textContent = L.s2;
+$('s3-label').textContent = L.s3;
+$('st').textContent = L.checking;
+$('btn').textContent = L.install;
 
 $('x').onclick = () => api.close();
 
@@ -336,16 +395,16 @@ async function init() {
   if (upd.latest && upd.latest !== info.version && upd.download) {
     latestVer = upd.latest;
     downloadUrl = upd.download;
-    $('st').textContent = 'Доступна новая версия';
-    $('st').style.color = '#818cf8';
+    $('st').textContent = L.newVersion;
+    $('st').style.color = '#60a5fa';
     $('sub').textContent = 'v' + info.version + '  →  v' + upd.latest;
-    $('sub').style.color = '#4a5168';
+    $('sub').style.color = '#7c8494';
     $('ver').textContent = 'v' + info.version + ' → v' + upd.latest;
   } else {
-    $('st').textContent = 'Готов к установке';
-    $('st').style.color = '#5a6178';
-    $('sub').textContent = 'Последняя версия';
-    $('sub').style.color = '#2e3340';
+    $('st').textContent = L.readyToInstall;
+    $('st').style.color = '#7c8494';
+    $('sub').textContent = L.latestVersion;
+    $('sub').style.color = '#4a5168';
   }
 
   setStep(2);
@@ -355,36 +414,44 @@ async function init() {
 $('btn').onclick = async () => {
   $('btn').disabled = true;
   $('track').classList.add('on');
-  $('pct').style.color = '#3a3f4d';
+  $('pct').style.color = '#4a5168';
+
+  // Remove any previous error detail
+  const prevErr = document.querySelector('.error-detail');
+  if (prevErr) prevErr.remove();
 
   // Phase 1: download/install
-  $('st').textContent = downloadUrl ? 'Загрузка…' : 'Установка…';
-  $('st').style.color = '#7c8da5';
+  $('st').textContent = downloadUrl ? L.downloading : L.installing;
+  $('st').style.color = '#7c8494';
   $('sub').textContent = '';
   anim(0, 45, 2500);
 
   const res = await api.install({ downloadUrl });
   if (!res.ok) {
-    $('st').textContent = 'Ошибка установки';
+    $('st').textContent = L.errorInstall;
     $('st').style.color = '#f87171';
-    $('sub').textContent = res.error || '';
-    $('sub').style.color = '#7f1d1d';
     $('bar').classList.add('error');
     $('bar').style.width = '100%';
     $('pct').textContent = '';
-    $('btn').textContent = 'Повторить';
+    if (res.error) {
+      const errEl = document.createElement('div');
+      errEl.className = 'error-detail';
+      errEl.textContent = res.error;
+      document.querySelector('.status-area').appendChild(errEl);
+    }
+    $('btn').textContent = L.retry;
     $('btn').disabled = false;
     return;
   }
 
   // Phase 2: shortcuts
   anim(45, 70, 600);
-  $('st').textContent = 'Создание ярлыков…';
+  $('st').textContent = L.shortcuts;
   await api.createShortcuts();
 
   // Phase 3: registry
   anim(70, 90, 400);
-  $('st').textContent = 'Настройка системы…';
+  $('st').textContent = L.configuring;
   await new Promise(r => setTimeout(r, 300));
 
   // Phase 4: done
@@ -400,12 +467,12 @@ $('btn').onclick = async () => {
   $('pct').textContent = '100%';
   $('pct').style.color = '#34d399';
 
-  $('st').textContent = 'Установка завершена';
+  $('st').textContent = L.done;
   $('st').style.color = '#34d399';
-  $('sub').textContent = 'GitBrowser готов к работе';
-  $('sub').style.color = '#2e6e55';
+  $('sub').textContent = L.ready;
+  $('sub').style.color = '#059669';
 
-  $('btn').textContent = 'Запустить';
+  $('btn').textContent = L.launch;
   $('btn').classList.add('success');
   $('btn').disabled = false;
   $('btn').onclick = () => api.launchApp();

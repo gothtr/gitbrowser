@@ -1,15 +1,18 @@
 {
   "name": "gitbrowser-installer",
   "version": "0.1.0",
-  "description": "GitBrowser Installer",
+  "description": "GitBrowser Installer — Fast. Private. Open.",
+  "author": "gothtr <https://github.com/gothtr>",
+  "homepage": "https://github.com/gothtr/gitbrowser",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win --x64"
   },
   "build": {
-    "appId": "com.gitbrowser.installer",
+    "appId": "com.gothtr.gitbrowser.installer",
     "productName": "GitBrowser Setup",
+    "copyright": "Copyright © 2025-2026 gothtr",
     "directories": { "output": "dist" },
     "files": ["main.js", "preload.js", "installer.html"],
     "extraResources": [
@@ -19,9 +22,12 @@
     ],
     "win": {
       "target": [{ "target": "portable", "arch": ["x64"] }],
-      "icon": "../resources/icons/app.ico"
+      "icon": "../resources/icons/app.ico",
+      "requestedExecutionLevel": "asInvoker"
     },
-    "portable": { "artifactName": "GitBrowser-Setup-${version}.exe" }
+    "portable": {
+      "artifactName": "GitBrowser-Setup-${version}.exe"
+    }
   },
   "devDependencies": {
     "electron": "^35.0.0",
