@@ -10,15 +10,14 @@ const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'GitBrowser');
 let win = null;
 
 function createWindow() {
-  const size = 420;
   win = new BrowserWindow({
-    width: size,
-    height: size,
+    width: 520,
+    height: 580,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
     frame: false,
-    backgroundColor: '#0a0e14',
+    backgroundColor: '#08090d',
     icon: app.isPackaged
       ? path.join(process.resourcesPath, 'app.ico')
       : path.join(__dirname, '..', 'resources', 'icons', 'app.ico'),
@@ -35,8 +34,8 @@ function createWindow() {
 }
 
 ipcMain.handle('get-icon-path', () => {
-  if (app.isPackaged) return path.join(process.resourcesPath, 'icon.png');
-  return path.join(__dirname, '..', 'resources', 'icons', 'logo-icon.png');
+  if (app.isPackaged) return path.join(process.resourcesPath, 'logo-dark-text.png');
+  return path.join(__dirname, '..', 'resources', 'icons', 'logo-dark-text.png');
 });
 
 ipcMain.handle('get-info', () => ({

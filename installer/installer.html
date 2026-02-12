@@ -5,169 +5,323 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{
-  width:420px;height:420px;overflow:hidden;
+  width:520px;height:580px;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;
-  background:#0a0e14;color:#e2e8f0;
+  background:#08090d;color:#e2e8f0;
   user-select:none;-webkit-user-select:none;
 }
+body{display:flex;flex-direction:column;position:relative}
 
-body{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  position:relative;
+/* ── Ambient background ── */
+.bg-glow{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;
+}
+.bg-glow::before{
+  content:'';position:absolute;top:-40%;left:-20%;
+  width:140%;height:100%;
+  background:radial-gradient(ellipse at 30% 20%,rgba(99,102,241,0.06) 0%,transparent 60%),
+             radial-gradient(ellipse at 70% 80%,rgba(59,130,246,0.04) 0%,transparent 50%);
+  animation:glowDrift 12s ease-in-out infinite alternate;
+}
+@keyframes glowDrift{
+  0%{transform:translate(0,0) scale(1)}
+  100%{transform:translate(20px,-10px) scale(1.05)}
 }
 
-/* Subtle top glow */
-body::before{
-  content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);
-  width:300px;height:240px;
-  background:radial-gradient(ellipse,rgba(59,130,246,0.07) 0%,transparent 70%);
-  pointer-events:none;
-}
-
-/* ── Title bar (drag area) ── */
+/* ── Title bar ── */
 .titlebar{
-  position:absolute;top:0;left:0;right:0;height:32px;
+  position:relative;z-index:10;height:36px;flex-shrink:0;
   -webkit-app-region:drag;
   display:flex;align-items:center;justify-content:flex-end;
-  padding:0 6px;
+  padding:0 8px;
 }
-.close{
+.tb-btn{
   -webkit-app-region:no-drag;
-  width:28px;height:28px;border:none;background:none;
-  color:#4a5168;cursor:pointer;border-radius:8px;
+  width:30px;height:30px;border:none;background:none;
+  color:#3a3f4d;cursor:pointer;border-radius:8px;
   display:flex;align-items:center;justify-content:center;
-  transition:all 150ms cubic-bezier(0.16,1,0.3,1);
+  transition:all 150ms;
 }
-.close:hover{background:rgba(255,255,255,0.07);color:#e2e8f0}
-.close:active{transform:scale(0.92)}
+.tb-btn:hover{background:rgba(255,255,255,0.06);color:#8b92a5}
+.tb-btn.close-btn:hover{background:rgba(239,68,68,0.15);color:#ef4444}
+.tb-btn:active{transform:scale(0.9)}
+
+/* ── Content ── */
+.content{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;position:relative;z-index:1;
+  padding:0 40px 32px;
+}
 
 /* ── Logo ── */
-.logo{
-  width:56px;height:56px;border-radius:14px;
-  background:linear-gradient(135deg,#12161e 0%,#1a1f2b 100%);
+.logo-wrap{
+  animation:logoEnter 0.7s cubic-bezier(0.16,1,0.3,1) both;
+  margin-bottom:8px;
+}
+.logo-wrap img{
+  height:72px;width:auto;
+  filter:drop-shadow(0 4px 24px rgba(99,102,241,0.15));
+}
+@keyframes logoEnter{
+  from{opacity:0;transform:scale(0.8) translateY(12px)}
+  to{opacity:1;transform:none}
+}
+
+/* ── Version badge ── */
+.version{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 12px;border-radius:20px;
+  background:rgba(255,255,255,0.04);
   border:1px solid rgba(255,255,255,0.06);
+  font-size:11px;color:#5a6178;font-weight:500;
+  animation:fadeUp 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both;
+  margin-bottom:32px;
+}
+.version .dot{width:5px;height:5px;border-radius:50%;background:#3b82f6}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── Steps indicator ── */
+.steps{
+  display:flex;align-items:center;gap:0;margin-bottom:28px;
+  animation:fadeUp 0.5s 0.15s cubic-bezier(0.16,1,0.3,1) both;
+}
+.step{
+  display:flex;align-items:center;gap:8px;
+  font-size:11px;font-weight:500;color:#2e3340;
+  transition:color 0.4s;
+}
+.step.active{color:#7c8da5}
+.step.done{color:#34d399}
+.step-dot{
+  width:24px;height:24px;border-radius:50%;
+  border:1.5px solid #1e2230;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 8px 32px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.04);
-  animation:logoIn 0.5s cubic-bezier(0.16,1,0.3,1) both;
-  margin-bottom:16px;
+  font-size:10px;font-weight:700;color:#2e3340;
+  transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
+  position:relative;
 }
-.logo img{width:36px;height:36px;border-radius:6px}
-@keyframes logoIn{from{opacity:0;transform:scale(0.85) translateY(6px)}to{opacity:1;transform:none}}
+.step.active .step-dot{
+  border-color:rgba(59,130,246,0.4);color:#60a5fa;
+  box-shadow:0 0 12px rgba(59,130,246,0.15);
+}
+.step.done .step-dot{
+  border-color:rgba(52,211,153,0.4);color:#34d399;
+  background:rgba(52,211,153,0.08);
+}
+.step-line{
+  width:32px;height:1px;background:#1a1e28;margin:0 4px;
+  position:relative;overflow:hidden;
+}
+.step-line::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,#3b82f6,#34d399);
+  transform:scaleX(0);transform-origin:left;
+  transition:transform 0.6s cubic-bezier(0.16,1,0.3,1);
+}
+.step-line.filled::after{transform:scaleX(1)}
 
-/* ── Text ── */
-.name{
-  font-size:20px;font-weight:700;color:#e2e8f0;letter-spacing:-0.3px;
-  animation:fadeIn 0.4s 0.05s cubic-bezier(0.16,1,0.3,1) both;
+/* ── Status area ── */
+.status-area{
+  text-align:center;margin-bottom:20px;min-height:36px;
+  animation:fadeUp 0.5s 0.2s cubic-bezier(0.16,1,0.3,1) both;
 }
-.ver{
-  font-size:11px;color:#4a5168;margin-top:3px;font-weight:500;
-  animation:fadeIn 0.4s 0.1s cubic-bezier(0.16,1,0.3,1) both;
+.status-text{
+  font-size:13px;color:#4a5168;
+  transition:color 0.3s;
 }
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-
-/* ── Status ── */
-.status{
-  margin-top:28px;font-size:12px;color:#4a5168;height:16px;
-  transition:color 0.2s;
-  animation:fadeIn 0.4s 0.15s cubic-bezier(0.16,1,0.3,1) both;
+.status-sub{
+  font-size:11px;color:#2e3340;margin-top:4px;
+  transition:color 0.3s;
 }
 
-/* ── Progress ── */
-.track{
-  margin-top:12px;width:240px;height:3px;
-  background:rgba(255,255,255,0.04);border-radius:2px;
-  overflow:hidden;opacity:0;transition:opacity 0.3s;
+/* ── Progress bar ── */
+.progress-wrap{
+  width:100%;max-width:320px;margin-bottom:28px;
+  animation:fadeUp 0.5s 0.25s cubic-bezier(0.16,1,0.3,1) both;
 }
-.track.on{opacity:1}
-.bar{
-  height:100%;width:0%;border-radius:2px;
-  background:linear-gradient(90deg,#3b82f6,#60a5fa);
-  box-shadow:0 0 10px rgba(59,130,246,0.3);
-  transition:width 0.4s cubic-bezier(0.16,1,0.3,1);
+.progress-track{
+  width:100%;height:4px;
+  background:rgba(255,255,255,0.03);border-radius:4px;
+  overflow:hidden;opacity:0;
+  transition:opacity 0.3s;
 }
-.bar.pulse{
+.progress-track.on{opacity:1}
+.progress-bar{
+  height:100%;width:0%;border-radius:4px;
+  background:linear-gradient(90deg,#6366f1,#3b82f6,#60a5fa);
+  background-size:200% 100%;
+  animation:shimmer 2s linear infinite;
+  box-shadow:0 0 12px rgba(59,130,246,0.3);
+  transition:width 0.5s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.progress-bar.pulse{
   width:30%;
-  animation:pulse 1.4s cubic-bezier(0.4,0,0.6,1) infinite;
+  animation:barPulse 1.6s cubic-bezier(0.4,0,0.6,1) infinite, shimmer 2s linear infinite;
 }
-@keyframes pulse{0%{transform:translateX(-100%)}100%{transform:translateX(433%)}}
+@keyframes barPulse{0%{transform:translateX(-100%)}100%{transform:translateX(433%)}}
+.progress-bar.success{
+  background:linear-gradient(90deg,#059669,#34d399,#6ee7b7);
+  box-shadow:0 0 12px rgba(52,211,153,0.3);
+}
+.progress-bar.error{
+  background:linear-gradient(90deg,#dc2626,#f87171);
+  box-shadow:0 0 12px rgba(239,68,68,0.3);
+}
+.progress-pct{
+  text-align:right;font-size:10px;color:#2e3340;
+  margin-top:6px;height:14px;
+  transition:color 0.3s;
+}
 
 /* ── Button ── */
-.btn{
-  margin-top:24px;width:160px;height:38px;
-  border:none;border-radius:10px;
-  background:rgba(59,130,246,0.12);
-  color:#60a5fa;
-  font-family:inherit;font-size:13px;font-weight:600;
-  cursor:pointer;letter-spacing:0.1px;
-  transition:all 0.2s cubic-bezier(0.16,1,0.3,1);
-  border:1px solid rgba(59,130,246,0.15);
-  animation:fadeIn 0.4s 0.2s cubic-bezier(0.16,1,0.3,1) both;
+.action-btn{
+  width:200px;height:44px;
+  border:none;border-radius:12px;
+  font-family:inherit;font-size:14px;font-weight:600;
+  cursor:pointer;letter-spacing:0.2px;
+  position:relative;overflow:hidden;
+  transition:all 0.25s cubic-bezier(0.16,1,0.3,1);
+  animation:fadeUp 0.5s 0.3s cubic-bezier(0.16,1,0.3,1) both;
   -webkit-app-region:no-drag;
+  background:linear-gradient(135deg,rgba(99,102,241,0.15),rgba(59,130,246,0.12));
+  border:1px solid rgba(99,102,241,0.2);
+  color:#818cf8;
 }
-.btn:hover{
-  background:rgba(59,130,246,0.18);
-  border-color:rgba(59,130,246,0.25);
-  box-shadow:0 0 20px rgba(59,130,246,0.1);
+.action-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(59,130,246,0.05));
+  opacity:0;transition:opacity 0.25s;
 }
-.btn:active{transform:scale(0.97)}
-.btn:disabled{opacity:0.35;cursor:default;transform:none;box-shadow:none}
-.btn.done{
-  background:rgba(52,211,153,0.12);
-  border-color:rgba(52,211,153,0.15);
+.action-btn:hover::before{opacity:1}
+.action-btn:hover{
+  border-color:rgba(99,102,241,0.35);
+  box-shadow:0 4px 24px rgba(99,102,241,0.12),0 0 0 1px rgba(99,102,241,0.1);
+  transform:translateY(-1px);
+}
+.action-btn:active{transform:translateY(0) scale(0.98)}
+.action-btn:disabled{
+  opacity:0.3;cursor:default;transform:none;box-shadow:none;
+}
+.action-btn:disabled::before{display:none}
+.action-btn.success{
+  background:linear-gradient(135deg,rgba(52,211,153,0.15),rgba(16,185,129,0.12));
+  border-color:rgba(52,211,153,0.25);
   color:#34d399;
 }
-.btn.done:hover{
-  background:rgba(52,211,153,0.18);
-  border-color:rgba(52,211,153,0.25);
-  box-shadow:0 0 20px rgba(52,211,153,0.1);
+.action-btn.success:hover{
+  border-color:rgba(52,211,153,0.4);
+  box-shadow:0 4px 24px rgba(52,211,153,0.12),0 0 0 1px rgba(52,211,153,0.1);
 }
 
-/* ── Path ── */
-.path{
-  position:absolute;bottom:16px;
-  font-size:10px;color:rgba(255,255,255,0.1);
-  max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+/* ── Install path ── */
+.install-path{
+  position:absolute;bottom:14px;left:0;right:0;
+  text-align:center;
+  font-size:10px;color:rgba(255,255,255,0.06);
+  padding:0 20px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
+
+/* ── Checkmark animation ── */
+.check-icon{display:inline-block;vertical-align:middle;margin-right:2px}
+@keyframes checkDraw{from{stroke-dashoffset:16}to{stroke-dashoffset:0}}
 </style>
 </head>
 <body>
 
+<div class="bg-glow"></div>
+
 <div class="titlebar">
-  <button class="close" id="x">
+  <button class="tb-btn close-btn" id="x">
     <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.3" fill="none">
-      <line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/>
+      <line x1="1.5" y1="1.5" x2="8.5" y2="8.5"/><line x1="8.5" y1="1.5" x2="1.5" y2="8.5"/>
     </svg>
   </button>
 </div>
 
-<div class="logo"><img id="icon" src="" onerror="this.parentElement.innerHTML='<span style=color:#60a5fa;font-size:20px;font-weight:700>G</span>'" /></div>
-<div class="name">GitBrowser</div>
-<div class="ver" id="ver">v0.1.0</div>
-<div class="status" id="st">Checking for updates…</div>
-<div class="track" id="track"><div class="bar" id="bar"></div></div>
-<button class="btn" id="btn" disabled>Install</button>
-<div class="path" id="path"></div>
+<div class="content">
+  <div class="logo-wrap">
+    <img id="logo" src="" alt="GitBrowser" />
+  </div>
+
+  <div class="version">
+    <span class="dot"></span>
+    <span id="ver">v0.1.0</span>
+  </div>
+
+  <div class="steps">
+    <div class="step active" id="s1">
+      <div class="step-dot">1</div>
+      <span>Проверка</span>
+    </div>
+    <div class="step-line" id="line1"></div>
+    <div class="step" id="s2">
+      <div class="step-dot">2</div>
+      <span>Установка</span>
+    </div>
+    <div class="step-line" id="line2"></div>
+    <div class="step" id="s3">
+      <div class="step-dot">3</div>
+      <span>Готово</span>
+    </div>
+  </div>
+
+  <div class="status-area">
+    <div class="status-text" id="st">Проверка обновлений…</div>
+    <div class="status-sub" id="sub"></div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-track" id="track">
+      <div class="progress-bar" id="bar"></div>
+    </div>
+    <div class="progress-pct" id="pct"></div>
+  </div>
+
+  <button class="action-btn" id="btn" disabled>Установить</button>
+</div>
+
+<div class="install-path" id="pathEl"></div>
 
 <script>
 const api = window.installer;
 const $ = id => document.getElementById(id);
 
 let downloadUrl = null;
+let latestVer = null;
 
 $('x').onclick = () => api.close();
 
+function setStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    const el = $('s' + i);
+    el.classList.remove('active', 'done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+  }
+  if (n > 1) $('line1').classList.add('filled');
+  if (n > 2) $('line2').classList.add('filled');
+}
+
+function setStepDone(n) {
+  const el = $('s' + n);
+  const dot = el.querySelector('.step-dot');
+  dot.innerHTML = '<svg class="check-icon" width="12" height="12" viewBox="0 0 12 12"><polyline points="2.5,6.5 5,9 9.5,3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:16;stroke-dashoffset:16;animation:checkDraw 0.4s 0.1s ease forwards"/></svg>';
+}
+
 async function init() {
-  // Load icon from correct path (works in both dev and packaged mode)
   try {
     const iconPath = await api.getIconPath();
-    $('icon').src = iconPath;
-  } catch { /* fallback handled by onerror */ }
+    $('logo').src = iconPath;
+  } catch {}
 
   const info = await api.getInfo();
   $('ver').textContent = 'v' + info.version;
-  $('path').textContent = info.installDir;
+  $('pathEl').textContent = info.installDir;
 
-  // Check updates
+  // Step 1: check updates
+  setStep(1);
   $('track').classList.add('on');
   $('bar').classList.add('pulse');
 
@@ -177,54 +331,82 @@ async function init() {
   $('bar').style.width = '0%';
   $('track').classList.remove('on');
 
+  setStepDone(1);
+
   if (upd.latest && upd.latest !== info.version && upd.download) {
-    $('st').textContent = 'v' + upd.latest + ' available';
-    $('st').style.color = '#60a5fa';
-    $('ver').textContent = 'v' + info.version + '  →  v' + upd.latest;
+    latestVer = upd.latest;
     downloadUrl = upd.download;
+    $('st').textContent = 'Доступна новая версия';
+    $('st').style.color = '#818cf8';
+    $('sub').textContent = 'v' + info.version + '  →  v' + upd.latest;
+    $('sub').style.color = '#4a5168';
+    $('ver').textContent = 'v' + info.version + ' → v' + upd.latest;
   } else {
-    $('st').textContent = 'Ready to install';
-    $('st').style.color = '#4a5168';
+    $('st').textContent = 'Готов к установке';
+    $('st').style.color = '#5a6178';
+    $('sub').textContent = 'Последняя версия';
+    $('sub').style.color = '#2e3340';
   }
+
+  setStep(2);
   $('btn').disabled = false;
 }
 
 $('btn').onclick = async () => {
   $('btn').disabled = true;
   $('track').classList.add('on');
+  $('pct').style.color = '#3a3f4d';
 
-  // Phase 1: install
-  $('st').textContent = downloadUrl ? 'Downloading…' : 'Installing…';
-  $('st').style.color = '#7c8494';
-  anim(0, 50, 2000);
+  // Phase 1: download/install
+  $('st').textContent = downloadUrl ? 'Загрузка…' : 'Установка…';
+  $('st').style.color = '#7c8da5';
+  $('sub').textContent = '';
+  anim(0, 45, 2500);
 
   const res = await api.install({ downloadUrl });
   if (!res.ok) {
-    $('st').textContent = res.error || 'Failed';
+    $('st').textContent = 'Ошибка установки';
     $('st').style.color = '#f87171';
-    $('bar').style.background = 'linear-gradient(90deg,#f87171,#dc2626)';
+    $('sub').textContent = res.error || '';
+    $('sub').style.color = '#7f1d1d';
+    $('bar').classList.add('error');
     $('bar').style.width = '100%';
-    $('btn').textContent = 'Retry';
+    $('pct').textContent = '';
+    $('btn').textContent = 'Повторить';
     $('btn').disabled = false;
     return;
   }
 
   // Phase 2: shortcuts
-  $('st').textContent = 'Creating shortcuts…';
-  anim(50, 85, 600);
+  anim(45, 70, 600);
+  $('st').textContent = 'Создание ярлыков…';
   await api.createShortcuts();
 
-  // Phase 3: done
-  anim(85, 100, 300);
-  await new Promise(r => setTimeout(r, 400));
+  // Phase 3: registry
+  anim(70, 90, 400);
+  $('st').textContent = 'Настройка системы…';
+  await new Promise(r => setTimeout(r, 300));
 
-  $('st').textContent = 'Done';
-  $('st').style.color = '#34d399';
+  // Phase 4: done
+  anim(90, 100, 300);
+  await new Promise(r => setTimeout(r, 500));
+
+  setStepDone(2);
+  setStep(3);
+  setStepDone(3);
+
+  $('bar').classList.add('success');
   $('bar').style.width = '100%';
-  $('bar').style.background = 'linear-gradient(90deg,#059669,#34d399)';
+  $('pct').textContent = '100%';
+  $('pct').style.color = '#34d399';
 
-  $('btn').textContent = 'Launch';
-  $('btn').classList.add('done');
+  $('st').textContent = 'Установка завершена';
+  $('st').style.color = '#34d399';
+  $('sub').textContent = 'GitBrowser готов к работе';
+  $('sub').style.color = '#2e6e55';
+
+  $('btn').textContent = 'Запустить';
+  $('btn').classList.add('success');
   $('btn').disabled = false;
   $('btn').onclick = () => api.launchApp();
 };
@@ -234,7 +416,9 @@ function anim(from, to, ms) {
   (function tick(now) {
     const p = Math.min((now - t0) / ms, 1);
     const e = 1 - Math.pow(1 - p, 3);
-    $('bar').style.width = (from + (to - from) * e) + '%';
+    const v = from + (to - from) * e;
+    $('bar').style.width = v + '%';
+    $('pct').textContent = Math.round(v) + '%';
     if (p < 1) requestAnimationFrame(tick);
   })(t0);
 }
