@@ -2,163 +2,262 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="design-tokens.css" />
+<link rel="stylesheet" href="components.css" />
 <style>
-:root {
-  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
-  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
-  --border-default: #30363d; --border-muted: #21262d;
-  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
-  --done-fg: #a371f7;
-}
-html.light {
-  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
-  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
-  --border-default: #d0d7de; --border-muted: #d8dee4;
-  --accent-fg: #0969da; --accent-emphasis: #0969da;
-  --done-fg: #8250df;
-}
-* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-  background: var(--bg-canvas); color: var(--fg-default);
-  min-height: 100vh; display: flex; flex-direction: column;
-  align-items: center; padding-top: 12vh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xl);
   user-select: none;
-  transition: background 0.3s;
+  transition: background var(--duration-normal) var(--ease-out);
 }
-/* Background color picker */
-.bg-picker {
-  position: fixed; bottom: 16px; right: 16px; display: flex; gap: 6px;
-  align-items: center; padding: 6px 10px; background: var(--bg-default);
-  border: 1px solid var(--border-muted); border-radius: 8px;
-  opacity: 0.4; transition: opacity 0.2s; z-index: 10;
+
+.hero {
+  text-align: center;
+  margin-bottom: var(--space-3xl);
+  animation: heroIn var(--duration-slow) var(--ease-out);
 }
-.bg-picker:hover { opacity: 1; }
-.bg-swatch {
-  width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent;
-  cursor: pointer; transition: all 0.15s;
+
+@keyframes heroIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.bg-swatch:hover, .bg-swatch.active { border-color: var(--accent-fg); transform: scale(1.15); }
-.bg-swatch.reset { background: var(--bg-canvas); border: 2px dashed var(--border-default); }
+
 .greeting {
-  font-size: 32px; font-weight: 600; letter-spacing: -0.5px;
-  color: var(--fg-default); margin-bottom: 4px;
-  animation: logoIn 0.5s cubic-bezier(0.33,1,0.68,1);
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  color: var(--fg-default);
+  margin-bottom: var(--space-xs);
 }
-@keyframes logoIn { from { opacity:0; transform:scale(0.9); } }
-.clock {
-  font-size: 48px; font-weight: 700; letter-spacing: -2px;
-  color: var(--fg-default); margin-bottom: 4px;
-  animation: fadeIn 0.5s 0.05s both; font-variant-numeric: tabular-nums;
+
+.brand {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 1px;
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+  margin-bottom: var(--space-xs);
 }
-.logo {
-  font-size: 14px; font-weight: 500; letter-spacing: 1px;
-  color: var(--fg-subtle); text-transform: uppercase;
-  margin-bottom: 8px;
-  animation: fadeIn 0.5s 0.08s both;
+
+.subtitle {
+  color: var(--fg-muted);
+  font-size: var(--text-md);
 }
-.subtitle { color: var(--fg-muted); font-size: 15px; margin-bottom: 32px; animation: fadeIn 0.5s 0.1s both; }
-@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } }
+
 .search {
-  width: 100%; max-width: 600px; position: relative; margin-bottom: 40px;
-  animation: fadeIn 0.5s 0.15s both;
+  width: 100%;
+  max-width: 560px;
+  position: relative;
+  margin-bottom: var(--space-2xl);
+  animation: fadeUp var(--duration-slow) var(--ease-out) 0.1s both;
 }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .search input {
-  width: 100%; padding: 14px 20px 14px 44px;
-  border: 1px solid var(--border-default); border-radius: 12px;
-  background: var(--bg-default); color: var(--fg-default);
-  font-size: 15px; font-family: inherit; outline: none;
-  transition: all 0.2s;
+  width: 100%;
+  padding: 14px 20px 14px 44px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--fg-default);
+  font-size: var(--text-md);
+  font-family: var(--font-sans);
+  outline: none;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transition: all var(--duration-fast) var(--ease-out);
 }
+
 .search input:focus {
   border-color: var(--accent-emphasis);
-  box-shadow: 0 0 0 3px rgba(31,111,235,0.3);
-  background: var(--bg-subtle);
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.25);
+  background: rgba(255, 255, 255, 0.08);
 }
+
+.search input::placeholder { color: var(--fg-subtle); }
+
 .search svg {
-  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--fg-subtle);
 }
+
 .quick-links {
-  display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 12px; max-width: 600px; width: 100%;
-  animation: fadeIn 0.5s 0.2s both;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+  max-width: 560px;
+  width: 100%;
+  animation: fadeUp var(--duration-slow) var(--ease-out) 0.2s both;
 }
-@media (max-width: 600px) { .quick-links { grid-template-columns: repeat(2, 1fr); } }
+
+@media (max-width: 560px) {
+  .quick-links { grid-template-columns: repeat(2, 1fr); }
+}
+
 .quick-link {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 16px 12px; background: var(--bg-default);
-  border: 1px solid var(--border-muted); border-radius: 8px;
-  cursor: pointer; transition: all 0.2s cubic-bezier(0.33,1,0.68,1);
-  color: var(--fg-default); font-size: 12px; position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--space-md);
+  background: var(--glass-bg-solid);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--spring);
+  color: var(--fg-default);
+  font-size: var(--text-sm);
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
+
 .quick-link:hover {
-  border-color: var(--accent-emphasis); transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(1,4,9,0.4);
+  border-color: var(--accent-fg);
+  transform: translateY(-3px);
+  box-shadow: var(--glass-shadow);
 }
+
 .quick-link:active { transform: translateY(0) scale(0.97); }
+
 .quick-link .ql-del {
-  position: absolute; top: 4px; right: 4px; width: 18px; height: 18px;
-  border: none; background: var(--bg-subtle); color: var(--fg-subtle);
-  border-radius: 50%; cursor: pointer; font-size: 12px; line-height: 1;
-  display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: all 0.12s;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: var(--bg-subtle);
+  color: var(--fg-subtle);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all var(--duration-fast);
 }
+
 .quick-link:hover .ql-del { opacity: 1; }
-.quick-link .ql-del:hover { background: #da3633; color: #fff; }
+.quick-link .ql-del:hover { background: var(--danger-emphasis); color: #fff; }
+
 .quick-link-icon {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: var(--bg-subtle); display: flex;
-  align-items: center; justify-content: center;
-  font-size: 16px; font-weight: 700; color: var(--accent-fg);
-  transition: all 0.2s; overflow: hidden;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--accent-fg);
+  transition: all var(--duration-fast);
+  overflow: hidden;
 }
-.quick-link-icon img { width: 20px; height: 20px; }
+
+.quick-link-icon img { width: 22px; height: 22px; }
+
 .quick-link:hover .quick-link-icon {
-  background: var(--accent-emphasis); color: white;
+  background: var(--accent-emphasis);
+  color: white;
 }
+
 .quick-link-add {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  padding: 16px 12px; background: transparent;
-  border: 2px dashed var(--border-muted); border-radius: 8px;
-  cursor: pointer; transition: all 0.2s; color: var(--fg-subtle); font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-lg) var(--space-md);
+  background: transparent;
+  border: 2px dashed var(--border-muted);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  color: var(--fg-subtle);
+  font-size: var(--text-sm);
 }
-.quick-link-add:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
+
+.quick-link-add:hover {
+  border-color: var(--accent-fg);
+  color: var(--accent-fg);
+}
+
 .quick-link-add .plus { font-size: 24px; font-weight: 300; }
-.ql-dialog-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex;
-  align-items: center; justify-content: center; z-index: 100; animation: fadeIn 0.15s;
+
+/* Background picker */
+.bg-picker {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--glass-bg-solid);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  opacity: 0.3;
+  transition: opacity var(--duration-fast);
+  z-index: 10;
 }
-.ql-dialog {
-  background: var(--bg-default); border: 1px solid var(--border-default);
-  border-radius: 12px; padding: 24px; width: 360px;
+
+.bg-picker:hover { opacity: 1; }
+
+.bg-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--duration-fast);
 }
-.ql-dialog h3 { font-size: 16px; margin-bottom: 16px; }
-.ql-dialog input {
-  width: 100%; padding: 8px 12px; border: 1px solid var(--border-default);
-  border-radius: 6px; background: var(--bg-canvas); color: var(--fg-default);
-  font-family: inherit; font-size: 13px; outline: none; margin-bottom: 10px;
+
+.bg-swatch:hover, .bg-swatch.active {
+  border-color: var(--accent-fg);
+  transform: scale(1.2);
 }
-.ql-dialog input:focus { border-color: var(--accent-emphasis); }
-.ql-dialog-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
-.ql-dialog-btns button {
-  padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border-default);
-  background: var(--bg-subtle); color: var(--fg-default); cursor: pointer;
-  font-family: inherit; font-size: 13px;
+
+.bg-swatch.reset {
+  background: var(--bg-canvas);
+  border: 2px dashed var(--border-default);
 }
-.ql-dialog-btns .primary { background: var(--accent-emphasis); color: #fff; border-color: var(--accent-emphasis); }
+
+/* Add dialog uses components.css classes */
 </style>
 </head>
 <body>
-<div class="greeting" id="greeting">Good evening</div>
-<div class="clock" id="clock"></div>
-<div class="logo">GitBrowser</div>
-<div class="subtitle">Fast. Private. Open.</div>
+
+<div class="hero">
+  <div class="greeting" id="greeting">Good evening</div>
+  <div class="brand">GitBrowser</div>
+  <div class="subtitle">Fast. Private. Open.</div>
+</div>
+
 <div class="search">
   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
   <input id="search" type="text" placeholder="Search the web or enter URL..." autofocus />
 </div>
+
 <div class="quick-links" id="quick-links"></div>
+
 <script>
 const DEFAULT_LINKS = [
   { name: 'GitHub', url: 'https://github.com' },
@@ -168,7 +267,6 @@ const DEFAULT_LINKS = [
   { name: 'Stack Overflow', url: 'https://stackoverflow.com' },
   { name: 'Wikipedia', url: 'https://wikipedia.org' },
   { name: 'X / Twitter', url: 'https://twitter.com' },
-  { name: 'Hacker News', url: 'https://news.ycombinator.com' },
 ];
 
 function getLinks() {
@@ -203,7 +301,6 @@ function renderLinks() {
     });
     container.appendChild(div);
   });
-  // Add button
   const addBtn = document.createElement('div');
   addBtn.className = 'quick-link-add';
   addBtn.innerHTML = '<div class="plus">+</div>Add';
@@ -213,14 +310,14 @@ function renderLinks() {
 
 function showAddDialog() {
   const overlay = document.createElement('div');
-  overlay.className = 'ql-dialog-overlay';
-  overlay.innerHTML = `<div class="ql-dialog">
+  overlay.className = 'dialog-overlay';
+  overlay.innerHTML = `<div class="dialog" style="animation:scaleIn var(--duration-normal) var(--spring)">
     <h3>Add Quick Link</h3>
-    <input id="ql-name" placeholder="Name" />
-    <input id="ql-url" placeholder="URL (https://...)" />
-    <div class="ql-dialog-btns">
-      <button id="ql-cancel">Cancel</button>
-      <button id="ql-save" class="primary">Add</button>
+    <input class="input" id="ql-name" placeholder="Name" style="margin-bottom:10px" />
+    <input class="input" id="ql-url" placeholder="URL (https://...)" />
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" id="ql-cancel">Cancel</button>
+      <button class="btn btn-primary btn-pill" id="ql-save">Add</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -276,41 +373,26 @@ if (gb && gb.getLocaleData) {
     if (sub && _nt.subtitle) sub.textContent = _nt.subtitle;
     const si = document.getElementById('search');
     if (si && _nt.search_placeholder) si.placeholder = _nt.search_placeholder;
-    updateClock(); // re-apply greeting with locale
+    updateGreeting();
   }).catch(() => {});
 }
 
-// Clock and greeting
-function updateClock() {
-  const now = new Date();
-  const h = now.getHours();
-  const m = String(now.getMinutes()).padStart(2, '0');
-  document.getElementById('clock').textContent = h + ':' + m;
+// Greeting (no clock per redesign plan)
+function updateGreeting() {
+  const h = new Date().getHours();
   const greetEl = document.getElementById('greeting');
-  if (greetEl) {
-    let g;
-    if (h >= 5 && h < 12) g = _nt.good_morning || 'Good morning';
-    else if (h >= 12 && h < 18) g = _nt.good_afternoon || 'Good afternoon';
-    else g = _nt.good_evening || 'Good evening';
-    greetEl.textContent = g;
-  }
+  if (!greetEl) return;
+  let g;
+  if (h >= 5 && h < 12) g = _nt.good_morning || 'Good morning';
+  else if (h >= 12 && h < 18) g = _nt.good_afternoon || 'Good afternoon';
+  else g = _nt.good_evening || 'Good evening';
+  greetEl.textContent = g;
 }
-updateClock();
-setInterval(updateClock, 10000);
+updateGreeting();
 
-// ─── Background color picker ───
-const BG_COLORS = [
-  null, // reset to default
-  '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f',
-  '#2d132c', '#1c1c1c', '#212121', '#263238',
-  '#1b262c', '#0a1931', '#2c3333', '#3c1642',
-];
-const LIGHT_BG_COLORS = [
-  null,
-  '#f0f4f8', '#e8eaf6', '#e3f2fd', '#fce4ec',
-  '#f3e5f5', '#e0f2f1', '#fff8e1', '#efebe9',
-  '#eceff1', '#f1f8e9', '#e8f5e9', '#fafafa',
-];
+// Background color picker
+const BG_COLORS = [null, '#1a1a2e', '#16213e', '#0f3460', '#1b1b2f', '#2d132c', '#1c1c1c', '#212121', '#263238', '#1b262c', '#0a1931', '#2c3333', '#3c1642'];
+const LIGHT_BG_COLORS = [null, '#f0f4f8', '#e8eaf6', '#e3f2fd', '#fce4ec', '#f3e5f5', '#e0f2f1', '#fff8e1', '#efebe9', '#eceff1', '#f1f8e9', '#e8f5e9', '#fafafa'];
 
 function getBgColors() {
   return document.documentElement.classList.contains('light') ? LIGHT_BG_COLORS : BG_COLORS;
@@ -333,13 +415,8 @@ function renderBgPicker() {
     if (c) sw.style.background = c;
     sw.title = i === 0 ? 'Default' : c;
     sw.onclick = () => {
-      if (c) {
-        localStorage.setItem('newtab_bg', c);
-        document.body.style.background = c;
-      } else {
-        localStorage.removeItem('newtab_bg');
-        document.body.style.background = '';
-      }
+      if (c) { localStorage.setItem('newtab_bg', c); document.body.style.background = c; }
+      else { localStorage.removeItem('newtab_bg'); document.body.style.background = ''; }
       picker.querySelectorAll('.bg-swatch').forEach(s => s.classList.remove('active'));
       sw.classList.add('active');
     };
@@ -347,7 +424,6 @@ function renderBgPicker() {
   });
 }
 
-// Apply saved bg
 const savedBg = localStorage.getItem('newtab_bg');
 if (savedBg) document.body.style.background = savedBg;
 renderBgPicker();

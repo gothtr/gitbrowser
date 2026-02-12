@@ -7,11 +7,14 @@ let currentTheme = 'Dark'; // Track current theme
 
 let mainWindow = null;
 let toolbarView = null;
+let sidebarView = null;
 const tabs = new Map();
 let tabOrder = [];
 let activeTabId = null;
 let nextTabId = 1;
-const TOOLBAR_HEIGHT = 74;
+const TOOLBAR_HEIGHT = 44;
+const SIDEBAR_WIDTH = 240;
+let sidebarCollapsed = false;
 const downloads = new Map();
 let nextDownloadId = 1;
 const closedTabsStack = []; // Stack for reopening closed tabs (Ctrl+Shift+T)
@@ -44,6 +47,18 @@ function createWindow() {
     minWidth: 800, minHeight: 600,
   });
 
+  // Sidebar view (left panel with tabs)
+  sidebarView = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  mainWindow.contentView.addChildView(sidebarView);
+  sidebarView.webContents.loadFile(path.join(__dirname, 'ui', 'sidebar.html'));
+
+  // Toolbar view (compact nav bar)
   toolbarView = new WebContentsView({
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -98,9 +113,11 @@ function createWindow() {
 function layoutViews() {
   if (!mainWindow) return;
   const { width: w, height: h } = mainWindow.getContentBounds();
-  if (toolbarView) toolbarView.setBounds({ x: 0, y: 0, width: w, height: TOOLBAR_HEIGHT });
+  const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
+  if (sidebarView) sidebarView.setBounds({ x: 0, y: 0, width: sw, height: h });
+  if (toolbarView) toolbarView.setBounds({ x: sw, y: 0, width: w - sw, height: TOOLBAR_HEIGHT });
   if (activeTabId && tabs.has(activeTabId)) {
-    tabs.get(activeTabId).view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width: w, height: h - TOOLBAR_HEIGHT });
+    tabs.get(activeTabId).view.setBounds({ x: sw, y: TOOLBAR_HEIGHT, width: w - sw, height: h - TOOLBAR_HEIGHT });
   }
 }
 
@@ -338,6 +355,9 @@ function sendToToolbar(channel, data) {
   if (toolbarView && !toolbarView.webContents.isDestroyed()) {
     toolbarView.webContents.send(channel, data);
   }
+  if (sidebarView && !sidebarView.webContents.isDestroyed()) {
+    sidebarView.webContents.send(channel, data);
+  }
 }
 
 // ─── Downloads ───
@@ -522,6 +542,12 @@ ipcMain.on('zoom-reset', () => {
 // Fullscreen
 ipcMain.on('toggle-fullscreen', () => {
   if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+});
+
+// Sidebar toggle
+ipcMain.on('toggle-sidebar', () => {
+  sidebarCollapsed = !sidebarCollapsed;
+  layoutViews();
 });
 
 // Private mode
@@ -1587,7 +1613,7 @@ function resolveTheme(theme) {
 function broadcastTheme(theme) {
   currentTheme = theme;
   const resolved = resolveTheme(theme);
-  // Send to toolbar
+  // Send to toolbar and sidebar
   sendToToolbar('theme-changed', { theme: resolved });
   // Send to all tab views
   for (const [, tabData] of tabs) {

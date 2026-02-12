@@ -2,78 +2,115 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="design-tokens.css" />
+<link rel="stylesheet" href="components.css" />
 <style>
-:root {
-  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
-  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
-  --border-default: #30363d; --border-muted: #21262d;
-  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
-  --success-fg: #3fb950; --danger-fg: #f85149; --done-fg: #a371f7;
-  --open-fg: #3fb950; --closed-fg: #f85149; --merged-fg: #a371f7;
-}
-html.light {
-  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
-  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
-  --border-default: #d0d7de; --border-muted: #d8dee4;
-  --accent-fg: #0969da; --accent-emphasis: #0969da;
-  --success-fg: #1a7f37; --danger-fg: #cf222e; --done-fg: #8250df;
-  --open-fg: #1a7f37; --closed-fg: #cf222e; --merged-fg: #8250df;
-}
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-  background: var(--bg-canvas); color: var(--fg-default);
-  height: 100vh; overflow-y: auto;
-}
 .center { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
-.container { text-align: center; max-width: 480px; padding: 32px; }
-.gh-icon { margin-bottom: 20px; color: var(--fg-default); }
-.title { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
-.desc { color: var(--fg-muted); font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+.container { text-align: center; max-width: 480px; padding: var(--space-2xl); }
+.gh-icon { margin-bottom: var(--space-xl); color: var(--fg-default); }
+.title { font-size: var(--text-2xl); font-weight: 600; margin-bottom: var(--space-sm); }
+.desc { color: var(--fg-muted); font-size: var(--text-md); line-height: 1.6; margin-bottom: var(--space-xl); }
 .login-btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 12px 24px; border: 1px solid var(--border-default); border-radius: 8px;
+  display: inline-flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl); border: 1px solid var(--border-default); border-radius: var(--radius-sm);
   background: var(--bg-default); color: var(--fg-default); cursor: pointer;
-  font-family: inherit; font-size: 14px; font-weight: 500; transition: all 0.15s;
+  font-family: var(--font-sans); font-size: var(--text-md); font-weight: 500; transition: all var(--duration-fast);
 }
 .login-btn:hover { background: var(--bg-subtle); border-color: var(--accent-emphasis); color: var(--accent-fg); }
-.input-row { margin-bottom: 16px; }
+.input-row { margin-bottom: var(--space-lg); }
 .input-row input {
-  width: 100%; max-width: 320px; padding: 10px 14px; border: 1px solid var(--border-default);
-  border-radius: 8px; background: var(--bg-default); color: var(--fg-default);
-  font-family: inherit; font-size: 13px; outline: none; text-align: center;
+  width: 100%; max-width: 320px; padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  background: var(--bg-default); color: var(--fg-default);
+  font-family: var(--font-sans); font-size: var(--text-base); outline: none; text-align: center;
 }
 .input-row input:focus { border-color: var(--accent-emphasis); }
-.input-row label { display: block; font-size: 12px; color: var(--fg-muted); margin-bottom: 6px; }
-.device-code { font-size: 32px; font-weight: 700; letter-spacing: 4px; color: var(--accent-fg); margin: 16px 0; }
-.device-link { color: var(--accent-fg); text-decoration: underline; cursor: pointer; font-size: 14px; }
+.input-row label { display: block; font-size: var(--text-sm); color: var(--fg-muted); margin-bottom: 6px; }
+.device-code { font-size: 32px; font-weight: 700; letter-spacing: 4px; color: var(--accent-fg); margin: var(--space-lg) 0; }
+.device-link { color: var(--accent-fg); text-decoration: underline; cursor: pointer; font-size: var(--text-md); }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--fg-subtle); border-top-color: var(--accent-fg); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.status { color: var(--fg-muted); font-size: 13px; margin-top: 12px; }
-.features { margin-top: 24px; text-align: left; }
-.feature { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-muted); }
+.status { color: var(--fg-muted); font-size: var(--text-base); margin-top: var(--space-md); }
+.features { margin-top: var(--space-xl); text-align: left; }
+.feature { display: flex; align-items: flex-start; gap: var(--space-sm); padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-muted); }
 .feature:last-child { border-bottom: none; }
 .feature-icon { color: var(--success-fg); flex-shrink: 0; margin-top: 2px; }
-.feature-text { font-size: 13px; color: var(--fg-muted); }
+.feature-text { font-size: var(--text-base); color: var(--fg-muted); }
 .feature-text strong { color: var(--fg-default); }
+
+/* Profile view */
+.profile-view { max-width: 700px; margin: 0 auto; padding: var(--space-xl); }
+.profile-header { display: flex; align-items: center; gap: var(--space-lg); margin-bottom: var(--space-sm); }
+.avatar { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--border-default); }
+.profile-info { flex: 1; }
+.profile-name { font-size: var(--text-xl); font-weight: 600; }
+.profile-login { font-size: var(--text-md); color: var(--fg-muted); }
+.profile-bio { font-size: var(--text-base); color: var(--fg-muted); margin-top: 2px; }
+.profile-stats { display: flex; gap: var(--space-lg); margin: var(--space-md) 0 var(--space-lg); font-size: var(--text-base); color: var(--fg-muted); }
+.profile-stats span { cursor: pointer; } .profile-stats span:hover { color: var(--accent-fg); }
+.profile-stats strong { color: var(--fg-default); }
+
+.tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border-muted); margin-bottom: var(--space-lg); }
+.tab-btn {
+  padding: var(--space-sm) var(--space-lg); font-size: var(--text-base); font-weight: 500; color: var(--fg-muted);
+  background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; font-family: var(--font-sans); transition: all var(--duration-fast); position: relative;
+}
+.tab-btn:hover { color: var(--fg-default); }
+.tab-btn.active { color: var(--fg-default); border-bottom-color: var(--accent-emphasis); }
+.tab-btn .badge { margin-left: 6px; }
+.tab-content { min-height: 300px; }
+
+.item-card {
+  display: flex; align-items: flex-start; padding: var(--space-md);
+  background: var(--glass-bg-solid); backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm); cursor: pointer; transition: all var(--duration-fast); gap: var(--space-sm);
+}
+.item-card:hover { border-color: var(--accent-fg); transform: translateY(-1px); box-shadow: var(--glass-shadow); }
+.item-title { font-size: var(--text-base); font-weight: 500; color: var(--accent-fg); }
+.item-desc { font-size: var(--text-sm); color: var(--fg-muted); margin-top: 2px; }
+.item-meta { font-size: var(--text-xs); color: var(--fg-subtle); margin-top: var(--space-xs); display: flex; gap: var(--space-md); align-items: center; }
+.state-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-pill); font-size: var(--text-xs); font-weight: 500; }
+.state-open { background: rgba(63,185,80,0.15); color: var(--open-fg); }
+.state-closed { background: rgba(248,81,73,0.15); color: var(--closed-fg); }
+.state-merged { background: rgba(163,113,247,0.15); color: var(--merged-fg); }
+.notif-unread { border-left: 3px solid var(--accent-emphasis); }
+.notif-reason { font-size: var(--text-xs); color: var(--fg-subtle); text-transform: capitalize; }
+.loading-state { text-align: center; padding: var(--space-3xl) var(--space-lg); color: var(--fg-subtle); font-size: var(--text-base); }
+
+.quick-actions { display: flex; gap: var(--space-sm); margin-bottom: var(--space-lg); flex-wrap: wrap; }
+.quick-action {
+  padding: 6px 14px; border: 1px solid var(--border-default); border-radius: var(--radius-pill);
+  background: var(--bg-default); color: var(--fg-muted); cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--text-sm); transition: all var(--duration-fast);
+}
+.quick-action:hover { border-color: var(--accent-emphasis); color: var(--accent-fg); }
+.logout-btn {
+  margin-top: var(--space-lg); padding: var(--space-sm) var(--space-lg);
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  background: none; color: var(--fg-muted); cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--text-sm); transition: all var(--duration-fast);
+}
+.logout-btn:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
+.filter-row { display: flex; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.filter-btn {
+  padding: 4px 12px; border: 1px solid var(--border-muted); border-radius: var(--radius-pill);
+  background: none; color: var(--fg-muted); cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm);
+  transition: all var(--duration-fast);
+}
+.filter-btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
+.filter-btn.active { background: var(--accent-emphasis); color: #fff; border-color: var(--accent-emphasis); }
 </style>
 </head>
 <body>
 
-<!-- Login View -->
 <div class="center" id="login-view">
 <div class="container">
   <div class="gh-icon"><svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg></div>
   <div class="title">GitHub Integration</div>
   <div class="desc">Connect via OAuth Device Flow — secure, no password needed.</div>
-  <div class="input-row">
-    <label>GitHub OAuth App Client ID</label>
-    <input id="client-id" type="text" placeholder="Ov23li..." />
-  </div>
-  <button class="login-btn" id="btn-login">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
-    Sign in with GitHub
-  </button>
+  <div class="input-row"><label>GitHub OAuth App Client ID</label><input id="client-id" type="text" placeholder="Ov23li..." /></div>
+  <button class="login-btn" id="btn-login"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg> Sign in with GitHub</button>
   <div class="features">
     <div class="feature"><div class="feature-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg></div><div class="feature-text"><strong>Quick access</strong> to repos, PRs, issues, notifications</div></div>
     <div class="feature"><div class="feature-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg></div><div class="feature-text"><strong>Secure OAuth</strong> — no tokens stored in browser</div></div>
@@ -82,7 +119,6 @@ body {
 </div>
 </div>
 
-<!-- Device Flow View -->
 <div class="center" id="device-view" style="display:none">
 <div class="container">
   <div class="title">Authorize GitBrowser</div>
@@ -93,76 +129,7 @@ body {
 </div>
 </div>
 
-<!-- Profile View -->
 <div id="profile-view" style="display:none">
-<style>
-.profile-view { max-width: 700px; margin: 0 auto; padding: 24px; }
-.profile-header { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
-.avatar { width: 56px; height: 56px; border-radius: 50%; border: 2px solid var(--border-default); }
-.profile-info { flex: 1; }
-.profile-name { font-size: 20px; font-weight: 600; }
-.profile-login { font-size: 14px; color: var(--fg-muted); }
-.profile-bio { font-size: 13px; color: var(--fg-muted); margin-top: 2px; }
-.profile-stats { display: flex; gap: 16px; margin: 12px 0 16px; font-size: 13px; color: var(--fg-muted); }
-.profile-stats span { cursor: pointer; }
-.profile-stats span:hover { color: var(--accent-fg); }
-.profile-stats strong { color: var(--fg-default); }
-.tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border-muted); margin-bottom: 16px; }
-.tab-btn {
-  padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--fg-muted);
-  background: none; border: none; border-bottom: 2px solid transparent;
-  cursor: pointer; font-family: inherit; transition: all 0.12s; position: relative;
-}
-.tab-btn:hover { color: var(--fg-default); }
-.tab-btn.active { color: var(--fg-default); border-bottom-color: var(--accent-emphasis); }
-.tab-btn .badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  background: var(--accent-emphasis); color: #fff; font-size: 11px; font-weight: 600;
-  margin-left: 6px;
-}
-.tab-content { min-height: 300px; }
-.item-card {
-  display: flex; align-items: flex-start; padding: 12px; background: var(--bg-default);
-  border: 1px solid var(--border-muted); border-radius: 8px; margin-bottom: 6px;
-  cursor: pointer; transition: all 0.12s; gap: 10px;
-}
-.item-card:hover { border-color: var(--accent-fg); background: var(--bg-subtle); }
-.item-title { font-size: 13px; font-weight: 500; color: var(--accent-fg); }
-.item-desc { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
-.item-meta { font-size: 11px; color: var(--fg-subtle); margin-top: 4px; display: flex; gap: 12px; align-items: center; }
-.state-badge {
-  display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;
-}
-.state-open { background: rgba(63,185,80,0.15); color: var(--open-fg); }
-.state-closed { background: rgba(248,81,73,0.15); color: var(--closed-fg); }
-.state-merged { background: rgba(163,113,247,0.15); color: var(--merged-fg); }
-.notif-unread { border-left: 3px solid var(--accent-emphasis); }
-.notif-reason { font-size: 11px; color: var(--fg-subtle); text-transform: capitalize; }
-.empty-state { text-align: center; padding: 48px 16px; color: var(--fg-muted); font-size: 14px; }
-.loading-state { text-align: center; padding: 48px 16px; color: var(--fg-subtle); font-size: 13px; }
-.quick-actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-.quick-action {
-  padding: 6px 14px; border: 1px solid var(--border-default); border-radius: 6px;
-  background: var(--bg-default); color: var(--fg-muted); cursor: pointer;
-  font-family: inherit; font-size: 12px; transition: all 0.12s;
-}
-.quick-action:hover { border-color: var(--accent-emphasis); color: var(--accent-fg); }
-.logout-btn {
-  margin-top: 16px; padding: 8px 16px; border: 1px solid var(--border-default);
-  border-radius: 6px; background: none; color: var(--fg-muted); cursor: pointer;
-  font-family: inherit; font-size: 12px; transition: all 0.12s;
-}
-.logout-btn:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
-.filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
-.filter-btn {
-  padding: 4px 12px; border: 1px solid var(--border-muted); border-radius: 16px;
-  background: none; color: var(--fg-muted); cursor: pointer; font-family: inherit; font-size: 12px;
-  transition: all 0.12s;
-}
-.filter-btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
-.filter-btn.active { background: var(--accent-emphasis); color: #fff; border-color: var(--accent-emphasis); }
-</style>
 <div class="profile-view">
   <div class="profile-header">
     <img class="avatar" id="avatar" src="" alt="" />
@@ -182,7 +149,7 @@ body {
   </div>
   <div class="tab-bar" id="tab-bar">
     <button class="tab-btn active" data-tab="repos">Repos</button>
-    <button class="tab-btn" data-tab="notifications">Notifications <span class="badge" id="notif-badge" style="display:none">0</span></button>
+    <button class="tab-btn" data-tab="notifications">Notifications <span class="badge badge-accent" id="notif-badge" style="display:none">0</span></button>
     <button class="tab-btn" data-tab="issues">Issues</button>
     <button class="tab-btn" data-tab="prs">Pull Requests</button>
     <button class="tab-btn" data-tab="activity">Activity</button>
@@ -191,69 +158,33 @@ body {
   <button class="logout-btn" id="btn-logout">Sign out</button>
 </div>
 </div>
-
 <script>
 const gb = window.gitbrowser;
-let ghToken = localStorage.getItem('gh_token');
-let ghClientId = localStorage.getItem('gh_client_id') || '';
-let currentUser = null;
-let activeTab = 'repos';
-let cachedData = {};
-let issueFilter = 'assigned';
-let prFilter = 'assigned';
+let ghToken = localStorage.getItem('gh_token'), ghClientId = localStorage.getItem('gh_client_id') || '';
+let currentUser = null, activeTab = 'repos', cachedData = {}, issueFilter = 'assigned', prFilter = 'assigned';
 
-// Try to load token from secure Rust backend
 (async () => {
-  if (!ghToken && gb && gb.secretGet) {
-    try {
-      const res = await gb.secretGet('github_token');
-      if (res && res.value) {
-        ghToken = res.value;
-        localStorage.setItem('gh_token', ghToken);
-      }
-    } catch {}
-  }
+  if (!ghToken && gb && gb.secretGet) { try { const r = await gb.secretGet('github_token'); if (r && r.value) { ghToken = r.value; localStorage.setItem('gh_token', ghToken); } } catch {} }
   init();
 })();
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-function timeAgo(d) {
-  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s / 60) + 'm ago';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  if (s < 2592000) return Math.floor(s / 86400) + 'd ago';
-  return new Date(d).toLocaleDateString();
-}
+function timeAgo(d) { const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000); if (s < 60) return 'just now'; if (s < 3600) return Math.floor(s/60)+'m ago'; if (s < 86400) return Math.floor(s/3600)+'h ago'; if (s < 2592000) return Math.floor(s/86400)+'d ago'; return new Date(d).toLocaleDateString(); }
+async function ghApi(endpoint, token) { if (!gb) return { error: 'No bridge' }; return gb.githubApi({ endpoint, token: token || ghToken }); }
+function showView(id) { ['login-view','device-view','profile-view'].forEach(v => { document.getElementById(v).style.display = v === id ? '' : 'none'; }); }
+function openGh(path) { const url = path.startsWith('http') ? path : 'https://github.com' + path; if (gb) gb.openUrlNewTab(url); }
 
-async function ghApi(endpoint, token) {
-  if (!gb) return { error: 'No bridge' };
-  return gb.githubApi({ endpoint, token: token || ghToken });
-}
-
-function showView(id) {
-  ['login-view', 'device-view', 'profile-view'].forEach(v => {
-    document.getElementById(v).style.display = v === id ? '' : 'none';
-  });
-}
-
-// ─── Login ───
 document.getElementById('btn-login').onclick = async () => {
   const clientId = document.getElementById('client-id').value.trim();
   if (!clientId) { document.getElementById('client-id').focus(); return; }
-  localStorage.setItem('gh_client_id', clientId);
-  ghClientId = clientId;
-
+  localStorage.setItem('gh_client_id', clientId); ghClientId = clientId;
   const res = await gb.githubDeviceLogin({ clientId });
   if (res.error) { alert('Error: ' + res.error); return; }
-
   document.getElementById('user-code').textContent = res.userCode;
   const link = document.getElementById('verify-link');
-  link.textContent = res.verificationUri;
-  link.href = res.verificationUri;
+  link.textContent = res.verificationUri; link.href = res.verificationUri;
   link.onclick = (e) => { e.preventDefault(); gb.openUrl(res.verificationUri); };
   showView('device-view');
-
   pollForToken(clientId, res.deviceCode, (res.interval || 5) * 1000);
 };
 
@@ -261,160 +192,53 @@ async function pollForToken(clientId, deviceCode, interval) {
   const statusEl = document.getElementById('poll-status');
   const poll = async () => {
     const res = await gb.githubDevicePoll({ clientId, deviceCode });
-    if (res.status === 'ok') {
-      ghToken = res.token;
-      localStorage.setItem('gh_token', ghToken);
-      // Also store securely in Rust backend
-      if (gb && gb.secretStore) gb.secretStore('github_token', ghToken).catch(() => {});
-      loadProfile(ghToken);
-      return;
-    }
-    if (res.status === 'expired') {
-      statusEl.innerHTML = 'Code expired. Please try again.';
-      setTimeout(() => showView('login-view'), 2000);
-      return;
-    }
-    if (res.status === 'error') {
-      statusEl.innerHTML = 'Error: ' + esc(res.error);
-      return;
-    }
-    const delay = res.status === 'slow_down' ? interval + 5000 : interval;
-    setTimeout(poll, delay);
+    if (res.status === 'ok') { ghToken = res.token; localStorage.setItem('gh_token', ghToken); if (gb && gb.secretStore) gb.secretStore('github_token', ghToken).catch(() => {}); loadProfile(ghToken); return; }
+    if (res.status === 'expired') { statusEl.innerHTML = 'Code expired. Please try again.'; setTimeout(() => showView('login-view'), 2000); return; }
+    if (res.status === 'error') { statusEl.innerHTML = 'Error: ' + esc(res.error); return; }
+    setTimeout(poll, res.status === 'slow_down' ? interval + 5000 : interval);
   };
   setTimeout(poll, interval);
 }
 
-// ─── Profile ───
 async function loadProfile(token) {
   showView('profile-view');
   const user = await ghApi('/user', token);
-  if (user.error) {
-    localStorage.removeItem('gh_token');
-    ghToken = null;
-    showView('login-view');
-    return;
-  }
+  if (user.error) { localStorage.removeItem('gh_token'); ghToken = null; showView('login-view'); return; }
   currentUser = user;
   document.getElementById('avatar').src = user.avatar_url || '';
   document.getElementById('profile-name').textContent = user.name || user.login;
   document.getElementById('profile-login').textContent = '@' + user.login;
   document.getElementById('profile-bio').textContent = user.bio || '';
-
-  const stats = document.getElementById('profile-stats');
-  stats.innerHTML = `
-    <span onclick="openGh('/${esc(user.login)}?tab=followers')"><strong>${user.followers || 0}</strong> followers</span>
-    <span onclick="openGh('/${esc(user.login)}?tab=following')"><strong>${user.following || 0}</strong> following</span>
-    <span><strong>${user.public_repos || 0}</strong> repos</span>
-    ${user.public_gists ? `<span><strong>${user.public_gists}</strong> gists</span>` : ''}
-  `;
-
-  // Quick actions
+  document.getElementById('profile-stats').innerHTML = `<span onclick="openGh('/${esc(user.login)}?tab=followers')"><strong>${user.followers||0}</strong> followers</span><span onclick="openGh('/${esc(user.login)}?tab=following')"><strong>${user.following||0}</strong> following</span><span><strong>${user.public_repos||0}</strong> repos</span>${user.public_gists?`<span><strong>${user.public_gists}</strong> gists</span>`:''}`;
   document.getElementById('qa-new-repo').onclick = () => openGh('/new');
   document.getElementById('qa-new-gist').onclick = () => openGh('https://gist.github.com');
   document.getElementById('qa-profile').onclick = () => openGh('/' + user.login);
-  document.getElementById('qa-sync-upload').onclick = async () => {
-    const btn = document.getElementById('qa-sync-upload');
-    btn.textContent = '⏳ Syncing...'; btn.disabled = true;
-    try {
-      const res = await gb.githubSyncBookmarksUpload({ token: ghToken });
-      btn.textContent = res.ok ? '✓ Synced' : '✕ Error';
-    } catch { btn.textContent = '✕ Error'; }
-    setTimeout(() => { btn.textContent = '⬆ Sync Bookmarks'; btn.disabled = false; }, 2000);
-  };
-  document.getElementById('qa-sync-download').onclick = async () => {
-    const btn = document.getElementById('qa-sync-download');
-    btn.textContent = '⏳ Importing...'; btn.disabled = true;
-    try {
-      const res = await gb.githubSyncBookmarksDownload({ token: ghToken });
-      btn.textContent = res.ok ? '✓ Imported ' + (res.imported || 0) : '✕ ' + (res.error || 'Error');
-    } catch { btn.textContent = '✕ Error'; }
-    setTimeout(() => { btn.textContent = '⬇ Import Bookmarks'; btn.disabled = false; }, 3000);
-  };
-
-  // Tab bar
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.onclick = () => switchGhTab(btn.dataset.tab);
-  });
-
-  // Logout
-  document.getElementById('btn-logout').onclick = () => {
-    localStorage.removeItem('gh_token');
-    ghToken = null;
-    currentUser = null;
-    cachedData = {};
-    // Clear from Rust backend too
-    if (gb && gb.secretDelete) gb.secretDelete('github_token').catch(() => {});
-    if (gb && gb.githubLogout) gb.githubLogout().catch(() => {});
-    showView('login-view');
-  };
-
-  loadTab('repos');
-  loadNotifCount(token);
+  document.getElementById('qa-sync-upload').onclick = async () => { const btn = document.getElementById('qa-sync-upload'); btn.textContent = '⏳ Syncing...'; btn.disabled = true; try { const r = await gb.githubSyncBookmarksUpload({ token: ghToken }); btn.textContent = r.ok ? '✓ Synced' : '✕ Error'; } catch { btn.textContent = '✕ Error'; } setTimeout(() => { btn.textContent = '⬆ Sync Bookmarks'; btn.disabled = false; }, 2000); };
+  document.getElementById('qa-sync-download').onclick = async () => { const btn = document.getElementById('qa-sync-download'); btn.textContent = '⏳ Importing...'; btn.disabled = true; try { const r = await gb.githubSyncBookmarksDownload({ token: ghToken }); btn.textContent = r.ok ? '✓ Imported '+(r.imported||0) : '✕ '+(r.error||'Error'); } catch { btn.textContent = '✕ Error'; } setTimeout(() => { btn.textContent = '⬇ Import Bookmarks'; btn.disabled = false; }, 3000); };
+  document.querySelectorAll('.tab-btn').forEach(btn => { btn.onclick = () => switchGhTab(btn.dataset.tab); });
+  document.getElementById('btn-logout').onclick = () => { localStorage.removeItem('gh_token'); ghToken = null; currentUser = null; cachedData = {}; if (gb && gb.secretDelete) gb.secretDelete('github_token').catch(() => {}); if (gb && gb.githubLogout) gb.githubLogout().catch(() => {}); showView('login-view'); };
+  loadTab('repos'); loadNotifCount(token);
 }
 
-function openGh(path) {
-  const url = path.startsWith('http') ? path : 'https://github.com' + path;
-  if (gb) gb.openUrlNewTab(url);
-}
-
-function switchGhTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  loadTab(tab);
-}
+function switchGhTab(tab) { activeTab = tab; document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab)); loadTab(tab); }
 
 async function loadTab(tab) {
   const content = document.getElementById('tab-content');
   content.innerHTML = '<div class="loading-state"><span class="spinner"></span> Loading...</div>';
-
-  switch (tab) {
-    case 'repos': await loadRepos(content); break;
-    case 'notifications': await loadNotifications(content); break;
-    case 'issues': await loadIssues(content); break;
-    case 'prs': await loadPRs(content); break;
-    case 'activity': await loadActivity(content); break;
-  }
+  switch (tab) { case 'repos': await loadRepos(content); break; case 'notifications': await loadNotifications(content); break; case 'issues': await loadIssues(content); break; case 'prs': await loadPRs(content); break; case 'activity': await loadActivity(content); break; }
 }
 
-// ─── Repos ───
+async function loadNotifCount(token) {
+  const data = await ghApi('/notifications?per_page=1', token);
+  if (Array.isArray(data) && data.length > 0) { const all = await ghApi('/notifications?per_page=50', token); const count = Array.isArray(all) ? all.length : 0; const badge = document.getElementById('notif-badge'); badge.textContent = count > 99 ? '99+' : count; badge.style.display = count > 0 ? '' : 'none'; cachedData.notifications = all; }
+}
+
 async function loadRepos(el) {
   const data = cachedData.repos || await ghApi('/user/repos?sort=updated&per_page=30');
   if (data.error) { el.innerHTML = '<div class="empty-state">Failed to load repos</div>'; return; }
   cachedData.repos = data;
   if (!data.length) { el.innerHTML = '<div class="empty-state">No repositories</div>'; return; }
-  el.innerHTML = data.map(r => `
-    <div class="item-card" onclick="openGh('/${esc(r.full_name)}')">
-      <div style="flex:1">
-        <div class="item-title">${esc(r.full_name)}</div>
-        ${r.description ? `<div class="item-desc">${esc(r.description)}</div>` : ''}
-        <div class="item-meta">
-          ${r.language ? `<span>${esc(r.language)}</span>` : ''}
-          <span>⭐ ${r.stargazers_count}</span>
-          <span>🍴 ${r.forks_count}</span>
-          <span>${timeAgo(r.updated_at)}</span>
-          ${r.private ? '<span style="color:var(--fg-subtle)">🔒 Private</span>' : ''}
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-// ─── Notifications ───
-async function loadNotifCount(token) {
-  const data = await ghApi('/notifications?per_page=1', token);
-  if (Array.isArray(data)) {
-    const badge = document.getElementById('notif-badge');
-    if (data.length > 0) {
-      // Fetch all to get count
-      const all = await ghApi('/notifications?per_page=50', token);
-      const count = Array.isArray(all) ? all.length : 0;
-      badge.textContent = count > 99 ? '99+' : count;
-      badge.style.display = count > 0 ? '' : 'none';
-      cachedData.notifications = all;
-    } else {
-      badge.style.display = 'none';
-    }
-  }
+  el.innerHTML = data.map(r => `<div class="item-card" onclick="openGh('/${esc(r.full_name)}')"><div style="flex:1"><div class="item-title">${esc(r.full_name)}</div>${r.description?`<div class="item-desc">${esc(r.description)}</div>`:''}<div class="item-meta">${r.language?`<span>${esc(r.language)}</span>`:''}<span>⭐ ${r.stargazers_count}</span><span>🍴 ${r.forks_count}</span><span>${timeAgo(r.updated_at)}</span>${r.private?'<span style="color:var(--fg-subtle)">🔒 Private</span>':''}</div></div></div>`).join('');
 }
 
 async function loadNotifications(el) {
@@ -422,188 +246,48 @@ async function loadNotifications(el) {
   if (data.error) { el.innerHTML = '<div class="empty-state">Failed to load notifications</div>'; return; }
   cachedData.notifications = data;
   if (!data.length) { el.innerHTML = '<div class="empty-state">No notifications</div>'; return; }
-  el.innerHTML = data.map(n => {
-    const unread = n.unread ? ' notif-unread' : '';
-    const icon = n.subject.type === 'PullRequest' ? '🔀' : n.subject.type === 'Issue' ? '🔵' : '💬';
-    const repo = n.repository ? n.repository.full_name : '';
-    return `
-      <div class="item-card${unread}" onclick="openNotif('${esc(n.subject.url || '')}', '${esc(n.subject.type)}')">
-        <div style="font-size:18px">${icon}</div>
-        <div style="flex:1">
-          <div class="item-title">${esc(n.subject.title)}</div>
-          <div class="item-meta">
-            <span>${esc(repo)}</span>
-            <span class="notif-reason">${esc(n.reason)}</span>
-            <span>${timeAgo(n.updated_at)}</span>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+  el.innerHTML = data.map(n => { const unread = n.unread ? ' notif-unread' : ''; const icon = n.subject.type === 'PullRequest' ? '🔀' : n.subject.type === 'Issue' ? '🔵' : '💬'; const repo = n.repository ? n.repository.full_name : ''; return `<div class="item-card${unread}" onclick="openNotif('${esc(n.subject.url||'')}','${esc(n.subject.type)}')"><div style="font-size:18px">${icon}</div><div style="flex:1"><div class="item-title">${esc(n.subject.title)}</div><div class="item-meta"><span>${esc(repo)}</span><span class="notif-reason">${esc(n.reason)}</span><span>${timeAgo(n.updated_at)}</span></div></div></div>`; }).join('');
 }
 
-async function openNotif(apiUrl, type) {
-  if (!apiUrl) return;
-  // Convert API URL to web URL
-  try {
-    const data = await ghApi(apiUrl.replace('https://api.github.com', ''));
-    if (data.html_url) openGh(data.html_url);
-  } catch { /* ignore */ }
-}
+async function openNotif(apiUrl, type) { if (!apiUrl) return; try { const data = await ghApi(apiUrl.replace('https://api.github.com', '')); if (data.html_url) openGh(data.html_url); } catch {} }
 
-// ─── Issues ───
 async function loadIssues(el) {
-  const filterHtml = `<div class="filter-row">
-    <button class="filter-btn${issueFilter === 'assigned' ? ' active' : ''}" onclick="setIssueFilter('assigned')">Assigned</button>
-    <button class="filter-btn${issueFilter === 'created' ? ' active' : ''}" onclick="setIssueFilter('created')">Created</button>
-    <button class="filter-btn${issueFilter === 'mentioned' ? ' active' : ''}" onclick="setIssueFilter('mentioned')">Mentioned</button>
-  </div>`;
-
+  const filterHtml = `<div class="filter-row"><button class="filter-btn${issueFilter==='assigned'?' active':''}" onclick="setIssueFilter('assigned')">Assigned</button><button class="filter-btn${issueFilter==='created'?' active':''}" onclick="setIssueFilter('created')">Created</button><button class="filter-btn${issueFilter==='mentioned'?' active':''}" onclick="setIssueFilter('mentioned')">Mentioned</button></div>`;
   const key = 'issues_' + issueFilter;
   const data = cachedData[key] || await ghApi('/issues?filter=' + issueFilter + '&state=open&per_page=30');
   if (data.error) { el.innerHTML = filterHtml + '<div class="empty-state">Failed to load issues</div>'; return; }
   cachedData[key] = data;
   if (!data.length) { el.innerHTML = filterHtml + '<div class="empty-state">No open issues</div>'; return; }
-
-  el.innerHTML = filterHtml + data.map(i => {
-    const repo = i.repository ? i.repository.full_name : (i.html_url || '').split('/').slice(3, 5).join('/');
-    return `
-      <div class="item-card" onclick="openGh('${esc(i.html_url)}')">
-        <div style="flex:1">
-          <div class="item-title">
-            <span class="state-badge state-open">open</span>
-            ${esc(i.title)}
-          </div>
-          <div class="item-meta">
-            <span>${esc(repo)}</span>
-            <span>#${i.number}</span>
-            <span>${timeAgo(i.created_at)}</span>
-            ${i.comments ? `<span>💬 ${i.comments}</span>` : ''}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+  el.innerHTML = filterHtml + data.map(i => { const repo = i.repository ? i.repository.full_name : (i.html_url||'').split('/').slice(3,5).join('/'); return `<div class="item-card" onclick="openGh('${esc(i.html_url)}')"><div style="flex:1"><div class="item-title"><span class="state-badge state-open">open</span> ${esc(i.title)}</div><div class="item-meta"><span>${esc(repo)}</span><span>#${i.number}</span><span>${timeAgo(i.created_at)}</span>${i.comments?`<span>💬 ${i.comments}</span>`:''}</div></div></div>`; }).join('');
 }
+function setIssueFilter(f) { issueFilter = f; delete cachedData['issues_'+f]; loadTab('issues'); }
 
-function setIssueFilter(f) {
-  issueFilter = f;
-  delete cachedData['issues_' + f];
-  loadTab('issues');
-}
-
-// ─── Pull Requests ───
 async function loadPRs(el) {
-  const filterHtml = `<div class="filter-row">
-    <button class="filter-btn${prFilter === 'assigned' ? ' active' : ''}" onclick="setPrFilter('assigned')">Assigned</button>
-    <button class="filter-btn${prFilter === 'created' ? ' active' : ''}" onclick="setPrFilter('created')">Created</button>
-    <button class="filter-btn${prFilter === 'review' ? ' active' : ''}" onclick="setPrFilter('review')">Review Requested</button>
-  </div>`;
-
-  let endpoint;
-  if (prFilter === 'review') {
-    endpoint = '/search/issues?q=type:pr+state:open+review-requested:' + (currentUser ? currentUser.login : '') + '&per_page=30';
-  } else {
-    endpoint = '/search/issues?q=type:pr+state:open+' + prFilter + ':' + (currentUser ? currentUser.login : '') + '&per_page=30';
-  }
-
+  const filterHtml = `<div class="filter-row"><button class="filter-btn${prFilter==='assigned'?' active':''}" onclick="setPrFilter('assigned')">Assigned</button><button class="filter-btn${prFilter==='created'?' active':''}" onclick="setPrFilter('created')">Created</button><button class="filter-btn${prFilter==='review'?' active':''}" onclick="setPrFilter('review')">Review Requested</button></div>`;
+  let endpoint = prFilter === 'review' ? '/search/issues?q=type:pr+state:open+review-requested:'+(currentUser?currentUser.login:'')+'&per_page=30' : '/search/issues?q=type:pr+state:open+'+prFilter+':'+(currentUser?currentUser.login:'')+'&per_page=30';
   const key = 'prs_' + prFilter;
   let data = cachedData[key];
-  if (!data) {
-    const res = await ghApi(endpoint);
-    data = res.items || res;
-    if (res.error) { el.innerHTML = filterHtml + '<div class="empty-state">Failed to load PRs</div>'; return; }
-    cachedData[key] = data;
-  }
+  if (!data) { const res = await ghApi(endpoint); data = res.items || res; if (res.error) { el.innerHTML = filterHtml + '<div class="empty-state">Failed to load PRs</div>'; return; } cachedData[key] = data; }
   if (!data.length) { el.innerHTML = filterHtml + '<div class="empty-state">No open pull requests</div>'; return; }
-
-  el.innerHTML = filterHtml + data.map(pr => {
-    const repo = (pr.html_url || '').split('/').slice(3, 5).join('/');
-    const merged = pr.pull_request && pr.pull_request.merged_at;
-    const stateClass = merged ? 'state-merged' : pr.state === 'closed' ? 'state-closed' : 'state-open';
-    const stateLabel = merged ? 'merged' : pr.state;
-    return `
-      <div class="item-card" onclick="openGh('${esc(pr.html_url)}')">
-        <div style="flex:1">
-          <div class="item-title">
-            <span class="state-badge ${stateClass}">${stateLabel}</span>
-            ${esc(pr.title)}
-          </div>
-          <div class="item-meta">
-            <span>${esc(repo)}</span>
-            <span>#${pr.number}</span>
-            <span>${timeAgo(pr.created_at)}</span>
-            ${pr.comments ? `<span>💬 ${pr.comments}</span>` : ''}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+  el.innerHTML = filterHtml + data.map(pr => { const repo = (pr.html_url||'').split('/').slice(3,5).join('/'); const merged = pr.pull_request && pr.pull_request.merged_at; const sc = merged ? 'state-merged' : pr.state === 'closed' ? 'state-closed' : 'state-open'; const sl = merged ? 'merged' : pr.state; return `<div class="item-card" onclick="openGh('${esc(pr.html_url)}')"><div style="flex:1"><div class="item-title"><span class="state-badge ${sc}">${sl}</span> ${esc(pr.title)}</div><div class="item-meta"><span>${esc(repo)}</span><span>#${pr.number}</span><span>${timeAgo(pr.created_at)}</span>${pr.comments?`<span>💬 ${pr.comments}</span>`:''}</div></div></div>`; }).join('');
 }
+function setPrFilter(f) { prFilter = f; delete cachedData['prs_'+f]; loadTab('prs'); }
 
-function setPrFilter(f) {
-  prFilter = f;
-  delete cachedData['prs_' + f];
-  loadTab('prs');
-}
-
-// ─── Activity ───
 async function loadActivity(el) {
   if (!currentUser) { el.innerHTML = '<div class="empty-state">Not logged in</div>'; return; }
-  const data = cachedData.activity || await ghApi('/users/' + currentUser.login + '/received_events?per_page=30');
+  const data = cachedData.activity || await ghApi('/users/'+currentUser.login+'/received_events?per_page=30');
   if (data.error) { el.innerHTML = '<div class="empty-state">Failed to load activity</div>'; return; }
   cachedData.activity = data;
   if (!data.length) { el.innerHTML = '<div class="empty-state">No recent activity</div>'; return; }
-
-  el.innerHTML = data.map(ev => {
-    const repo = ev.repo ? ev.repo.name : '';
-    const actor = ev.actor ? ev.actor.login : '';
-    let desc = '';
-    switch (ev.type) {
-      case 'PushEvent': desc = `pushed ${(ev.payload.commits || []).length} commit(s)`; break;
-      case 'CreateEvent': desc = `created ${ev.payload.ref_type || 'repo'}${ev.payload.ref ? ' ' + ev.payload.ref : ''}`; break;
-      case 'DeleteEvent': desc = `deleted ${ev.payload.ref_type} ${ev.payload.ref || ''}`; break;
-      case 'WatchEvent': desc = 'starred'; break;
-      case 'ForkEvent': desc = 'forked'; break;
-      case 'IssuesEvent': desc = `${ev.payload.action} issue #${ev.payload.issue ? ev.payload.issue.number : ''}`; break;
-      case 'PullRequestEvent': desc = `${ev.payload.action} PR #${ev.payload.pull_request ? ev.payload.pull_request.number : ''}`; break;
-      case 'IssueCommentEvent': desc = `commented on #${ev.payload.issue ? ev.payload.issue.number : ''}`; break;
-      case 'PullRequestReviewEvent': desc = `reviewed PR #${ev.payload.pull_request ? ev.payload.pull_request.number : ''}`; break;
-      case 'ReleaseEvent': desc = `${ev.payload.action} release ${ev.payload.release ? ev.payload.release.tag_name : ''}`; break;
-      default: desc = ev.type.replace('Event', '').replace(/([A-Z])/g, ' $1').trim().toLowerCase();
-    }
-    return `
-      <div class="item-card" onclick="openGh('/${esc(repo)}')">
-        <div style="flex:1">
-          <div class="item-title" style="color:var(--fg-default)">${esc(actor)} <span style="color:var(--fg-muted);font-weight:400">${esc(desc)}</span></div>
-          <div class="item-meta">
-            <span>${esc(repo)}</span>
-            <span>${timeAgo(ev.created_at)}</span>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
+  el.innerHTML = data.map(ev => { const repo = ev.repo ? ev.repo.name : ''; const actor = ev.actor ? ev.actor.login : ''; let desc = '';
+    switch(ev.type){case 'PushEvent':desc=`pushed ${(ev.payload.commits||[]).length} commit(s)`;break;case 'CreateEvent':desc=`created ${ev.payload.ref_type||'repo'}${ev.payload.ref?' '+ev.payload.ref:''}`;break;case 'WatchEvent':desc='starred';break;case 'ForkEvent':desc='forked';break;case 'IssuesEvent':desc=`${ev.payload.action} issue #${ev.payload.issue?ev.payload.issue.number:''}`;break;case 'PullRequestEvent':desc=`${ev.payload.action} PR #${ev.payload.pull_request?ev.payload.pull_request.number:''}`;break;case 'IssueCommentEvent':desc=`commented on #${ev.payload.issue?ev.payload.issue.number:''}`;break;default:desc=ev.type.replace('Event','').replace(/([A-Z])/g,' $1').trim().toLowerCase()}
+    return `<div class="item-card" onclick="openGh('/${esc(repo)}')"><div style="flex:1"><div class="item-title" style="color:var(--fg-default)">${esc(actor)} <span style="color:var(--fg-muted);font-weight:400">${esc(desc)}</span></div><div class="item-meta"><span>${esc(repo)}</span><span>${timeAgo(ev.created_at)}</span></div></div></div>`; }).join('');
 }
 
-// ─── Theme ───
 function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
-if (gb) {
-  gb.onThemeChanged((d) => applyTheme(d.theme));
-  gb.getSettings().then(s => {
-    if (s && s.appearance) {
-      let t = s.appearance.theme;
-      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
-      applyTheme(t);
-    }
-  }).catch(() => {});
-}
-
-// ─── Init ───
+if (gb) { gb.onThemeChanged((d) => applyTheme(d.theme)); gb.getSettings().then(s => { if(s&&s.appearance){let t=s.appearance.theme;if(t==='System')t=window.matchMedia('(prefers-color-scheme:light)').matches?'Light':'Dark';applyTheme(t)} }).catch(()=>{}); }
 document.getElementById('client-id').value = ghClientId;
-function init() {
-  if (ghToken) loadProfile(ghToken);
-}
+function init() { if (ghToken) loadProfile(ghToken); }
 </script>
 </body>
 </html>

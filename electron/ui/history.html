@@ -2,203 +2,128 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="design-tokens.css" />
+<link rel="stylesheet" href="components.css" />
 <style>
-:root {
-  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
-  --fg-default: #e6edf3; --fg-muted: #7d8590; --fg-subtle: #484f58;
-  --border-default: #30363d; --border-muted: #21262d;
-  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
-  --danger-fg: #f85149; --danger-emphasis: #da3633;
+.top-bar { display: flex; gap: var(--space-sm); margin-bottom: var(--space-xl); animation: fadeUp var(--duration-normal) var(--ease-out) 0.05s both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.search-wrap { flex: 1; position: relative; }
+.search-wrap svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--fg-subtle); }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before {
+  content: ''; position: absolute; left: 7px; top: 0; bottom: 0;
+  width: 2px; background: var(--border-muted); border-radius: 1px;
 }
-html.light {
-  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
-  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
-  --border-default: #d0d7de; --border-muted: #d8dee4;
-  --accent-fg: #0969da; --accent-emphasis: #0969da;
-  --danger-fg: #cf222e; --danger-emphasis: #cf222e;
+.day-group { margin-bottom: var(--space-xl); }
+.day-label {
+  font-size: var(--text-sm); font-weight: 600; color: var(--fg-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: var(--space-xs) 0 var(--space-sm);
+  position: relative;
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-  background: var(--bg-canvas); color: var(--fg-default);
-  padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
+.day-label::before {
+  content: ''; position: absolute; left: -21px; top: 6px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent-emphasis); border: 2px solid var(--bg-canvas);
 }
-.page-title { font-size: 28px; font-weight: 600; margin-bottom: 4px; }
-.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 15px; }
-.top-bar { display: flex; gap: 8px; margin-bottom: 20px; }
-.search-box {
-  flex: 1; padding: 12px 16px; border: 1px solid var(--border-default);
-  border-radius: 10px; background: var(--bg-default); color: var(--fg-default);
-  font-family: inherit; font-size: 15px; outline: none; transition: border-color 0.15s;
+.h-item {
+  display: flex; align-items: center; padding: var(--space-sm) var(--space-md); gap: var(--space-sm);
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  animation: itemSlideIn var(--duration-normal) var(--ease-out) both;
 }
-.search-box:focus { border-color: var(--accent-emphasis); box-shadow: 0 0 0 3px rgba(31,111,235,0.2); }
-.btn-clear {
-  padding: 10px 16px; border: 1px solid var(--danger-fg); border-radius: 8px;
-  background: transparent; color: var(--danger-fg); cursor: pointer;
-  font-family: inherit; font-size: 13px; font-weight: 500; transition: all 0.12s; white-space: nowrap;
+.h-item:hover { background: var(--bg-subtle); }
+.h-favicon { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
+.h-info { flex: 1; min-width: 0; }
+.h-title { font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-url { font-size: var(--text-xs); color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.h-time { font-size: var(--text-xs); color: var(--fg-subtle); white-space: nowrap; flex-shrink: 0; }
+.h-del {
+  width: 22px; height: 22px; border: none; background: none; color: var(--fg-subtle);
+  cursor: pointer; border-radius: var(--radius-sm); display: flex; align-items: center;
+  justify-content: center; opacity: 0; transition: all var(--duration-fast); flex-shrink: 0; font-size: 13px;
 }
-.btn-clear:hover { background: var(--danger-emphasis); color: #fff; border-color: var(--danger-emphasis); }
-.list { display: flex; flex-direction: column; gap: 1px; }
-.day-group { margin-top: 16px; }
-.day-group:first-child { margin-top: 0; }
-.day-label { font-size: 12px; font-weight: 600; color: var(--fg-muted); padding: 8px 0 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-.item {
-  display: flex; align-items: center; padding: 10px 16px; gap: 12px;
-  background: var(--bg-default); border-radius: 6px; cursor: pointer;
-  transition: background 0.12s; border: 1px solid transparent;
-  animation: itemIn 0.25s cubic-bezier(0.33,1,0.68,1) both;
-}
-@keyframes itemIn { from { opacity: 0; transform: translateY(8px); } }
-.item:hover { background: var(--bg-subtle); border-color: var(--border-muted); }
-.item-favicon { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
-.item-info { flex: 1; min-width: 0; }
-.item-title { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item-url { font-size: 11px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.item-time { font-size: 11px; color: var(--fg-subtle); white-space: nowrap; flex-shrink: 0; }
-.item-del {
-  width: 24px; height: 24px; border: none; background: none; color: var(--fg-subtle);
-  cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center;
-  opacity: 0; transition: all 0.12s; flex-shrink: 0; font-size: 14px;
-}
-.item:hover .item-del { opacity: 1; }
-.item-del:hover { background: var(--danger-emphasis); color: #fff; }
-.empty { padding: 48px; text-align: center; color: var(--fg-muted); font-size: 14px; }
+.h-item:hover .h-del { opacity: 1; }
+.h-del:hover { background: var(--danger-emphasis); color: #fff; }
 </style>
 </head>
 <body>
-<div class="page-title">History</div>
-<div class="page-desc">Your browsing history</div>
-<div class="top-bar">
-  <input class="search-box" id="search" placeholder="Search history..." autofocus />
-  <button class="btn-clear" id="btn-clear">Clear All</button>
+<div class="page-container">
+  <div class="page-header" style="animation:fadeUp var(--duration-normal) var(--ease-out)">
+    <svg width="28" height="28" viewBox="0 0 16 16" fill="var(--accent-fg)"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm.5 4.75a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 .37.65l2.5 1.5a.75.75 0 1 0 .76-1.3L8.5 7.96V4.75Z"/></svg>
+    <div class="page-title">History</div>
+  </div>
+  <div class="page-desc">Your browsing history</div>
+  <div class="top-bar">
+    <div class="search-wrap">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>
+      <input class="input input-glass" id="search" placeholder="Search history..." autofocus style="padding-left:40px" />
+    </div>
+    <button class="btn btn-danger btn-pill" id="btn-clear">Clear All</button>
+  </div>
+  <div class="timeline" id="list"></div>
 </div>
-<div class="list" id="list"></div>
-
 <script>
-const gb = window.gitbrowser;
-const listEl = document.getElementById('list');
-const searchEl = document.getElementById('search');
-let debounce = null;
+const gb = window.gitbrowser, listEl = document.getElementById('list'), searchEl = document.getElementById('search');
+let debounce = null, _lt = {};
 
-searchEl.addEventListener('input', () => {
-  clearTimeout(debounce);
-  debounce = setTimeout(() => load(searchEl.value), 200);
-});
-
+searchEl.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(() => load(searchEl.value), 200); });
 document.getElementById('btn-clear').onclick = () => {
-  const msg = _lt.clear_confirm || 'Are you sure you want to clear all history?';
-  if (!confirm(msg)) return;
+  if (!confirm(_lt.clear_confirm || 'Are you sure you want to clear all history?')) return;
   gb.clearHistory();
-  listEl.innerHTML = `<div class="empty">${esc(_lt.cleared || 'History cleared')}</div>`;
+  listEl.innerHTML = `<div class="empty-state">${esc(_lt.cleared || 'History cleared')}</div>`;
 };
 
 async function load(query) {
   let items;
-  try {
-    if (query) items = await gb.searchHistory(query);
-    else items = await gb.getHistory();
-  } catch { items = []; }
+  try { items = query ? await gb.searchHistory(query) : await gb.getHistory(); } catch { items = []; }
   if (!Array.isArray(items)) items = [];
-  
-  if (items.length === 0) {
-    listEl.innerHTML = `<div class="empty">${esc(_lt.no_history || 'No history')}</div>`;
-    return;
-  }
+  if (!items.length) { listEl.innerHTML = `<div class="empty-state"><svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm.5 4.75a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 .37.65l2.5 1.5a.75.75 0 1 0 .76-1.3L8.5 7.96V4.75Z"/></svg><div>${esc(_lt.no_history || 'No history yet')}</div></div>`; return; }
   listEl.innerHTML = '';
-  
-  // Group by day
-  const groups = {};
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const yesterday = today - 86400000;
-  
+  const groups = {}, now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), yesterday = today - 86400000;
   items.slice(0, 200).forEach(h => {
     const ts = h.visit_time || 0;
-    let label;
-    if (ts >= today) label = _lt.today || 'Today';
-    else if (ts >= yesterday) label = _lt.yesterday || 'Yesterday';
-    else {
-      const d = new Date(ts);
-      label = d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
-    }
+    let label = ts >= today ? (_lt.today || 'Today') : ts >= yesterday ? (_lt.yesterday || 'Yesterday') : new Date(ts).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
     if (!groups[label]) groups[label] = [];
     groups[label].push(h);
   });
-  
+  let idx = 0;
   Object.entries(groups).forEach(([label, entries]) => {
     const group = document.createElement('div');
     group.className = 'day-group';
     group.innerHTML = `<div class="day-label">${esc(label)}</div>`;
     entries.forEach(h => {
-    const div = document.createElement('div');
-    div.className = 'item';
-    const time = h.visit_time ? formatTime(h.visit_time) : '';
-    const faviconUrl = h.url ? getFaviconUrl(h.url) : '';
-    div.innerHTML = `
-      ${faviconUrl ? `<img class="item-favicon" src="${faviconUrl}" onerror="this.style.display='none'" />` : ''}
-      <div class="item-info">
-        <div class="item-title">${esc(h.title || h.url)}</div>
-        <div class="item-url">${esc(h.url)}</div>
-      </div>
-      <div class="item-time">${esc(time)}</div>
-      <button class="item-del" title="Delete">\u00D7</button>
-    `;
-    div.querySelector('.item-info').onclick = () => gb.openUrl(h.url);
-    div.querySelector('.item-del').onclick = (e) => {
-      e.stopPropagation();
-      gb.deleteHistoryEntry(h.id);
-      div.style.opacity = '0'; div.style.transition = 'all 0.15s';
-      setTimeout(() => div.remove(), 150);
-    };
-    group.appendChild(div);
+      const div = document.createElement('div');
+      div.className = 'h-item';
+      div.style.animationDelay = Math.min(idx++ * 20, 400) + 'ms';
+      const time = h.visit_time ? formatTime(h.visit_time) : '';
+      const fav = getFaviconUrl(h.url);
+      div.innerHTML = `${fav ? `<img class="h-favicon" src="${fav}" onerror="this.style.display='none'" />` : ''}
+        <div class="h-info"><div class="h-title">${esc(h.title || h.url)}</div><div class="h-url">${esc(h.url)}</div></div>
+        <div class="h-time">${esc(time)}</div><button class="h-del" title="Delete">\u00D7</button>`;
+      div.querySelector('.h-info').onclick = () => gb.openUrl(h.url);
+      div.querySelector('.h-del').onclick = (e) => { e.stopPropagation(); gb.deleteHistoryEntry(h.id); div.style.cssText='opacity:0;transition:all 0.15s'; setTimeout(() => div.remove(), 150); };
+      group.appendChild(div);
     });
     listEl.appendChild(group);
   });
 }
 
-function getFaviconUrl(url) {
-  try {
-    const u = new URL(url);
-    return 'https://www.google.com/s2/favicons?sz=16&domain=' + u.hostname;
-  } catch { return ''; }
-}
-
-function formatTime(t) {
-  try {
-    const d = new Date(t);
-    const now = new Date();
-    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    return d.toLocaleDateString([], {month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-  } catch { return t; }
-}
+function getFaviconUrl(url) { try { return 'https://www.google.com/s2/favicons?sz=16&domain=' + new URL(url).hostname; } catch { return ''; } }
+function formatTime(t) { try { const d = new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); } catch { return ''; } }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-// Theme
 function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
-if (window.gitbrowser) {
+if (gb) {
   gb.onThemeChanged((d) => applyTheme(d.theme));
-  gb.getSettings().then(s => {
-    if (s && s.appearance) {
-      let t = s.appearance.theme;
-      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
-      applyTheme(t);
-    }
-  }).catch(() => {});
+  gb.getSettings().then(s => { if (s && s.appearance) { let t = s.appearance.theme; if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark'; applyTheme(t); } }).catch(() => {});
 }
-
 load('');
-
-// Localization
-let _lt = {};
 if (gb && gb.getLocaleData) {
   gb.getLocaleData().then(({ data: t }) => {
-    if (t && t.history) {
-      _lt = t.history;
-      document.querySelector('.page-title').textContent = t.history.title || 'History';
-      document.querySelector('.page-desc').textContent = t.history.desc || 'Your browsing history';
-      searchEl.placeholder = t.history.search_placeholder || 'Search history...';
-      document.getElementById('btn-clear').textContent = t.history.clear_all || 'Clear All';
-    }
+    if (t && t.history) { _lt = t.history; document.querySelector('.page-title').textContent = t.history.title || 'History'; document.querySelector('.page-desc').textContent = t.history.desc || 'Your browsing history'; searchEl.placeholder = t.history.search_placeholder || 'Search history...'; document.getElementById('btn-clear').textContent = t.history.clear_all || 'Clear All'; }
   }).catch(() => {});
 }
 </script>

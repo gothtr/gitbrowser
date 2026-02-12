@@ -2,137 +2,92 @@
 <html>
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="design-tokens.css" />
+<link rel="stylesheet" href="components.css" />
 <style>
-:root {
-  --bg-canvas: #0d1117; --bg-default: #161b22; --bg-subtle: #1c2128;
-  --fg-default: #e6edf3; --fg-muоted: #7d8590; --fg-subtle: #484f58;
-  --border-default: #30363d; --border-muted: #21262d;
-  --accent-fg: #58a6ff; --accent-emphasis: #1f6feb;
-  --success-fg: #3fb950; --danger-fg: #f85149;
+.toolbar-row { display: flex; gap: var(--space-sm); margin-bottom: var(--space-xl); animation: itemSlideIn var(--duration-normal) var(--ease-out) 0.05s both; }
+.ext-list { display: flex; flex-direction: column; gap: var(--space-sm); }
+.ext-card {
+  display: flex; align-items: center; gap: var(--space-lg); padding: var(--space-lg);
+  background: var(--glass-bg-solid); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+  animation: itemSlideIn var(--duration-normal) var(--ease-out) both;
 }
-html.light {
-  --bg-canvas: #ffffff; --bg-default: #f6f8fa; --bg-subtle: #f0f2f5;
-  --fg-default: #24292f; --fg-muted: #57606a; --fg-subtle: #8c959f;
-  --border-default: #d0d7de; --border-muted: #d8dee4;
-  --accent-fg: #0969da; --accent-emphasis: #0969da;
-  --success-fg: #1a7f37; --danger-fg: #cf222e;
+.ext-card:hover { border-color: var(--border-default); }
+.ext-icon {
+  width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--bg-subtle);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
-  background: var(--bg-canvas); color: var(--fg-default);
-  padding: 32px 48px; max-width: 900px; overflow-y: auto; height: 100vh;
-}
-.page-title { font-size: 28px; font-weight: 600; margin-bottom: 4px; }
-.page-desc { color: var(--fg-muted); margin-bottom: 20px; font-size: 15px; }
-.toolbar-row { display: flex; gap: 8px; margin-bottom: 20px; }
-.btn {
-  padding: 8px 16px; border: 1px solid var(--border-default); background: var(--bg-default);
-  color: var(--fg-default); cursor: pointer; border-radius: 6px; font-family: inherit;
-  font-size: 13px; transition: all 0.12s; display: inline-flex; align-items: center; gap: 6px;
-}
-.btn:hover { border-color: var(--accent-fg); color: var(--accent-fg); }
-.btn.primary { background: var(--accent-emphasis); color: #fff; border-color: var(--accent-emphasis); }
-.btn.primary:hover { opacity: 0.9; }
-.btn.danger:hover { border-color: var(--danger-fg); color: var(--danger-fg); }
-.list { display: flex; flex-direction: column; gap: 8px; }
-.item {
-  padding: 16px; background: var(--bg-default); border-radius: 8px;
-  border: 1px solid var(--border-muted); transition: border-color 0.12s;
-  animation: itemIn 0.25s cubic-bezier(0.33,1,0.68,1) both;
-  display: flex; align-items: center; gap: 14px;
-}
-@keyframes itemIn { from { opacity: 0; transform: translateY(8px); } }
-.item:hover { border-color: var(--border-default); }
+.ext-info { flex: 1; min-width: 0; }
+.ext-name { font-size: var(--text-md); font-weight: 500; }
+.ext-meta { font-size: var(--text-sm); color: var(--fg-muted); margin-top: 2px; display: flex; align-items: center; gap: var(--space-sm); }
+.ext-actions { display: flex; gap: var(--space-sm); align-items: center; }
+.empty-state svg { width: 48px; height: 48px; }
 </style>
 </head>
 <body>
-<div class="page-title" id="title">Extensions</div>
-<div class="page-desc" id="desc">Manage your browser extensions</div>
-<div class="toolbar-row">
-  <button class="btn primary" id="installBtn">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
-    Install Extension
-  </button>
+<div class="page-container">
+  <div class="page-header" style="animation:itemSlideIn var(--duration-normal) var(--ease-out)">
+    <svg width="28" height="28" viewBox="0 0 16 16" fill="var(--accent-fg)"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/></svg>
+    <div class="page-title" id="title">Extensions</div>
+  </div>
+  <div class="page-desc" id="desc">Manage your browser extensions</div>
+  <div class="toolbar-row">
+    <button class="btn btn-primary btn-pill" id="installBtn">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+      Install Extension
+    </button>
+  </div>
+  <div class="ext-list" id="list"></div>
 </div>
-<div class="list" id="list"></div>
-
 <script>
-const gb = window.gitbrowser;
-const listEl = document.getElementById('list');
+const gb = window.gitbrowser, listEl = document.getElementById('list');
 
 async function load() {
   let exts;
   try { exts = await gb.extensionList(); } catch { exts = []; }
-  if (!Array.isArray(exts) || exts.length === 0) {
-    listEl.innerHTML = `<div style="padding:48px;text-align:center;color:var(--fg-muted);font-size:14px;">
-      <svg width="48" height="48" viewBox="0 0 16 16" fill="currentColor" style="margin-bottom:12px;color:var(--fg-subtle)"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/></svg>
-      <div>No extensions installed</div>
-    </div>`;
+  if (!Array.isArray(exts) || !exts.length) {
+    listEl.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/></svg>
+      <div>No extensions installed</div></div>`;
     return;
   }
   listEl.innerHTML = '';
-  exts.forEach(ext => {
+  exts.forEach((ext, i) => {
     const div = document.createElement('div');
-    div.className = 'item';
+    div.className = 'ext-card';
+    div.style.animationDelay = i * 40 + 'ms';
     div.innerHTML = `
-      <div style="width:40px;height:40px;border-radius:8px;background:var(--bg-subtle);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-        <svg width="20" height="20" viewBox="0 0 16 16" fill="var(--accent-fg)"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/></svg>
+      <div class="ext-icon"><svg width="22" height="22" viewBox="0 0 16 16" fill="var(--accent-fg)"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/></svg></div>
+      <div class="ext-info">
+        <div class="ext-name">${esc(ext.name)}</div>
+        <div class="ext-meta">v${esc(ext.version)} <span class="badge ${ext.enabled ? 'badge-success' : ''}" style="${ext.enabled ? '' : 'background:var(--bg-subtle);color:var(--fg-subtle)'}">${ext.enabled ? 'Enabled' : 'Disabled'}</span></div>
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:14px;font-weight:500;">${esc(ext.name)}</div>
-        <div style="font-size:12px;color:var(--fg-muted);margin-top:2px;">v${esc(ext.version)} ${ext.enabled ? '<span style="color:var(--success-fg)">Enabled</span>' : '<span style="color:var(--fg-subtle)">Disabled</span>'}</div>
-      </div>
-      <button class="btn" data-toggle="${ext.id}">${ext.enabled ? 'Disable' : 'Enable'}</button>
-      <button class="btn danger" data-remove="${ext.id}">Remove</button>
-    `;
-    div.querySelector('[data-toggle]').onclick = async () => {
-      try {
-        if (ext.enabled) await gb.extensionDisable(ext.id);
-        else await gb.extensionEnable(ext.id);
-        load();
-      } catch {}
+      <div class="ext-actions">
+        <div class="toggle ${ext.enabled ? 'on' : ''}" data-toggle="${ext.id}"></div>
+        <button class="btn btn-ghost btn-danger" data-remove="${ext.id}" style="font-size:var(--text-sm)">Remove</button>
+      </div>`;
+    div.querySelector('[data-toggle]').onclick = async function() {
+      this.classList.toggle('on');
+      try { if (ext.enabled) await gb.extensionDisable(ext.id); else await gb.extensionEnable(ext.id); load(); } catch {}
     };
-    div.querySelector('[data-remove]').onclick = async () => {
-      try { await gb.extensionUninstall(ext.id); load(); } catch {}
-    };
+    div.querySelector('[data-remove]').onclick = async () => { try { await gb.extensionUninstall(ext.id); load(); } catch {} };
     listEl.appendChild(div);
   });
 }
 
 document.getElementById('installBtn').onclick = async () => {
   const path = prompt('Enter extension path:');
-  if (path) {
-    try { await gb.extensionInstall(path); load(); } catch {}
-  }
+  if (path) { try { await gb.extensionInstall(path); load(); } catch {} }
 };
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-// Theme
 function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
-if (gb) {
-  gb.onThemeChanged((d) => applyTheme(d.theme));
-  gb.getSettings().then(s => {
-    if (s && s.appearance) {
-      let t = s.appearance.theme;
-      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
-      applyTheme(t);
-    }
-  }).catch(() => {});
-}
-
+if (gb) { gb.onThemeChanged((d) => applyTheme(d.theme)); gb.getSettings().then(s => { if(s&&s.appearance){let t=s.appearance.theme;if(t==='System')t=window.matchMedia('(prefers-color-scheme:light)').matches?'Light':'Dark';applyTheme(t)} }).catch(()=>{}); }
 load();
-
-// Localization
-if (gb && gb.getLocaleData) {
-  gb.getLocaleData().then(({ data: t }) => {
-    if (t && t.extensions) {
-      document.getElementById('title').textContent = t.extensions.title || 'Extensions';
-      document.getElementById('desc').textContent = t.extensions.desc || 'Manage your browser extensions';
-    }
-  }).catch(() => {});
-}
+if (gb && gb.getLocaleData) { gb.getLocaleData().then(({data:t}) => { if(t&&t.extensions){document.getElementById('title').textContent=t.extensions.title||'Extensions';document.getElementById('desc').textContent=t.extensions.desc||'Manage your browser extensions'} }).catch(()=>{}); }
 </script>
 </body>
 </html>

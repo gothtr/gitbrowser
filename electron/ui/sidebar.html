@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="design-tokens.css" />
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--fg-default);
+  user-select: none;
+  -webkit-user-select: none;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-app-region: drag;
+}
+
+/* ─── Header ─── */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 12px 8px;
+  gap: 8px;
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+}
+.logo {
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--fg-default);
+  letter-spacing: -0.3px;
+  flex: 1;
+}
+.logo span { color: var(--accent-fg); }
+.collapse-btn {
+  width: 28px; height: 28px;
+  border: none; background: none;
+  color: var(--fg-subtle);
+  cursor: pointer; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--duration-fast);
+  -webkit-app-region: no-drag;
+}
+.collapse-btn:hover { background: var(--bg-subtle); color: var(--fg-default); }
+
+/* ─── Sections ─── */
+.section-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--fg-subtle);
+  padding: 4px 14px 4px; -webkit-app-region: no-drag;
+}
+.separator {
+  height: 1px; background: rgba(255,255,255,0.06);
+  margin: 4px 12px;
+}
+html.light .separator { background: rgba(0,0,0,0.06); }
+
+/* ─── Pinned tabs ─── */
+.pinned-section { padding: 0 8px; flex-shrink: 0; -webkit-app-region: no-drag; }
+.pinned-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 4px 2px;
+}
+.pinned-tab {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all var(--duration-fast);
+  font-size: 12px; font-weight: 600; color: var(--fg-muted);
+  background: transparent;
+}
+.pinned-tab:hover { background: var(--bg-subtle); }
+.pinned-tab.active {
+  background: var(--bg-subtle);
+  box-shadow: inset 2px 0 0 var(--accent-emphasis);
+}
+
+/* ─── Tab list ─── */
+.tabs-section {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: 2px 8px; -webkit-app-region: no-drag;
+  scrollbar-width: thin; scrollbar-color: var(--fg-subtle) transparent;
+}
+.tabs-list { display: flex; flex-direction: column; gap: 1px; }
+
+.tab-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all var(--duration-fast) var(--ease-out);
+  color: var(--fg-muted); position: relative;
+  animation: tabAppear 0.2s var(--ease-out);
+  -webkit-app-region: no-drag;
+}
+@keyframes tabAppear {
+  from { opacity: 0; transform: translateY(6px); }
+}
+.tab-item:hover { background: var(--bg-subtle); color: var(--fg-default); }
+.tab-item.active {
+  background: var(--bg-subtle); color: var(--fg-default);
+}
+.tab-item.active::before {
+  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+  width: 2px; background: var(--accent-emphasis);
+  border-radius: 0 2px 2px 0;
+}
+.tab-item.loading .tab-title::after {
+  content: ''; display: inline-block; width: 8px; height: 8px;
+  border: 1.5px solid var(--accent-fg); border-top-color: transparent;
+  border-radius: 50%; margin-left: 6px; vertical-align: middle;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.tab-item.dragging { opacity: 0.4; }
+.tab-item.drag-over { border-top: 2px solid var(--accent-emphasis); }
+
+.tab-favicon { width: 14px; height: 14px; border-radius: 2px; flex-shrink: 0; }
+.tab-title {
+  flex: 1; font-size: var(--text-sm); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.tab-close {
+  width: 18px; height: 18px; border: none; background: none;
+  color: var(--fg-subtle); cursor: pointer; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; line-height: 1; padding: 0;
+  opacity: 0; transition: all var(--duration-fast); flex-shrink: 0;
+}
+.tab-item:hover .tab-close { opacity: 1; }
+.tab-close:hover { background: var(--danger-emphasis); color: #fff; }
+
+/* ─── New tab ─── */
+.new-tab-area { padding: 4px 8px; flex-shrink: 0; -webkit-app-region: no-drag; }
+.new-tab-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 7px 12px;
+  border: 1px dashed var(--border-muted); border-radius: var(--radius-sm);
+  background: none; color: var(--fg-subtle);
+  cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm);
+  transition: all var(--duration-fast);
+}
+.new-tab-btn:hover {
+  border-color: var(--accent-fg); color: var(--accent-fg);
+  background: rgba(88,166,255,0.06);
+}
+
+/* ─── Quick nav ─── */
+.quick-nav {
+  padding: 6px 8px 10px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 1px;
+  -webkit-app-region: no-drag;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 12px; border: none; background: none;
+  color: var(--fg-muted); cursor: pointer; border-radius: var(--radius-sm);
+  font-family: var(--font-sans); font-size: var(--text-sm);
+  transition: all var(--duration-fast); position: relative;
+  text-align: left;
+}
+.nav-item:hover { background: var(--bg-subtle); color: var(--fg-default); }
+.nav-item:active { transform: scale(0.98); }
+.nav-label { flex: 1; }
+.nav-badge {
+  min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 8px; background: var(--danger-fg);
+  color: #fff; font-size: 9px; font-weight: 700;
+  line-height: 16px; text-align: center;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-header">
+  <div class="logo">Git<span>Browser</span></div>
+  <button class="collapse-btn" id="collapse-btn" title="Toggle sidebar">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.823 7.823a.25.25 0 0 1 0 .354l-2.396 2.396A.25.25 0 0 1 4 10.396V5.604a.25.25 0 0 1 .427-.177Z"/><path d="M1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25V1.75C0 .784.784 0 1.75 0ZM1.5 1.75v12.5c0 .138.112.25.25.25H9.5v-13H1.75a.25.25 0 0 0-.25.25ZM11 14.5h3.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25H11Z"/></svg>
+  </button>
+</div>
+
+<!-- Pinned tabs -->
+<div class="pinned-section" id="pinned-section">
+  <div class="section-label">Pinned</div>
+  <div class="pinned-tabs" id="pinned-tabs"></div>
+</div>
+
+<!-- Separator -->
+<div class="separator"></div>
+
+<!-- Tab list -->
+<div class="tabs-section" id="tabs-section">
+  <div class="tabs-list" id="tabs-list"></div>
+</div>
+
+<!-- New tab button -->
+<div class="new-tab-area">
+  <button class="new-tab-btn" id="new-tab-btn">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+    <span id="new-tab-label">New Tab</span>
+  </button>
+</div>
+
+<!-- Separator -->
+<div class="separator"></div>
+
+<!-- Quick nav buttons -->
+<div class="quick-nav" id="quick-nav"></div>
+
+<script>
+const gb = window.gitbrowser;
+const tabsList = document.getElementById('tabs-list');
+const pinnedTabs = document.getElementById('pinned-tabs');
+let currentActiveId = null;
+let pinnedIds = new Set();
+
+// Load pinned state
+try { const p = JSON.parse(localStorage.getItem('pinned_tabs') || '[]'); pinnedIds = new Set(p); } catch {}
+function savePinned() { localStorage.setItem('pinned_tabs', JSON.stringify([...pinnedIds])); }
+
+// ─── Buttons ───
+document.getElementById('new-tab-btn').onclick = () => gb.newTab();
+document.getElementById('collapse-btn').onclick = () => gb.toggleSidebar();
+
+// ─── Quick nav ───
+const NAV_ITEMS = [
+  { id: 'bookmarks', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>', label: 'Bookmarks', action: () => gb.openBookmarks() },
+  { id: 'history', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm.5 4.75a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 .37.65l2.5 1.5a.75.75 0 1 0 .77-1.29L8.5 7.94Z"/></svg>', label: 'History', action: () => gb.openHistory() },
+  { id: 'downloads', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>', label: 'Downloads', action: () => gb.openDownloads() },
+  { id: 'passwords', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 4a4 4 0 0 1 8 0v2h.25c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-5.5C2 6.784 2.784 6 3.75 6H4Zm8.25 3.5h-8.5a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM10.5 6V4a2.5 2.5 0 1 0-5 0v2Z"/></svg>', label: 'Passwords', action: () => gb.openPasswords() },
+  { id: 'extensions', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.5 1.75C7.5.784 8.284 0 9.25 0h5.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.75 9H9.25A1.75 1.75 0 0 1 7.5 7.25Zm1.75-.25a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h5.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM0 9.25C0 8.284.784 7.5 1.75 7.5h5.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 7.25 16.5h-5.5A1.75 1.75 0 0 1 0 14.75Zm1.75-.25a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h5.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM0 1.75C0 .784.784 0 1.75 0h5.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 7.25 9h-5.5A1.75 1.75 0 0 1 0 7.25Zm1.75-.25a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h5.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25Z"/></svg>', label: 'Extensions', action: () => gb.openExtensions() },
+  { id: 'ai', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4.001 4.001 0 0 0-6.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 4.6 8.048 3.486 3.486 0 0 1 2 5.5ZM11 4a.75.75 0 1 0 0 1.5 1.5 1.5 0 0 1 .666 2.844.75.75 0 0 0-.416.672v.352a.75.75 0 0 0 .574.73c1.2.289 2.162 1.2 2.522 2.372a.75.75 0 1 0 1.434-.44 5.01 5.01 0 0 0-2.56-3.012A3 3 0 0 0 11 4Z"/></svg>', label: 'AI', action: () => gb.openAI() },
+  { id: 'github', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>', label: 'GitHub', action: () => gb.openGitHub(), badge: true },
+  { id: 'settings', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.1-.303c.652-.18 1.34.03 1.73.545a8.042 8.042 0 0 1 1.088 1.89c.238.572.1 1.252-.337 1.71l-.812.804a.395.395 0 0 0-.112.29c.013.26.013.52 0 .78a.394.394 0 0 0 .112.29l.812.804c.436.458.575 1.138.337 1.71a8.04 8.04 0 0 1-1.088 1.89c-.39.515-1.078.725-1.73.545l-1.1-.303a.352.352 0 0 0-.3.071 5.834 5.834 0 0 1-.667.386.35.35 0 0 0-.212.224l-.289 1.106c-.169.646-.715 1.196-1.458 1.26a8.28 8.28 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106a.35.35 0 0 0-.212-.224 5.738 5.738 0 0 1-.668-.386.352.352 0 0 0-.299-.071l-1.1.303c-.652.18-1.34-.03-1.73-.545a8.042 8.042 0 0 1-1.088-1.89c-.238-.572-.1-1.252.337-1.71l.812-.804a.395.395 0 0 0 .112-.29 6.046 6.046 0 0 1 0-.78.394.394 0 0 0-.112-.29l-.812-.804c-.436-.458-.575-1.138-.337-1.71a8.04 8.04 0 0 1 1.088-1.89c.39-.515 1.078-.725 1.73-.545l1.1.303a.352.352 0 0 0 .3-.071c.214-.143.437-.272.667-.386a.35.35 0 0 0 .212-.224l.289-1.106C6.01.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.046-.219.29-.411.6-.573.925-.014.028-.042.112.017.182l.812.803c.407.404.63.953.63 1.52s-.223 1.116-.63 1.52l-.812.803c-.059.07-.031.154-.017.182.162.325.354.634.573.925.02.03.086.077.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.16.107.327.204.5.29.449.222.851.628.998 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.03.175-.016.195-.046.219-.29.411-.6.573-.925.014-.028.042-.112-.017-.182l-.812-.803a2.15 2.15 0 0 1-.63-1.52c0-.567.223-1.116.63-1.52l.812-.803c.059-.07.031-.154.017-.182a6.588 6.588 0 0 0-.573-.925c-.02-.03-.086-.077-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.5-.29c-.449-.222-.851-.628-.998-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/></svg>', label: 'Settings', action: () => gb.openSettings() },
+];
+
+function renderQuickNav() {
+  const el = document.getElementById('quick-nav');
+  el.innerHTML = NAV_ITEMS.map(item => `
+    <button class="nav-item" data-id="${item.id}" title="${item.label}">
+      ${item.icon}
+      <span class="nav-label">${item.label}</span>
+      ${item.badge ? '<span class="nav-badge" id="gh-badge" style="display:none"></span>' : ''}
+    </button>
+  `).join('');
+  el.querySelectorAll('.nav-item').forEach(btn => {
+    const item = NAV_ITEMS.find(i => i.id === btn.dataset.id);
+    if (item) btn.onclick = item.action;
+  });
+}
+renderQuickNav();
+
+// ─── Tabs rendering ───
+const loadingTabs = new Set();
+
+gb.onTabsUpdate((data) => {
+  const { tabs: tabList, activeId } = data;
+  currentActiveId = activeId;
+  
+  const pinned = tabList.filter(t => pinnedIds.has(t.id));
+  const regular = tabList.filter(t => !pinnedIds.has(t.id));
+  
+  // Render pinned
+  const pinnedSection = document.getElementById('pinned-section');
+  if (pinned.length > 0) {
+    pinnedSection.style.display = '';
+    pinnedTabs.innerHTML = '';
+    pinned.forEach(t => {
+      const div = document.createElement('div');
+      div.className = 'pinned-tab' + (t.id === activeId ? ' active' : '');
+      div.title = t.title || 'New Tab';
+      if (t.favicon) {
+        div.innerHTML = `<img src="${t.favicon}" width="16" height="16" style="border-radius:2px" onerror="this.parentElement.textContent='${(t.title||'N')[0]}'" />`;
+      } else {
+        div.textContent = (t.title || 'N')[0].toUpperCase();
+      }
+      div.onclick = () => gb.switchTab(t.id);
+      div.oncontextmenu = (e) => { e.preventDefault(); gb.tabContextMenu(t.id); };
+      pinnedTabs.appendChild(div);
+    });
+  } else {
+    pinnedSection.style.display = 'none';
+  }
+  
+  // Render regular tabs
+  tabsList.innerHTML = '';
+  regular.forEach(t => {
+    const div = document.createElement('div');
+    div.className = 'tab-item' + (t.id === activeId ? ' active' : '') + (loadingTabs.has(t.id) ? ' loading' : '');
+    div.dataset.tabId = t.id;
+    
+    let faviconHtml = '';
+    if (t.favicon) {
+      faviconHtml = `<img class="tab-favicon" src="${t.favicon}" onerror="this.style.display='none'" />`;
+    }
+    
+    let title = t.title || 'New Tab';
+    div.innerHTML = `
+      ${faviconHtml}
+      <span class="tab-title">${esc(title)}</span>
+      <button class="tab-close" title="Close">&times;</button>
+    `;
+    
+    div.addEventListener('click', (e) => {
+      if (!e.target.closest('.tab-close')) gb.switchTab(t.id);
+    });
+    div.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      gb.tabContextMenu(t.id);
+    });
+    div.querySelector('.tab-close').addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Animate close
+      div.style.height = div.offsetHeight + 'px';
+      div.style.overflow = 'hidden';
+      requestAnimationFrame(() => {
+        div.style.transition = 'all 0.2s var(--ease-out)';
+        div.style.height = '0';
+        div.style.opacity = '0';
+        div.style.padding = '0 12px';
+        div.style.margin = '0';
+      });
+      setTimeout(() => gb.closeTab(t.id), 200);
+    });
+    
+    // Drag and drop
+    div.draggable = true;
+    div.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', t.id);
+      div.classList.add('dragging');
+    });
+    div.addEventListener('dragend', () => {
+      div.classList.remove('dragging');
+      document.querySelectorAll('.tab-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+    div.addEventListener('dragover', (e) => { e.preventDefault(); div.classList.add('drag-over'); });
+    div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
+    div.addEventListener('drop', (e) => {
+      e.preventDefault();
+      div.classList.remove('drag-over');
+      const fromId = e.dataTransfer.getData('text/plain');
+      if (fromId && t.id && fromId !== t.id) gb.reorderTab(fromId, t.id);
+    });
+    
+    tabsList.appendChild(div);
+  });
+});
+
+gb.onTabLoading((data) => {
+  if (data.loading) loadingTabs.add(data.id);
+  else loadingTabs.delete(data.id);
+});
+
+// GitHub notification badge
+gb.onGhNotifCount((d) => {
+  const badge = document.getElementById('gh-badge');
+  if (!badge) return;
+  const count = d.count || 0;
+  badge.textContent = count > 99 ? '99+' : count;
+  badge.style.display = count > 0 ? '' : 'none';
+});
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// ─── Theme ───
+function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+if (gb) {
+  gb.onThemeChanged((d) => applyTheme(d.theme));
+  gb.getSettings().then(s => {
+    if (s && s.appearance) {
+      let t = s.appearance.theme;
+      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
+      applyTheme(t);
+    }
+  }).catch(() => {});
+}
+
+// ─── Keyboard shortcuts ───
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.key === 't') { e.preventDefault(); gb.newTab(); }
+  if (e.ctrlKey && e.key === 'w') { e.preventDefault(); if (currentActiveId) gb.closeTab(currentActiveId); }
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') { e.preventDefault(); gb.reopenClosedTab(); }
+  if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); gb.nextTab(); }
+  if (e.ctrlKey && e.shiftKey && e.key === 'Tab') { e.preventDefault(); gb.prevTab(); }
+  if (e.ctrlKey && e.key === 'b') { e.preventDefault(); gb.openBookmarks(); }
+  if (e.ctrlKey && e.key === 'h') { e.preventDefault(); gb.openHistory(); }
+  if (e.ctrlKey && e.key === 'j') { e.preventDefault(); gb.openDownloads(); }
+  if (e.ctrlKey && e.key === ',') { e.preventDefault(); gb.openSettings(); }
+  if (e.ctrlKey && e.shiftKey && e.key === 'N') { e.preventDefault(); gb.openPrivateWindow(); }
+});
+
+gb.getTabs();
+</script>
+</body>
+</html>

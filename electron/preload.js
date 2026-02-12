@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   // Fullscreen
   toggleFullscreen: () => ipcRenderer.send('toggle-fullscreen'),
 
+  // Sidebar
+  toggleSidebar: () => ipcRenderer.send('toggle-sidebar'),
+
   // Private mode
   openPrivateWindow: () => ipcRenderer.send('open-private-window'),
 
