@@ -116,7 +116,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   openExtensions: () => ipcRenderer.send('open-extensions'),
 
   // Sidebar quick nav context menu
-  sidebarQuickNavMenu: (navId) => ipcRenderer.send('sidebar-quick-nav-menu', navId),
+  sidebarQuickNavMenu: (navId, x, y) => ipcRenderer.send('sidebar-quick-nav-menu', navId, x, y),
 
   // Navigation from internal pages
   openUrl: (url) => ipcRenderer.send('open-url', url),
