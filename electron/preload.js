@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   reload: () => ipcRenderer.send('reload'),
   reopenClosedTab: () => ipcRenderer.send('reopen-closed-tab'),
   getTabs: () => ipcRenderer.send('get-tabs'),
-  tabContextMenu: (id) => ipcRenderer.send('tab-context-menu', id),
+  tabContextMenu: (id, x, y) => ipcRenderer.send('tab-context-menu', id, x, y),
 
   // Ctrl+Tab / Ctrl+Shift+Tab navigation
   nextTab: () => ipcRenderer.send('next-tab'),
@@ -114,6 +114,12 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   extensionDisable: (id) => ipcRenderer.invoke('extension-disable', { id }),
   extensionSelectPath: () => ipcRenderer.invoke('extension-select-path'),
   openExtensions: () => ipcRenderer.send('open-extensions'),
+
+  // Context menu action from injected glass menu
+  ctxAction: (action, data) => ipcRenderer.send('ctx-menu-action', action, data),
+
+  // Sidebar context menu (when collapsed, show via overlay)
+  sidebarContextMenu: (x, y) => ipcRenderer.send('sidebar-context-menu', x, y),
 
   // Sidebar quick nav context menu
   sidebarQuickNavMenu: (navId, x, y) => ipcRenderer.send('sidebar-quick-nav-menu', navId, x, y),

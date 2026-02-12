@@ -3,6 +3,21 @@ const path = require('path');
 const fs = require('fs');
 const rustBridge = require('./rust-bridge');
 
+// Disable Autofill CDP errors from DevTools
+app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication,AutofillEnableAccountWalletStorage');
+
+// Suppress EPIPE errors that occur when writing to destroyed webContents/sockets
+process.on('uncaughtException', (err) => {
+  if (err && err.code === 'EPIPE') return; // silently ignore
+  // For non-EPIPE errors, log and show dialog
+  console.error('Uncaught exception:', err);
+  dialog.showErrorBox('Error', err?.message || String(err));
+});
+process.on('unhandledRejection', (reason) => {
+  if (reason && reason.code === 'EPIPE') return;
+  console.error('Unhandled rejection:', reason);
+});
+
 // Resolve paths that work both in dev and packaged app
 // In packaged app, extraResources are at process.resourcesPath
 function resolvePath(...segments) {
@@ -96,9 +111,9 @@ function createWindow() {
     const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
     showOverlayContextMenu(toolbarView.webContents, params, sw, 0);
   });
-  sidebarView.webContents.on('context-menu', (e, params) => {
+  sidebarView.webContents.on('context-menu', (e) => {
     e.preventDefault();
-    showOverlayContextMenu(sidebarView.webContents, params, 0, 0);
+    // Custom context menu handled inside sidebar.html
   });
 
   layoutViews();
@@ -165,6 +180,19 @@ function layoutViews() {
 }
 
 // ─── Tab management ───
+
+// For internal pages (gb://...), switch to existing tab if already open
+function openOrSwitchTab(url) {
+  if (url && url.startsWith('gb://') && url !== 'gb://newtab') {
+    for (const [id, tab] of tabs) {
+      if (tab.url === url) {
+        switchTab(id);
+        return;
+      }
+    }
+  }
+  createTab(url);
+}
 
 function createTab(url, activate = true) {
   const id = 'tab-' + (nextTabId++);
@@ -283,6 +311,36 @@ function createTab(url, activate = true) {
   view.webContents.on('context-menu', (e, params) => {
     e.preventDefault();
     buildPageContextMenu(view.webContents, params);
+  });
+
+  // Keyboard shortcuts inside tab views
+  view.webContents.on('before-input-event', (e, input) => {
+    if (input.type !== 'keyDown') return;
+    const ctrl = input.control || input.meta;
+    const shift = input.shift;
+    const key = input.key.toLowerCase();
+
+    if (ctrl && !shift) {
+      if (key === '=' || key === '+') { e.preventDefault(); ipcMain.emit('zoom-in', { sender: null }); }
+      else if (key === '-') { e.preventDefault(); ipcMain.emit('zoom-out', { sender: null }); }
+      else if (key === '0') { e.preventDefault(); ipcMain.emit('zoom-reset', { sender: null }); }
+      else if (key === 't') { e.preventDefault(); createTab('gb://newtab'); }
+      else if (key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId); }
+      else if (key === 'l') { e.preventDefault(); if (toolbarView) toolbarView.webContents.executeJavaScript('document.getElementById("url").focus();document.getElementById("url").select();').catch(() => {}); }
+      else if (key === 'f') { e.preventDefault(); if (toolbarView) toolbarView.webContents.executeJavaScript('toggleFindBar()').catch(() => {}); }
+      else if (key === 'r') { e.preventDefault(); if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.reload(); }
+      else if (key === 'd') { e.preventDefault(); ipcMain.emit('add-bookmark-current', { sender: null }); }
+      else if (key === 'tab') { e.preventDefault(); ipcMain.emit('next-tab', { sender: null }); }
+    }
+    if (ctrl && shift) {
+      if (key === 'tab') { e.preventDefault(); ipcMain.emit('prev-tab', { sender: null }); }
+      else if (key === 't') { e.preventDefault(); ipcMain.emit('reopen-closed-tab', { sender: null }); }
+      else if (key === 'n') { e.preventDefault(); ipcMain.emit('open-private-window', { sender: null }); }
+    }
+    if (!ctrl && !shift) {
+      if (key === 'f5') { e.preventDefault(); if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.reload(); }
+      else if (key === 'f11') { e.preventDefault(); if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen()); }
+    }
   });
 
   // HTML5 fullscreen (e.g. YouTube video player)
@@ -616,7 +674,7 @@ ipcMain.on('win-close', () => {
   if (mainWindow) mainWindow.close();
 });
 
-// Sidebar toggle
+// Sidebar toggle — instant bounds change, CSS handles visual smoothness inside sidebar
 ipcMain.on('toggle-sidebar', () => {
   sidebarCollapsed = !sidebarCollapsed;
   layoutViews();
@@ -656,21 +714,33 @@ ipcMain.on('open-private-window', () => {
   let privHtmlFullscreen = false;
   // Ephemeral partition — no 'persist:' prefix means in-memory only, destroyed when all webContents using it are closed
   const privPartition = 'private-' + Date.now();
+  let privClosing = false;
 
   function privCreateTab(url, activate = true) {
+    if (privClosing || privWin.isDestroyed()) return null;
     const id = 'priv-tab-' + (privNextTabId++);
     const view = new WebContentsView({
-      webPreferences: { contextIsolation: true, partition: privPartition },
+      webPreferences: {
+        contextIsolation: true,
+        partition: privPartition,
+      },
     });
     const tabData = { view, url: url || 'gb://newtab', title: 'New Tab' };
     privTabs.set(id, tabData);
     privTabOrder.push(id);
 
     view.webContents.on('page-title-updated', (_e, title) => {
+      if (privClosing) return;
       if (title.startsWith('__gb_navigate:')) {
         const navUrl = normalizeUrl(title.substring('__gb_navigate:'.length));
         tabData.url = navUrl;
         if (navUrl.startsWith('http://') || navUrl.startsWith('https://')) view.webContents.loadURL(navUrl);
+        else {
+          const pg = INTERNAL_PAGES[navUrl];
+          if (pg) view.webContents.loadFile(path.join(__dirname, 'ui', pg));
+        }
+        if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-url-updated', { id, url: navUrl });
+        privSendTabsUpdate();
         return;
       }
       if (title.startsWith('__gb_newtab:')) { privCreateTab(title.substring('__gb_newtab:'.length)); return; }
@@ -679,11 +749,11 @@ ipcMain.on('open-private-window', () => {
     });
     view.webContents.on('did-navigate', (_e, navUrl) => {
       tabData.url = navUrl;
-      privToolbar.webContents.send('tab-url-updated', { id, url: navUrl });
+      if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-url-updated', { id, url: navUrl });
       privSendTabsUpdate();
     });
-    view.webContents.on('did-start-loading', () => privToolbar.webContents.send('tab-loading', { id, loading: true }));
-    view.webContents.on('did-stop-loading', () => privToolbar.webContents.send('tab-loading', { id, loading: false }));
+    view.webContents.on('did-start-loading', () => { if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-loading', { id, loading: true }); });
+    view.webContents.on('did-stop-loading', () => { if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-loading', { id, loading: false }); });
     view.webContents.on('page-favicon-updated', (_e, favicons) => {
       if (favicons && favicons.length > 0) { tabData.favicon = favicons[0]; privSendTabsUpdate(); }
     });
@@ -702,6 +772,26 @@ ipcMain.on('open-private-window', () => {
       buildPageContextMenu(view.webContents, params);
     });
 
+    // Keyboard shortcuts for private tabs
+    view.webContents.on('before-input-event', (e, input) => {
+      if (input.type !== 'keyDown') return;
+      const ctrl = input.control || input.meta;
+      const shift = input.shift;
+      const key = input.key.toLowerCase();
+      if (ctrl && !shift) {
+        if (key === '=' || key === '+') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() + 0.5); }
+        else if (key === '-') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() - 0.5); }
+        else if (key === '0') { e.preventDefault(); view.webContents.setZoomLevel(0); }
+        else if (key === 't') { e.preventDefault(); privCreateTab('gb://newtab'); }
+        else if (key === 'w') { e.preventDefault(); if (privActiveTabId) privCloseTab(privActiveTabId); }
+        else if (key === 'r') { e.preventDefault(); view.webContents.reload(); }
+      }
+      if (!ctrl && !shift) {
+        if (key === 'f5') { e.preventDefault(); view.webContents.reload(); }
+        if (key === 'f11') { e.preventDefault(); if (privWin && !privWin.isDestroyed()) privWin.setFullScreen(!privWin.isFullScreen()); }
+      }
+    });
+
     const page = INTERNAL_PAGES[url];
     if (page) view.webContents.loadFile(path.join(__dirname, 'ui', page));
     else if (url && (url.startsWith('http://') || url.startsWith('https://'))) view.webContents.loadURL(url);
@@ -713,7 +803,7 @@ ipcMain.on('open-private-window', () => {
   }
 
   function privSwitchTab(id) {
-    if (!privTabs.has(id)) return;
+    if (privClosing || !privTabs.has(id)) return;
     if (privActiveTabId && privTabs.has(privActiveTabId)) {
       privWin.contentView.removeChildView(privTabs.get(privActiveTabId).view);
     }
@@ -725,7 +815,7 @@ ipcMain.on('open-private-window', () => {
   }
 
   function privCloseTab(id) {
-    if (!privTabs.has(id)) return;
+    if (privClosing || !privTabs.has(id)) return;
     const { view } = privTabs.get(id);
     privWin.contentView.removeChildView(view);
     view.webContents.close();
@@ -739,6 +829,7 @@ ipcMain.on('open-private-window', () => {
   }
 
   function privSendTabsUpdate() {
+    if (privClosing || privToolbar.webContents.isDestroyed()) return;
     const list = privTabOrder.map(tid => {
       if (!privTabs.has(tid)) return null;
       const t = privTabs.get(tid);
@@ -748,6 +839,7 @@ ipcMain.on('open-private-window', () => {
   }
 
   function layoutPriv() {
+    if (privClosing || privWin.isDestroyed()) return;
     const { width: w, height: h } = privWin.getContentBounds();
     if (privHtmlFullscreen) {
       privToolbar.setBounds({ x: 0, y: -TOOLBAR_HEIGHT, width: w, height: TOOLBAR_HEIGHT });
@@ -764,6 +856,7 @@ ipcMain.on('open-private-window', () => {
 
   // Handle IPC from private toolbar
   privToolbar.webContents.on('ipc-message', (_e, channel, ...args) => {
+    if (privClosing) return;
     if (channel === 'new-tab') privCreateTab('gb://newtab');
     else if (channel === 'close-tab') privCloseTab(args[0]);
     else if (channel === 'switch-tab') privSwitchTab(args[0]);
@@ -791,8 +884,9 @@ ipcMain.on('open-private-window', () => {
   layoutPriv();
   privWin.on('resize', layoutPriv);
   privWin.on('close', () => {
+    privClosing = true;
     // Clean up all private tabs
-    for (const [, { view }] of privTabs) { try { view.webContents.close(); } catch {} }
+    for (const [, { view }] of privTabs) { try { if (!view.webContents.isDestroyed()) view.webContents.close(); } catch {} }
     privTabs.clear();
     privTabOrder = [];
   });
@@ -860,12 +954,108 @@ ipcMain.handle('reader-extract', async () => {
 });
 
 // Open internal pages as tabs
-ipcMain.on('open-settings', () => createTab('gb://settings'));
-ipcMain.on('open-bookmarks', () => createTab('gb://bookmarks'));
-ipcMain.on('open-history', () => createTab('gb://history'));
-ipcMain.on('open-downloads', () => createTab('gb://downloads'));
-ipcMain.on('open-ai', () => createTab('gb://ai'));
-ipcMain.on('open-github', () => createTab('gb://github'));
+ipcMain.on('open-settings', () => openOrSwitchTab('gb://settings'));
+ipcMain.on('open-bookmarks', () => openOrSwitchTab('gb://bookmarks'));
+ipcMain.on('open-history', () => openOrSwitchTab('gb://history'));
+ipcMain.on('open-downloads', () => openOrSwitchTab('gb://downloads'));
+ipcMain.on('open-ai', () => openOrSwitchTab('gb://ai'));
+ipcMain.on('open-github', () => openOrSwitchTab('gb://github'));
+
+// Sidebar context menu (overlay in tab view when sidebar is collapsed)
+ipcMain.on('sidebar-context-menu', (_e, clientX, clientY) => {
+  if (!activeTabId || !tabs.has(activeTabId)) return;
+  const tabView = tabs.get(activeTabId).view;
+  const tabBounds = tabView.getBounds();
+  const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
+
+  const items = [
+    { label: cmL('tabs.new_tab', 'Новая вкладка'), action: 'sb_new_tab' },
+    { type: 'separator' },
+    { label: cmL('bookmarks.title', 'Закладки'), action: 'sb_bookmarks' },
+    { label: cmL('history.title', 'История'), action: 'sb_history' },
+    { label: cmL('downloads.title', 'Загрузки'), action: 'sb_downloads' },
+    { label: cmL('passwords.title', 'Пароли'), action: 'sb_passwords' },
+    { label: cmL('extensions.title', 'Расширения'), action: 'sb_extensions' },
+    { type: 'separator' },
+    { label: cmL('ai.title', 'AI-ассистент'), action: 'sb_ai' },
+    { label: 'GitHub', action: 'sb_github' },
+    { type: 'separator' },
+    { label: cmL('settings.title', 'Настройки'), action: 'sb_settings' },
+  ];
+
+  const globalX = clientX;
+  const globalY = clientY;
+  const tabLocalX = globalX - tabBounds.x + sw;
+  const tabLocalY = globalY - tabBounds.y;
+  const menuData = JSON.stringify(items);
+
+  tabView.webContents.executeJavaScript(`(function(){
+    ${CLEAR_ALL_OVERLAYS_JS}
+    var style=document.createElement('style');style.id='__gb-sb-ctx-style';
+    style.textContent=\`
+      #__gb-sb-ctx-ov{position:fixed;inset:0;z-index:2147483646;}
+      #__gb-sb-ctx{position:fixed;z-index:2147483647;
+        background:rgba(18,22,30,0.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+        border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:4px;min-width:200px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.45),0 2px 6px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.06);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#e2e8f0;
+        animation:__gbSbIn 0.12s cubic-bezier(0.16,1,0.3,1);user-select:none;-webkit-user-select:none;}
+      @keyframes __gbSbIn{from{opacity:0;transform:scale(0.97)}to{opacity:1;transform:scale(1)}}
+      #__gb-sb-ctx .sbi{display:flex;align-items:center;padding:6px 10px;border-radius:6px;cursor:default;transition:background 0.08s;gap:16px;}
+      #__gb-sb-ctx .sbi:hover{background:rgba(255,255,255,0.07);}
+      #__gb-sb-ctx .sbi-sep{height:1px;background:rgba(255,255,255,0.06);margin:3px 6px;}
+      html.light #__gb-sb-ctx{background:rgba(255,255,255,0.94);border-color:rgba(0,0,0,0.1);color:#1e293b;box-shadow:0 8px 32px rgba(0,0,0,0.1),0 2px 6px rgba(0,0,0,0.05);}
+      html.light #__gb-sb-ctx .sbi:hover{background:rgba(0,0,0,0.05);}
+      html.light #__gb-sb-ctx .sbi-sep{background:rgba(0,0,0,0.07);}
+    \`;
+    document.documentElement.appendChild(style);
+    function closeMenu(){
+      var a=document.getElementById('__gb-sb-ctx-ov');if(a)a.remove();
+      var b=document.getElementById('__gb-sb-ctx');if(b)b.remove();
+      var c=document.getElementById('__gb-sb-ctx-style');if(c)c.remove();
+    }
+    var ov=document.createElement('div');ov.id='__gb-sb-ctx-ov';
+    ov.onclick=function(){closeMenu();};
+    ov.oncontextmenu=function(e){e.preventDefault();closeMenu();};
+    document.documentElement.appendChild(ov);
+    var menu=document.createElement('div');menu.id='__gb-sb-ctx';
+    var items=${menuData};
+    items.forEach(function(it){
+      if(it.type==='separator'){var s=document.createElement('div');s.className='sbi-sep';menu.appendChild(s);return;}
+      var d=document.createElement('div');d.className='sbi';
+      d.textContent=it.label;
+      d.onclick=function(){closeMenu();console.log('__gb_sb_ctx:'+JSON.stringify({action:it.action}));};
+      menu.appendChild(d);
+    });
+    document.documentElement.appendChild(menu);
+    var mx=${tabLocalX},my=${tabLocalY};
+    var r=menu.getBoundingClientRect();
+    if(mx+r.width>window.innerWidth)mx=window.innerWidth-r.width-8;
+    if(my+r.height>window.innerHeight)my=window.innerHeight-r.height-8;
+    if(mx<4)mx=4;if(my<4)my=4;
+    menu.style.left=mx+'px';menu.style.top=my+'px';
+  })();`);
+
+  const sbCtxHandler = (event) => {
+    const message = event.message;
+    if (!message || !message.startsWith('__gb_sb_ctx:')) return;
+    tabView.webContents.removeListener('console-message', sbCtxHandler);
+    try {
+      const { action } = JSON.parse(message.replace('__gb_sb_ctx:', ''));
+      if (action === 'sb_new_tab') createTab('gb://newtab');
+      else if (action === 'sb_bookmarks') openOrSwitchTab('gb://bookmarks');
+      else if (action === 'sb_history') openOrSwitchTab('gb://history');
+      else if (action === 'sb_downloads') openOrSwitchTab('gb://downloads');
+      else if (action === 'sb_passwords') openOrSwitchTab('gb://passwords');
+      else if (action === 'sb_extensions') openOrSwitchTab('gb://extensions');
+      else if (action === 'sb_ai') openOrSwitchTab('gb://ai');
+      else if (action === 'sb_github') openOrSwitchTab('gb://github');
+      else if (action === 'sb_settings') openOrSwitchTab('gb://settings');
+    } catch {}
+  };
+  tabView.webContents.on('console-message', sbCtxHandler);
+  setTimeout(() => { try { tabView.webContents.removeListener('console-message', sbCtxHandler); } catch {} }, 10000);
+});
 
 // Sidebar quick nav context menus (glass style in tab view)
 ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
@@ -924,9 +1114,7 @@ ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
   const menuData = JSON.stringify(items);
 
   tabView.webContents.executeJavaScript(`(function(){
-    var old=document.getElementById('__gb-ctx');if(old)old.remove();
-    var oldS=document.getElementById('__gb-ctx-style');if(oldS)oldS.remove();
-    var oldOv=document.getElementById('__gb-ctx-ov');if(oldOv)oldOv.remove();
+    ${CLEAR_ALL_OVERLAYS_JS}
 
     var style=document.createElement('style');style.id='__gb-ctx-style';
     style.textContent=\`
@@ -999,11 +1187,11 @@ ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
     } catch {}
   };
   tabView.webContents.on('console-message', navHandler);
-  setTimeout(() => tabView.webContents.removeListener('console-message', navHandler), 10000);
+  setTimeout(() => { try { tabView.webContents.removeListener('console-message', navHandler); } catch {} }, 10000);
 });
 
 function handleNavAction(action, data) {
-  if (action === 'nav_open') createTab(data);
+  if (action === 'nav_open') openOrSwitchTab(data);
   else if (action === 'nav_bookmark_add') {
     if (activeTabId && tabs.has(activeTabId)) {
       const t = tabs.get(activeTabId);
@@ -1014,29 +1202,41 @@ function handleNavAction(action, data) {
   else if (action === 'nav_password_lock') rustBridge.call('password.lock', {}).catch(() => {});
 }
 
+// ─── Page context menu state (for IPC-based glass menu) ───
+let _pageCtxWc = null;
+let _pageCtxParams = null;
+let _pageCtxConsoleHandler = null;
+
 // ─── Toolbar "More" menu ───
+let _prevMoreHandler = null;
+let _prevMoreWc = null;
 ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
   if (!activeTabId || !tabs.has(activeTabId)) return;
+  // Clean up previous listener to prevent duplicate handling
+  if (_prevMoreHandler && _prevMoreWc) {
+    try { _prevMoreWc.removeListener('console-message', _prevMoreHandler); } catch {}
+    _prevMoreHandler = null; _prevMoreWc = null;
+  }
 
   const items = [
-    { label: cmL('toolbar.new_tab', 'Новая вкладка'), accel: 'Ctrl+T', action: 'nav_open', data: 'gb://newtab', icon: '⊕' },
-    { label: cmL('toolbar.private_window', 'Приватное окно'), accel: 'Ctrl+Shift+N', action: 'more_private', icon: '🕶' },
+    { label: cmL('toolbar.new_tab', 'Новая вкладка'), accel: 'Ctrl+T', action: 'nav_open', data: 'gb://newtab', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>' },
+    { label: cmL('toolbar.private_window', 'Приватное окно'), accel: 'Ctrl+Shift+N', action: 'more_private', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M.143 2.31a.75.75 0 0 1 1.047-.167l14.5 10.5a.75.75 0 1 1-.88 1.214l-2.248-1.628C11.346 13.19 9.792 13.75 8 13.75c-4.706 0-7.5-4.25-7.5-5.75 0-.85.99-2.57 2.727-3.88L.976 2.357a.75.75 0 0 1-.833-1.047ZM4.09 4.97C2.6 6.05 1.75 7.38 1.75 8c0 .718 1.842 4.25 6.25 4.25 1.34 0 2.498-.38 3.438-.96L9.978 10.2A2.75 2.75 0 0 1 6.3 6.536L4.09 4.97ZM8 2.25c.94 0 1.81.18 2.6.47a.75.75 0 0 1-.5 1.415A6.7 6.7 0 0 0 8 3.75c-.94 0-1.76.18-2.46.46l-.01-.01C6.24 3.68 7.08 2.25 8 2.25Zm4.39 3.07a.75.75 0 0 1 1.046.2c.844 1.18 1.314 2.33 1.314 2.98 0 .47-.26 1.15-.76 1.89a.75.75 0 0 1-1.24-.84c.38-.56.5-.96.5-1.05 0-.28-.32-1.12-1.06-2.13a.75.75 0 0 1 .2-1.05Z"/></svg>' },
     { type: 'separator' },
-    { label: cmL('toolbar.find', 'Найти на странице'), accel: 'Ctrl+F', action: 'more_find', icon: '🔍' },
-    { label: cmL('toolbar.zoom_in', 'Увеличить'), accel: 'Ctrl++', action: 'more_zoom_in', icon: '＋' },
-    { label: cmL('toolbar.zoom_out', 'Уменьшить'), accel: 'Ctrl+-', action: 'more_zoom_out', icon: '－' },
-    { label: cmL('toolbar.zoom_reset', 'Сбросить масштаб'), accel: 'Ctrl+0', action: 'more_zoom_reset', icon: '⊙' },
+    { label: cmL('toolbar.find', 'Найти на странице'), accel: 'Ctrl+F', action: 'more_find', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>' },
+    { label: cmL('toolbar.zoom_in', 'Увеличить'), accel: 'Ctrl++', action: 'more_zoom_in', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>' },
+    { label: cmL('toolbar.zoom_out', 'Уменьшить'), accel: 'Ctrl+-', action: 'more_zoom_out', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2 7.75A.75.75 0 0 1 2.75 7h10a.75.75 0 0 1 0 1.5h-10A.75.75 0 0 1 2 7.75Z"/></svg>' },
+    { label: cmL('toolbar.zoom_reset', 'Сбросить масштаб'), accel: 'Ctrl+0', action: 'more_zoom_reset', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 1.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11Z"/></svg>' },
     { type: 'separator' },
-    { label: cmL('toolbar.fullscreen', 'Полный экран'), accel: 'F11', action: 'more_fullscreen', icon: '⛶' },
-    { label: cmL('toolbar.reader_mode', 'Режим чтения'), action: 'more_reader', icon: '📖' },
+    { label: cmL('toolbar.fullscreen', 'Полный экран'), accel: 'F11', action: 'more_fullscreen', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 10a.75.75 0 0 1 .75.75v2.5c0 .138.112.25.25.25h2.5a.75.75 0 0 1 0 1.5h-2.5A1.75 1.75 0 0 1 1 13.25v-2.5a.75.75 0 0 1 .75-.75Zm12.5 0a.75.75 0 0 1 .75.75v2.5A1.75 1.75 0 0 1 13.25 15h-2.5a.75.75 0 0 1 0-1.5h2.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 .75-.75ZM2.75 1h2.5a.75.75 0 0 1 0 1.5h-2.5a.25.25 0 0 0-.25.25v2.5a.75.75 0 0 1-1.5 0v-2.5C1 1.784 1.784 1 2.75 1Zm10.5 0C14.216 1 15 1.784 15 2.75v2.5a.75.75 0 0 1-1.5 0v-2.5a.25.25 0 0 0-.25-.25h-2.5a.75.75 0 0 1 0-1.5h2.5Z"/></svg>' },
+    { label: cmL('toolbar.reader_mode', 'Режим чтения'), action: 'more_reader', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25ZM1.75 1.5a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM3.5 4.75a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75Zm.75 2.75a.75.75 0 0 0 0 1.5h7.5a.75.75 0 0 0 0-1.5h-7.5Zm0 3.5a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5h-4.5Z"/></svg>' },
     { type: 'separator' },
-    { label: cmL('bookmarks.title', 'Закладки'), accel: 'Ctrl+B', action: 'nav_open', data: 'gb://bookmarks', icon: '★' },
-    { label: cmL('history.title', 'История'), accel: 'Ctrl+H', action: 'nav_open', data: 'gb://history', icon: '⏱' },
-    { label: cmL('downloads.title', 'Загрузки'), action: 'nav_open', data: 'gb://downloads', icon: '↓' },
-    { label: cmL('passwords.title', 'Пароли'), action: 'nav_open', data: 'gb://passwords', icon: '🔒' },
-    { label: cmL('extensions.title', 'Расширения'), action: 'nav_open', data: 'gb://extensions', icon: '⚙' },
+    { label: cmL('bookmarks.title', 'Закладки'), accel: 'Ctrl+B', action: 'nav_open', data: 'gb://bookmarks', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>' },
+    { label: cmL('history.title', 'История'), accel: 'Ctrl+H', action: 'nav_open', data: 'gb://history', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm.5 4.75a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 .37.65l2.5 1.5a.75.75 0 1 0 .77-1.29L8.5 7.94Z"/></svg>' },
+    { label: cmL('downloads.title', 'Загрузки'), action: 'nav_open', data: 'gb://downloads', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>' },
+    { label: cmL('passwords.title', 'Пароли'), action: 'nav_open', data: 'gb://passwords', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 4a4 4 0 0 1 8 0v2h.25c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-5.5C2 6.784 2.784 6 3.75 6H4Zm8.25 3.5h-8.5a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM10.5 6V4a2.5 2.5 0 1 0-5 0v2Z"/></svg>' },
+    { label: cmL('extensions.title', 'Расширения'), action: 'nav_open', data: 'gb://extensions', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 4.25a2.25 2.25 0 0 1 4.5 0 .75.75 0 0 0 .75.75h2.5c.14 0 .25.11.25.25v2.5a.75.75 0 0 0 .75.75 2.25 2.25 0 0 1 0 4.5.75.75 0 0 0-.75.75v2.5a.25.25 0 0 1-.25.25h-2.5a.75.75 0 0 1-.75-.75 2.25 2.25 0 0 0-4.5 0 .75.75 0 0 1-.75.75H2.25a.25.25 0 0 1-.25-.25v-2.5a.75.75 0 0 0-.75-.75 2.25 2.25 0 0 1 0-4.5.75.75 0 0 0 .75-.75v-2.5c0-.14.11-.25.25-.25h2.5a.75.75 0 0 0 .75-.75z"/></svg>' },
     { type: 'separator' },
-    { label: cmL('settings.title', 'Настройки'), accel: 'Ctrl+,', action: 'nav_open', data: 'gb://settings', icon: '⚙' },
+    { label: cmL('settings.title', 'Настройки'), accel: 'Ctrl+,', action: 'nav_open', data: 'gb://settings', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.1-.303c.652-.18 1.34.03 1.73.545a8.042 8.042 0 0 1 1.088 1.89c.238.572.1 1.252-.337 1.71l-.812.804a.395.395 0 0 0-.112.29c.013.26.013.52 0 .78a.394.394 0 0 0 .112.29l.812.804c.436.458.575 1.138.337 1.71a8.04 8.04 0 0 1-1.088 1.89c-.39.515-1.078.725-1.73.545l-1.1-.303a.352.352 0 0 0-.3.071 5.834 5.834 0 0 1-.667.386.35.35 0 0 0-.212.224l-.289 1.106c-.169.646-.715 1.196-1.458 1.26a8.28 8.28 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106a.35.35 0 0 0-.212-.224 5.738 5.738 0 0 1-.668-.386.352.352 0 0 0-.299-.071l-1.1.303c-.652.18-1.34-.03-1.73-.545a8.042 8.042 0 0 1-1.088-1.89c-.238-.572-.1-1.252.337-1.71l.812-.804a.395.395 0 0 0 .112-.29 6.046 6.046 0 0 1 0-.78.394.394 0 0 0-.112-.29l-.812-.804c-.436-.458-.575-1.138-.337-1.71a8.04 8.04 0 0 1 1.088-1.89c.39-.515 1.078-.725 1.73-.545l1.1.303a.352.352 0 0 0 .3-.071c.214-.143.437-.272.667-.386a.35.35 0 0 0 .212-.224l.289-1.106C6.01.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.046-.219.29-.411.6-.573.925-.014.028-.042.112.017.182l.812.803c.407.404.63.953.63 1.52s-.223 1.116-.63 1.52l-.812.803c-.059.07-.031.154-.017.182.162.325.354.634.573.925.02.03.086.077.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.16.107.327.204.5.29.449.222.851.628.998 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.03.175-.016.195-.046.219-.29.411-.6.573-.925.014-.028.042-.112-.017-.182l-.812-.803a2.15 2.15 0 0 1-.63-1.52c0-.567.223-1.116.63-1.52l.812-.803c.059-.07.031-.154.017-.182a6.588 6.588 0 0 0-.573-.925c-.02-.03-.086-.077-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.5-.29c-.449-.222-.851-.628-.998-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/></svg>' },
   ];
 
   const tabView = tabs.get(activeTabId).view;
@@ -1049,9 +1249,7 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
   const menuData = JSON.stringify(items);
 
   tabView.webContents.executeJavaScript(`(function(){
-    var old=document.getElementById('__gb-ctx');if(old)old.remove();
-    var oldS=document.getElementById('__gb-ctx-style');if(oldS)oldS.remove();
-    var oldOv=document.getElementById('__gb-ctx-ov');if(oldOv)oldOv.remove();
+    ${CLEAR_ALL_OVERLAYS_JS}
 
     var style=document.createElement('style');style.id='__gb-ctx-style';
     style.textContent=\`
@@ -1072,7 +1270,7 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
       #__gb-ctx .ctx-item{display:flex;align-items:center;
         padding:7px 12px;border-radius:8px;cursor:pointer;transition:background 0.1s,color 0.1s;gap:10px;}
       #__gb-ctx .ctx-item:hover{background:rgba(96,165,250,0.12);color:#fff;}
-      #__gb-ctx .ctx-icon{width:20px;text-align:center;font-size:14px;flex-shrink:0;opacity:0.6;}
+      #__gb-ctx .ctx-icon{width:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;opacity:0.5;}
       #__gb-ctx .ctx-item:hover .ctx-icon{opacity:1;}
       #__gb-ctx .ctx-label{flex:1;}
       #__gb-ctx .ctx-accel{font-size:11px;color:rgba(255,255,255,0.3);font-weight:500;margin-left:auto;}
@@ -1130,7 +1328,7 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
     tabView.webContents.removeListener('console-message', moreHandler);
     try {
       const { action, data } = JSON.parse(message.replace('__gb_more_ctx:', ''));
-      if (action === 'nav_open') createTab(data);
+      if (action === 'nav_open') openOrSwitchTab(data);
       else if (action === 'more_private') { ipcMain.emit('open-private-window', { sender: null }); }
       else if (action === 'more_find') { if (toolbarView) toolbarView.webContents.executeJavaScript('toggleFindBar()').catch(() => {}); }
       else if (action === 'more_zoom_in') { if (activeTabId && tabs.has(activeTabId)) { const wc = tabs.get(activeTabId).view.webContents; wc.setZoomLevel(wc.getZoomLevel() + 1); sendToToolbar('zoom-changed', { level: wc.getZoomLevel() }); } }
@@ -1143,8 +1341,10 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
       }
     } catch {}
   };
+  _prevMoreHandler = moreHandler;
+  _prevMoreWc = tabView.webContents;
   tabView.webContents.on('console-message', moreHandler);
-  setTimeout(() => tabView.webContents.removeListener('console-message', moreHandler), 10000);
+  setTimeout(() => { try { tabView.webContents.removeListener('console-message', moreHandler); } catch {} if (_prevMoreHandler === moreHandler) { _prevMoreHandler = null; _prevMoreWc = null; } }, 10000);
 });
 
 ipcMain.on('navigate', (_e, input) => {
@@ -1271,6 +1471,14 @@ function cmL(key, fallback) {
 }
 
 // ─── Overlay context menu for toolbar/sidebar ───
+// JS snippet to remove all injected overlay menus from a page (call before injecting new one)
+const CLEAR_ALL_OVERLAYS_JS = `
+  ['__gb-sb-ctx','__gb-sb-ctx-style','__gb-sb-ctx-ov',
+   '__gb-ctx','__gb-ctx-style','__gb-ctx-ov',
+   '__gb-page-ctx','__gb-page-ctx-style','__gb-page-ctx-ov','__gb-page-ctx-sub']
+  .forEach(function(id){var e=document.getElementById(id);if(e)e.remove();});
+`;
+
 // Shows a custom glass context menu in the active tab view (which is large enough)
 // by converting coordinates from the source view to the tab view coordinate space.
 function showOverlayContextMenu(sourceWc, params, viewOffsetX, viewOffsetY) {
@@ -1313,9 +1521,7 @@ function showOverlayContextMenu(sourceWc, params, viewOffsetX, viewOffsetY) {
 
   // Inject the glass context menu into the active tab view
   tabView.webContents.executeJavaScript(`(function(){
-    var old=document.getElementById('__gb-ctx');if(old)old.remove();
-    var oldS=document.getElementById('__gb-ctx-style');if(oldS)oldS.remove();
-    var oldOv=document.getElementById('__gb-ctx-ov');if(oldOv)oldOv.remove();
+    ${CLEAR_ALL_OVERLAYS_JS}
 
     var style=document.createElement('style');style.id='__gb-ctx-style';
     style.textContent=\`
@@ -1398,7 +1604,7 @@ function showOverlayContextMenu(sourceWc, params, viewOffsetX, viewOffsetY) {
     } catch {}
   };
   tabView.webContents.on('console-message', overlayHandler);
-  setTimeout(() => tabView.webContents.removeListener('console-message', overlayHandler), 10000);
+  setTimeout(() => { try { tabView.webContents.removeListener('console-message', overlayHandler); } catch {} }, 10000);
 }
 
 // Native Electron Menu for toolbar/sidebar (not clipped by view bounds)
@@ -1428,11 +1634,18 @@ function buildNativeContextMenu(wc, params) {
 }
 
 function buildPageContextMenu(wc, params) {
+  // Store context for IPC handler
+  _pageCtxWc = wc;
+  _pageCtxParams = params;
+  // Clean up previous console handler
+  if (_pageCtxConsoleHandler && wc && !wc.isDestroyed()) {
+    try { wc.removeListener('console-message', _pageCtxConsoleHandler); } catch {}
+  }
+
   const hasSelection = params.selectionText && params.selectionText.trim().length > 0;
   const selText = (params.selectionText || '').trim();
   const isEditable = params.isEditable;
 
-  // Build menu items as JSON array for injection
   const items = [];
 
   if (hasSelection) {
@@ -1457,18 +1670,19 @@ function buildPageContextMenu(wc, params) {
     items.push({ label: cmL('context_menu.open_image_new_tab', 'Открыть изображение в новой вкладке'), action: 'openImageTab', data: params.srcURL });
   }
 
+  // AI submenu items
+  let aiSub = [];
   if (hasSelection && selText.length >= 2) {
-    items.push({ type: 'separator' });
-    items.push({ label: cmL('context_menu.ai', 'AI'), submenu: [
-      { label: cmL('context_menu.fix_errors', 'Исправить ошибки'), action: 'ai', data: 'fix' },
-      { label: cmL('context_menu.rephrase', 'Перефразировать'), action: 'ai', data: 'rephrase' },
+    aiSub = [
+      { label: cmL('context_menu.fix_errors', 'Исправить ошибки'), action: 'ai', data: JSON.stringify({ type: 'fix', text: selText }) },
+      { label: cmL('context_menu.rephrase', 'Перефразировать'), action: 'ai', data: JSON.stringify({ type: 'rephrase', text: selText }) },
       { type: 'separator' },
-      { label: cmL('context_menu.translate_en', 'Перевести на English'), action: 'ai', data: 'translate_en' },
-      { label: cmL('context_menu.translate_ru', 'Перевести на Русский'), action: 'ai', data: 'translate_ru' },
+      { label: cmL('context_menu.translate_en', 'Перевести на English'), action: 'ai', data: JSON.stringify({ type: 'translate_en', text: selText }) },
+      { label: cmL('context_menu.translate_ru', 'Перевести на Русский'), action: 'ai', data: JSON.stringify({ type: 'translate_ru', text: selText }) },
       { type: 'separator' },
-      { label: cmL('context_menu.summarize', 'Резюмировать'), action: 'ai', data: 'summarize' },
-      { label: cmL('context_menu.explain', 'Объяснить'), action: 'ai', data: 'explain' },
-    ]});
+      { label: cmL('context_menu.summarize', 'Резюмировать'), action: 'ai', data: JSON.stringify({ type: 'summarize', text: selText }) },
+      { label: cmL('context_menu.explain', 'Объяснить'), action: 'ai', data: JSON.stringify({ type: 'explain', text: selText }) },
+    ];
   }
 
   if (process.argv.includes('--dev')) {
@@ -1477,141 +1691,177 @@ function buildPageContextMenu(wc, params) {
   }
 
   const menuData = JSON.stringify(items);
-  const selTextEsc = JSON.stringify(selText);
-  const x = params.x;
-  const y = params.y;
+  const aiSubData = JSON.stringify(aiSub);
+  const aiLabel = JSON.stringify(cmL('context_menu.ai', 'AI'));
+  const mx = params.x;
+  const my = params.y;
 
-  // Inject custom glass context menu
+  // Inject glass-style context menu directly into the page
+  if (wc.isDestroyed()) return;
   wc.executeJavaScript(`(function(){
-    // Remove existing
-    var old=document.getElementById('__gb-ctx');if(old)old.remove();
-    var oldS=document.getElementById('__gb-ctx-style');if(oldS)oldS.remove();
-    var oldOv=document.getElementById('__gb-ctx-ov');if(oldOv)oldOv.remove();
+    ${CLEAR_ALL_OVERLAYS_JS}
 
-    var style=document.createElement('style');style.id='__gb-ctx-style';
+    var style=document.createElement('style');style.id='__gb-page-ctx-style';
     style.textContent=\`
-      #__gb-ctx-ov{position:fixed;inset:0;z-index:2147483646;}
-      #__gb-ctx{position:fixed;z-index:2147483647;
+      #__gb-page-ctx-ov{position:fixed;inset:0;z-index:2147483646;}
+      .__gbp{position:fixed;z-index:2147483647;
         background:rgba(18,22,30,0.92);
         backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
-        border:1px solid rgba(255,255,255,0.08);border-radius:12px;
-        padding:6px;min-width:200px;
-        box-shadow:0 12px 48px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);
+        border:1px solid rgba(255,255,255,0.08);border-radius:10px;
+        padding:4px;min-width:200px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.45),0 2px 6px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.06);
         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#e2e8f0;
-        animation:__gbCtxIn 0.15s cubic-bezier(0.16,1,0.3,1);
+        animation:__gbPCtxIn 0.12s cubic-bezier(0.16,1,0.3,1);
         user-select:none;-webkit-user-select:none;}
-      @keyframes __gbCtxIn{from{opacity:0;transform:scale(0.96) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
-      #__gb-ctx .ctx-item{display:flex;align-items:center;justify-content:space-between;
-        padding:7px 12px;border-radius:8px;cursor:pointer;transition:background 0.1s,color 0.1s;gap:24px;}
-      #__gb-ctx .ctx-item:hover{background:rgba(96,165,250,0.12);color:#fff;}
-      #__gb-ctx .ctx-item.disabled{opacity:0.4;pointer-events:none;}
-      #__gb-ctx .ctx-accel{font-size:11px;color:rgba(255,255,255,0.3);font-weight:500;}
-      #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(255,255,255,0.5);}
-      #__gb-ctx .ctx-sep{height:1px;background:rgba(255,255,255,0.06);margin:4px 8px;}
-      #__gb-ctx .ctx-sub{position:relative;}
-      #__gb-ctx .ctx-sub .ctx-arrow{font-size:10px;color:rgba(255,255,255,0.3);margin-left:8px;}
-      #__gb-ctx .ctx-submenu{display:none;position:absolute;left:100%;top:-6px;
-        background:rgba(18,22,30,0.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
-        border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:6px;min-width:180px;
-        box-shadow:0 12px 48px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);
-        animation:__gbCtxIn 0.12s cubic-bezier(0.16,1,0.3,1);}
-      #__gb-ctx .ctx-sub:hover .ctx-submenu{display:block;}
+      @keyframes __gbPCtxIn{from{opacity:0;transform:scale(0.97)}to{opacity:1;transform:scale(1)}}
+      .__gbp .pci{display:flex;align-items:center;justify-content:space-between;
+        padding:6px 10px;border-radius:6px;cursor:default;transition:background 0.08s;gap:16px;}
+      .__gbp .pci:hover{background:rgba(255,255,255,0.07);}
+      .__gbp .pci.disabled{opacity:0.35;pointer-events:none;}
+      .__gbp .pci-label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+      .__gbp .pci-accel{font-size:11px;color:rgba(255,255,255,0.25);font-weight:500;flex-shrink:0;}
+      .__gbp .pci:hover .pci-accel{color:rgba(255,255,255,0.4);}
+      .__gbp .pci-arrow{font-size:10px;color:rgba(255,255,255,0.3);margin-left:4px;}
+      .__gbp .pci-sep{height:1px;background:rgba(255,255,255,0.06);margin:3px 6px;}
+      #__gb-page-ctx-sub{animation:__gbPCtxIn 0.1s cubic-bezier(0.16,1,0.3,1);}
       @media (prefers-color-scheme:light){
-        #__gb-ctx,#__gb-ctx .ctx-submenu{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.08);color:#1e293b;
-          box-shadow:0 12px 48px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.8);}
-        #__gb-ctx .ctx-item:hover{background:rgba(37,99,235,0.1);}
-        #__gb-ctx .ctx-accel{color:rgba(0,0,0,0.3);}
-        #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(0,0,0,0.5);}
-        #__gb-ctx .ctx-sep{background:rgba(0,0,0,0.06);}
-        #__gb-ctx .ctx-sub .ctx-arrow{color:rgba(0,0,0,0.3);}
+        .__gbp{background:rgba(255,255,255,0.94);border-color:rgba(0,0,0,0.1);color:#1e293b;
+          box-shadow:0 8px 32px rgba(0,0,0,0.1),0 2px 6px rgba(0,0,0,0.05),inset 0 1px 0 rgba(255,255,255,0.8);}
+        .__gbp .pci:hover{background:rgba(0,0,0,0.05);}
+        .__gbp .pci-accel{color:rgba(0,0,0,0.25);}
+        .__gbp .pci:hover .pci-accel{color:rgba(0,0,0,0.4);}
+        .__gbp .pci-arrow{color:rgba(0,0,0,0.3);}
+        .__gbp .pci-sep{background:rgba(0,0,0,0.07);}
       }
-      html.light #__gb-ctx,html.light #__gb-ctx .ctx-submenu{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.08);color:#1e293b;
-        box-shadow:0 12px 48px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.8);}
-      html.light #__gb-ctx .ctx-item:hover{background:rgba(37,99,235,0.1);}
-      html.light #__gb-ctx .ctx-accel{color:rgba(0,0,0,0.3);}
-      html.light #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(0,0,0,0.5);}
-      html.light #__gb-ctx .ctx-sep{background:rgba(0,0,0,0.06);}
-      html.light #__gb-ctx .ctx-sub .ctx-arrow{color:rgba(0,0,0,0.3);}
+      html.light .__gbp{background:rgba(255,255,255,0.94);border-color:rgba(0,0,0,0.1);color:#1e293b;
+        box-shadow:0 8px 32px rgba(0,0,0,0.1),0 2px 6px rgba(0,0,0,0.05),inset 0 1px 0 rgba(255,255,255,0.8);}
+      html.light .__gbp .pci:hover{background:rgba(0,0,0,0.05);}
+      html.light .__gbp .pci-accel{color:rgba(0,0,0,0.25);}
+      html.light .__gbp .pci:hover .pci-accel{color:rgba(0,0,0,0.4);}
+      html.light .__gbp .pci-arrow{color:rgba(0,0,0,0.3);}
+      html.light .__gbp .pci-sep{background:rgba(0,0,0,0.07);}
     \`;
     document.documentElement.appendChild(style);
 
-    // Overlay to catch clicks outside
-    var ov=document.createElement('div');ov.id='__gb-ctx-ov';
-    ov.onclick=function(){ov.remove();menu.remove();style.remove();};
-    ov.oncontextmenu=function(e){e.preventDefault();ov.remove();menu.remove();style.remove();};
+    function closeMenu(){
+      var ov2=document.getElementById('__gb-page-ctx-ov');if(ov2)ov2.remove();
+      var m2=document.getElementById('__gb-page-ctx');if(m2)m2.remove();
+      var s2=document.getElementById('__gb-page-ctx-style');if(s2)s2.remove();
+      var sb=document.getElementById('__gb-page-ctx-sub');if(sb)sb.remove();
+    }
+
+    var _prevFocus=document.activeElement;
+    var _prevSelStart=null,_prevSelEnd=null;
+    if(_prevFocus&&(_prevFocus.tagName==='INPUT'||_prevFocus.tagName==='TEXTAREA')){
+      _prevSelStart=_prevFocus.selectionStart;_prevSelEnd=_prevFocus.selectionEnd;
+    }
+
+    var hasIpc=!!(window.gitbrowser&&window.gitbrowser.ctxAction);
+    function doAction(act,dat){
+      closeMenu();
+      if(_prevFocus&&_prevFocus.focus){
+        _prevFocus.focus();
+        if(_prevSelStart!==null&&(_prevFocus.tagName==='INPUT'||_prevFocus.tagName==='TEXTAREA')){
+          try{_prevFocus.setSelectionRange(_prevSelStart,_prevSelEnd);}catch(e){}
+        }
+      }
+      // Small delay to let focus restore before IPC triggers clipboard ops
+      setTimeout(function(){
+        if(hasIpc){window.gitbrowser.ctxAction(act,dat);}
+        else{console.log('__gb_page_ctx:'+JSON.stringify({action:act,data:dat}));}
+      },50);
+    }
+
+    var ov=document.createElement('div');ov.id='__gb-page-ctx-ov';
+    ov.onclick=function(){closeMenu();};
+    ov.oncontextmenu=function(e){e.preventDefault();closeMenu();};
     document.documentElement.appendChild(ov);
 
-    var menu=document.createElement('div');menu.id='__gb-ctx';
+    var menu=document.createElement('div');menu.id='__gb-page-ctx';
+    menu.className='__gbp';
     var items=${menuData};
+    var aiSub=${aiSubData};
+    var aiLabel=${aiLabel};
 
-    function buildItems(container,list){
-      list.forEach(function(it){
-        if(it.type==='separator'){var s=document.createElement('div');s.className='ctx-sep';container.appendChild(s);return;}
-        if(it.submenu){
-          var sub=document.createElement('div');sub.className='ctx-item ctx-sub';
-          sub.innerHTML=it.label+'<span class="ctx-arrow">▶</span>';
-          var sm=document.createElement('div');sm.className='ctx-submenu';
-          buildItems(sm,it.submenu);
-          sub.appendChild(sm);
-          container.appendChild(sub);
-          return;
-        }
-        var d=document.createElement('div');d.className='ctx-item'+(it.disabled?' disabled':'');
-        d.innerHTML=it.label+(it.accel?'<span class="ctx-accel">'+it.accel+'</span>':'');
-        d.dataset.action=it.action||'';
-        d.dataset.data=it.data||'';
-        d.onclick=function(){
-          ov.remove();menu.remove();style.remove();
-          var a=this.dataset.action,dd=this.dataset.data;
-          if(a==='copy')document.execCommand('copy');
-          else if(a==='cut')document.execCommand('cut');
-          else if(a==='paste')document.execCommand('paste');
-          else if(a==='selectAll')document.execCommand('selectAll');
-          else{
-            // Send action to main process via console message
-            console.log('__gb_ctx:'+JSON.stringify({action:a,data:dd}));
-          }
-        };
-        container.appendChild(d);
-      });
+    items.forEach(function(it){
+      if(it.type==='separator'){var s=document.createElement('div');s.className='pci-sep';menu.appendChild(s);return;}
+      var d=document.createElement('div');d.className='pci'+(it.disabled?' disabled':'');
+      d.innerHTML='<span class="pci-label">'+it.label+'</span>'+(it.accel?'<span class="pci-accel">'+it.accel+'</span>':'');
+      d.onclick=function(){doAction(it.action||'',it.data||'');};
+      menu.appendChild(d);
+    });
+
+    if(aiSub.length>0){
+      var sep=document.createElement('div');sep.className='pci-sep';menu.appendChild(sep);
+      var aiRow=document.createElement('div');aiRow.className='pci';
+      aiRow.innerHTML='<span class="pci-label">'+aiLabel+'</span><span class="pci-arrow">&#9656;</span>';
+      var subTimer=null;
+      function showAiSub(){
+        clearTimeout(subTimer);
+        var oldSub=document.getElementById('__gb-page-ctx-sub');if(oldSub)oldSub.remove();
+        var sub=document.createElement('div');sub.id='__gb-page-ctx-sub';sub.className='__gbp';
+        aiSub.forEach(function(si){
+          if(si.type==='separator'){var ss=document.createElement('div');ss.className='pci-sep';sub.appendChild(ss);return;}
+          var sd=document.createElement('div');sd.className='pci';
+          sd.innerHTML='<span class="pci-label">'+si.label+'</span>';
+          sd.onclick=function(){doAction(si.action||'',si.data||'');};
+          sub.appendChild(sd);
+        });
+        document.documentElement.appendChild(sub);
+        var mr=menu.getBoundingClientRect();var sr=sub.getBoundingClientRect();
+        var sx=mr.right+4,sy=aiRow.getBoundingClientRect().top;
+        if(sx+sr.width>window.innerWidth)sx=mr.left-sr.width-4;
+        if(sy+sr.height>window.innerHeight)sy=window.innerHeight-sr.height-8;
+        if(sy<4)sy=4;
+        sub.style.left=sx+'px';sub.style.top=sy+'px';
+        sub.onmouseenter=function(){clearTimeout(subTimer);};
+        sub.onmouseleave=function(){subTimer=setTimeout(function(){sub.remove();},200);};
+      }
+      aiRow.onmouseenter=function(){showAiSub();};
+      aiRow.onmouseleave=function(){subTimer=setTimeout(function(){var s=document.getElementById('__gb-page-ctx-sub');if(s)s.remove();},200);};
+      aiRow.onclick=function(){showAiSub();};
+      menu.appendChild(aiRow);
     }
-    buildItems(menu,items);
+
     document.documentElement.appendChild(menu);
 
-    // Position: clamp to viewport (ensure menu never clips at edges)
-    var mx=${x},my=${y};
+    var mx=${mx},my=${my};
     var r=menu.getBoundingClientRect();
     if(mx+r.width>window.innerWidth)mx=window.innerWidth-r.width-8;
     if(my+r.height>window.innerHeight)my=window.innerHeight-r.height-8;
     if(mx<4)mx=4;if(my<4)my=4;
     menu.style.left=mx+'px';menu.style.top=my+'px';
-    // Re-check after positioning (submenu may shift bounds)
-    requestAnimationFrame(function(){
-      var r2=menu.getBoundingClientRect();
-      if(r2.top<0)menu.style.top='4px';
-      if(r2.left<0)menu.style.left='4px';
-    });
-  })();`);
+  })();void 0;`).catch(() => {});
 
-  // Listen for context menu actions via console message
+  // Console.log fallback listener for external pages without preload
   const consoleHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_ctx:')) return;
-    wc.removeListener('console-message', consoleHandler);
+    if (!message || !message.startsWith('__gb_page_ctx:')) return;
+    try { wc.removeListener('console-message', consoleHandler); } catch {}
+    _pageCtxConsoleHandler = null;
     try {
-      const payload = JSON.parse(message.replace('__gb_ctx:', ''));
-      const { action, data } = payload;
-      if (action === 'openLink') createTab(data);
-      else if (action === 'copyLink' || action === 'copyImageUrl') clipboard.writeText(data);
-      else if (action === 'saveImage') wc.downloadURL(data);
-      else if (action === 'openImageTab') createTab(data);
-      else if (action === 'ai') runAiAction(wc, data, selText);
+      const { action, data } = JSON.parse(message.replace('__gb_page_ctx:', ''));
+      if (action === 'copy') wc.copy();
+      else if (action === 'cut') wc.cut();
+      else if (action === 'paste') wc.paste();
+      else if (action === 'selectAll') wc.selectAll();
+      else if (action === 'openLink' && data) createTab(data);
+      else if (action === 'copyLink' && data) clipboard.writeText(data);
+      else if (action === 'saveImage' && data) wc.downloadURL(data);
+      else if (action === 'copyImageUrl' && data) clipboard.writeText(data);
+      else if (action === 'openImageTab' && data) createTab(data);
       else if (action === 'inspect') wc.inspectElement(params.x, params.y);
+      else if (action === 'ai' && data) {
+        try {
+          const aiData = JSON.parse(data);
+          runAiAction(wc, aiData.type, aiData.text);
+        } catch {}
+      }
     } catch {}
   };
-  wc.on('console-message', consoleHandler);
-  // Clean up listener after 10s if no action taken
-  setTimeout(() => { wc.removeListener('console-message', consoleHandler); }, 10000);
+  _pageCtxConsoleHandler = consoleHandler;
+  if (!wc.isDestroyed()) wc.on('console-message', consoleHandler);
+  setTimeout(() => { try { if (!wc.isDestroyed()) wc.removeListener('console-message', consoleHandler); } catch {} if (_pageCtxConsoleHandler === consoleHandler) _pageCtxConsoleHandler = null; }, 10000);
 }
 
 // Run AI action and show result in an injected popup
@@ -1916,7 +2166,7 @@ ipcMain.handle('password-generate', async (_e, opts) => {
   catch (err) { return { error: err.message || String(err) }; }
 });
 
-ipcMain.on('open-passwords', () => createTab('gb://passwords'));
+ipcMain.on('open-passwords', () => openOrSwitchTab('gb://passwords'));
 
 // Extensions
 ipcMain.handle('extension-list', async () => {
@@ -1939,7 +2189,7 @@ ipcMain.handle('extension-disable', async (_e, { id }) => {
   try { return await rustBridge.call('extension.disable', { id }); }
   catch (err) { return { error: err.message }; }
 });
-ipcMain.on('open-extensions', () => createTab('gb://extensions'));
+ipcMain.on('open-extensions', () => openOrSwitchTab('gb://extensions'));
 
 // Extension file picker dialog (replaces prompt())
 ipcMain.handle('extension-select-path', async () => {
@@ -2157,33 +2407,131 @@ ipcMain.handle('github-logout', async () => {
   } catch (err) { return { error: err.message }; }
 });
 
+// ─── Page context menu actions (IPC from injected glass menu) ───
+ipcMain.on('ctx-menu-action', (_e, action, data) => {
+  const wc = _pageCtxWc;
+  const params = _pageCtxParams;
+  if (!wc || wc.isDestroyed()) return;
+  try {
+    if (action === 'copy') wc.copy();
+    else if (action === 'cut') wc.cut();
+    else if (action === 'paste') wc.paste();
+    else if (action === 'selectAll') wc.selectAll();
+    else if (action === 'openLink' && data) createTab(data);
+    else if (action === 'copyLink' && data) clipboard.writeText(data);
+    else if (action === 'saveImage' && data) wc.downloadURL(data);
+    else if (action === 'copyImageUrl' && data) clipboard.writeText(data);
+    else if (action === 'openImageTab' && data) createTab(data);
+    else if (action === 'inspect' && params) wc.inspectElement(params.x, params.y);
+    else if (action === 'ai' && data) {
+      try {
+        const aiData = JSON.parse(data);
+        runAiAction(wc, aiData.type, aiData.text);
+      } catch {}
+    }
+  } catch {}
+});
+
 // Tab context menu
-ipcMain.on('tab-context-menu', (_e, id) => {
-  const menu = Menu.buildFromTemplate([
-    { label: cmL('tabs.new_tab', 'New Tab'), click: () => createTab('gb://newtab') },
+ipcMain.on('tab-context-menu', (_e, id, clientX, clientY) => {
+  if (!activeTabId || !tabs.has(activeTabId)) return;
+  const tabView = tabs.get(activeTabId).view;
+  const tabBounds = tabView.getBounds();
+
+  const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
+  const sidebarBounds = sidebarView ? sidebarView.getBounds() : { x: 0, y: 0 };
+
+  const isMuted = tabs.has(id) && tabs.get(id).view.webContents.isAudioMuted();
+  const muteLabel = isMuted ? cmL('tabs.unmute', 'Включить звук') : cmL('tabs.mute', 'Выключить звук');
+
+  const items = [
+    { label: cmL('tabs.new_tab', 'Новая вкладка'), action: 'new_tab' },
     { type: 'separator' },
-    { label: cmL('tabs.reload', 'Reload'), click: () => { if (tabs.has(id)) tabs.get(id).view.webContents.reload(); } },
-    { label: cmL('tabs.duplicate', 'Duplicate'), click: () => { if (tabs.has(id)) createTab(tabs.get(id).url); } },
+    { label: cmL('tabs.reload', 'Перезагрузить'), action: 'reload' },
+    { label: cmL('tabs.duplicate', 'Дублировать'), action: 'duplicate' },
     { type: 'separator' },
-    { label: cmL('tabs.mute', 'Mute Tab'), click: () => {
-      if (tabs.has(id)) {
-        const wc = tabs.get(id).view.webContents;
-        wc.setAudioMuted(!wc.isAudioMuted());
-      }
-    }},
+    { label: muteLabel, action: 'mute' },
     { type: 'separator' },
-    { label: cmL('tabs.close_tab', 'Close Tab'), click: () => closeTab(id) },
-    { label: cmL('tabs.close_others', 'Close Other Tabs'), click: () => { tabOrder.filter(tid => tid !== id).forEach(tid => closeTab(tid)); } },
-    { label: cmL('tabs.close_right', 'Close Tabs to the Right'), click: () => {
-      const idx = tabOrder.indexOf(id);
-      if (idx >= 0) tabOrder.slice(idx + 1).forEach(tid => closeTab(tid));
-    }},
+    { label: cmL('tabs.close_tab', 'Закрыть вкладку'), action: 'close' },
+    { label: cmL('tabs.close_others', 'Закрыть другие'), action: 'close_others' },
+    { label: cmL('tabs.close_right', 'Закрыть вкладки снизу'), action: 'close_right' },
     { type: 'separator' },
-    { label: cmL('tabs.reopen_closed', 'Reopen Closed Tab'), accelerator: 'CmdOrCtrl+Shift+T', enabled: closedTabsStack.length > 0, click: () => {
-      if (closedTabsStack.length > 0) { const { url } = closedTabsStack.pop(); createTab(url); }
-    }},
-  ]);
-  menu.popup();
+    { label: cmL('tabs.reopen_closed', 'Восстановить вкладку'), action: 'reopen', disabled: closedTabsStack.length === 0 },
+  ];
+
+  const menuData = JSON.stringify(items);
+  // Position: convert sidebar coords to tab view coords
+  const globalX = (clientX || 0) + sidebarBounds.x;
+  const globalY = (clientY || 0) + sidebarBounds.y;
+  const tabLocalX = globalX - tabBounds.x;
+  const tabLocalY = globalY - tabBounds.y;
+
+  tabView.webContents.executeJavaScript(`(function(){
+    ${CLEAR_ALL_OVERLAYS_JS}
+    var style=document.createElement('style');style.id='__gb-ctx-style';
+    style.textContent=\`
+      #__gb-ctx-ov{position:fixed;inset:0;z-index:2147483646;}
+      #__gb-ctx{position:fixed;z-index:2147483647;
+        background:rgba(18,22,30,0.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+        border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:4px;min-width:200px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.45),0 2px 6px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.06);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#e2e8f0;
+        animation:__gbTcIn 0.12s cubic-bezier(0.16,1,0.3,1);user-select:none;-webkit-user-select:none;}
+      @keyframes __gbTcIn{from{opacity:0;transform:scale(0.97)}to{opacity:1;transform:scale(1)}}
+      #__gb-ctx .tci{display:flex;align-items:center;padding:6px 10px;border-radius:6px;cursor:default;transition:background 0.08s;}
+      #__gb-ctx .tci:hover{background:rgba(255,255,255,0.07);}
+      #__gb-ctx .tci.disabled{opacity:0.35;pointer-events:none;}
+      #__gb-ctx .tci-sep{height:1px;background:rgba(255,255,255,0.06);margin:3px 6px;}
+      html.light #__gb-ctx{background:rgba(255,255,255,0.94);border-color:rgba(0,0,0,0.1);color:#1e293b;box-shadow:0 8px 32px rgba(0,0,0,0.1),0 2px 6px rgba(0,0,0,0.05);}
+      html.light #__gb-ctx .tci:hover{background:rgba(0,0,0,0.05);}
+      html.light #__gb-ctx .tci-sep{background:rgba(0,0,0,0.07);}
+    \`;
+    document.documentElement.appendChild(style);
+    function closeMenu(){
+      var a=document.getElementById('__gb-ctx-ov');if(a)a.remove();
+      var b=document.getElementById('__gb-ctx');if(b)b.remove();
+      var c=document.getElementById('__gb-ctx-style');if(c)c.remove();
+    }
+    var ov=document.createElement('div');ov.id='__gb-ctx-ov';
+    ov.onclick=function(){closeMenu();};
+    ov.oncontextmenu=function(e){e.preventDefault();closeMenu();};
+    document.documentElement.appendChild(ov);
+    var menu=document.createElement('div');menu.id='__gb-ctx';
+    var items=${menuData};
+    items.forEach(function(it){
+      if(it.type==='separator'){var s=document.createElement('div');s.className='tci-sep';menu.appendChild(s);return;}
+      var d=document.createElement('div');d.className='tci'+(it.disabled?' disabled':'');
+      d.textContent=it.label;
+      d.onclick=function(){closeMenu();console.log('__gb_tab_ctx:'+JSON.stringify({action:it.action}));};
+      menu.appendChild(d);
+    });
+    document.documentElement.appendChild(menu);
+    var mx=${tabLocalX},my=${tabLocalY};
+    var r=menu.getBoundingClientRect();
+    if(mx+r.width>window.innerWidth)mx=window.innerWidth-r.width-8;
+    if(my+r.height>window.innerHeight)my=window.innerHeight-r.height-8;
+    if(mx<4)mx=4;if(my<4)my=4;
+    menu.style.left=mx+'px';menu.style.top=my+'px';
+  })();`);
+
+  const tabCtxHandler = (event) => {
+    const message = event.message;
+    if (!message || !message.startsWith('__gb_tab_ctx:')) return;
+    tabView.webContents.removeListener('console-message', tabCtxHandler);
+    try {
+      const { action } = JSON.parse(message.replace('__gb_tab_ctx:', ''));
+      if (action === 'new_tab') createTab('gb://newtab');
+      else if (action === 'reload') { if (tabs.has(id)) tabs.get(id).view.webContents.reload(); }
+      else if (action === 'duplicate') { if (tabs.has(id)) createTab(tabs.get(id).url); }
+      else if (action === 'mute') { if (tabs.has(id)) { const wc2 = tabs.get(id).view.webContents; wc2.setAudioMuted(!wc2.isAudioMuted()); } }
+      else if (action === 'close') closeTab(id);
+      else if (action === 'close_others') { tabOrder.filter(tid => tid !== id).forEach(tid => closeTab(tid)); }
+      else if (action === 'close_right') { const idx = tabOrder.indexOf(id); if (idx >= 0) tabOrder.slice(idx + 1).forEach(tid => closeTab(tid)); }
+      else if (action === 'reopen') { if (closedTabsStack.length > 0) { const { url } = closedTabsStack.pop(); createTab(url); } }
+    } catch {}
+  };
+  tabView.webContents.on('console-message', tabCtxHandler);
+  setTimeout(() => { try { tabView.webContents.removeListener('console-message', tabCtxHandler); } catch {} }, 10000);
 });
 
 // ─── Helpers ───
