@@ -13,7 +13,7 @@
     "directories": { "output": "dist" },
     "files": ["main.js", "preload.js", "installer.html"],
     "extraResources": [
-      { "from": "../resources/icons/app-icon.png", "to": "icon.png" },
+      { "from": "../resources/icons/logo-icon.png", "to": "icon.png" },
       { "from": "../resources/icons/app.ico", "to": "app.ico" }
     ],
     "win": {

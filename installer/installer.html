@@ -3,335 +3,241 @@
 <head>
 <meta charset="UTF-8">
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html, body {
-  width: 100%; height: 100%;
-  overflow: hidden;
-  font-family: 'Segoe UI', -apple-system, sans-serif;
-  background: transparent;
-  user-select: none;
-  -webkit-user-select: none;
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:420px;height:420px;overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;
+  background:#0a0e14;color:#e2e8f0;
+  user-select:none;-webkit-user-select:none;
 }
 
-.window {
-  width: 460px; height: 380px;
-  background: #141420;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.06);
-  box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.3);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
-  -webkit-app-region: drag;
+body{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;
 }
 
-/* Subtle gradient overlay */
-.window::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 50% 0%, rgba(100,80,200,0.08) 0%, transparent 60%);
-  pointer-events: none;
+/* Subtle top glow */
+body::before{
+  content:'';position:absolute;top:-120px;left:50%;transform:translateX(-50%);
+  width:300px;height:240px;
+  background:radial-gradient(ellipse,rgba(59,130,246,0.07) 0%,transparent 70%);
+  pointer-events:none;
 }
 
-/* Close button */
-.close-btn {
-  position: absolute;
-  top: 12px; right: 12px;
-  width: 28px; height: 28px;
-  border: none; background: none;
-  color: rgba(255,255,255,0.2);
-  cursor: pointer;
-  border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
-  -webkit-app-region: no-drag;
-  z-index: 10;
+/* ── Title bar (drag area) ── */
+.titlebar{
+  position:absolute;top:0;left:0;right:0;height:32px;
+  -webkit-app-region:drag;
+  display:flex;align-items:center;justify-content:flex-end;
+  padding:0 6px;
 }
-.close-btn:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
+.close{
+  -webkit-app-region:no-drag;
+  width:28px;height:28px;border:none;background:none;
+  color:#4a5168;cursor:pointer;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 150ms cubic-bezier(0.16,1,0.3,1);
+}
+.close:hover{background:rgba(255,255,255,0.07);color:#e2e8f0}
+.close:active{transform:scale(0.92)}
 
-/* Logo */
-.logo {
-  margin-top: 52px;
-  width: 64px; height: 64px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #2a2040 0%, #1a1430 100%);
-  border: 1px solid rgba(255,255,255,0.06);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-  animation: logoIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
-  position: relative;
-  z-index: 1;
+/* ── Logo ── */
+.logo{
+  width:56px;height:56px;border-radius:14px;
+  background:linear-gradient(135deg,#12161e 0%,#1a1f2b 100%);
+  border:1px solid rgba(255,255,255,0.06);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 8px 32px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.04);
+  animation:logoIn 0.5s cubic-bezier(0.16,1,0.3,1) both;
+  margin-bottom:16px;
 }
-.logo img { width: 44px; height: 44px; border-radius: 8px; }
-@keyframes logoIn {
-  from { opacity: 0; transform: scale(0.8) translateY(10px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
+.logo img{width:36px;height:36px;border-radius:6px}
+@keyframes logoIn{from{opacity:0;transform:scale(0.85) translateY(6px)}to{opacity:1;transform:none}}
 
-/* Title */
-.title {
-  margin-top: 18px;
-  font-size: 22px;
-  font-weight: 700;
-  color: #f0ecf8;
-  letter-spacing: -0.3px;
-  animation: fadeUp 0.5s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
-  position: relative; z-index: 1;
+/* ── Text ── */
+.name{
+  font-size:20px;font-weight:700;color:#e2e8f0;letter-spacing:-0.3px;
+  animation:fadeIn 0.4s 0.05s cubic-bezier(0.16,1,0.3,1) both;
 }
-.version {
-  margin-top: 4px;
-  font-size: 12px;
-  color: rgba(255,255,255,0.25);
-  font-weight: 500;
-  animation: fadeUp 0.5s 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
-  position: relative; z-index: 1;
+.ver{
+  font-size:11px;color:#4a5168;margin-top:3px;font-weight:500;
+  animation:fadeIn 0.4s 0.1s cubic-bezier(0.16,1,0.3,1) both;
 }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── Status ── */
+.status{
+  margin-top:28px;font-size:12px;color:#4a5168;height:16px;
+  transition:color 0.2s;
+  animation:fadeIn 0.4s 0.15s cubic-bezier(0.16,1,0.3,1) both;
 }
 
-/* Status */
-.status {
-  margin-top: 32px;
-  font-size: 13px;
-  color: rgba(255,255,255,0.35);
-  height: 18px;
-  transition: all 0.3s;
-  animation: fadeUp 0.5s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-  position: relative; z-index: 1;
+/* ── Progress ── */
+.track{
+  margin-top:12px;width:240px;height:3px;
+  background:rgba(255,255,255,0.04);border-radius:2px;
+  overflow:hidden;opacity:0;transition:opacity 0.3s;
+}
+.track.on{opacity:1}
+.bar{
+  height:100%;width:0%;border-radius:2px;
+  background:linear-gradient(90deg,#3b82f6,#60a5fa);
+  box-shadow:0 0 10px rgba(59,130,246,0.3);
+  transition:width 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+.bar.pulse{
+  width:30%;
+  animation:pulse 1.4s cubic-bezier(0.4,0,0.6,1) infinite;
+}
+@keyframes pulse{0%{transform:translateX(-100%)}100%{transform:translateX(433%)}}
+
+/* ── Button ── */
+.btn{
+  margin-top:24px;width:160px;height:38px;
+  border:none;border-radius:10px;
+  background:rgba(59,130,246,0.12);
+  color:#60a5fa;
+  font-family:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;letter-spacing:0.1px;
+  transition:all 0.2s cubic-bezier(0.16,1,0.3,1);
+  border:1px solid rgba(59,130,246,0.15);
+  animation:fadeIn 0.4s 0.2s cubic-bezier(0.16,1,0.3,1) both;
+  -webkit-app-region:no-drag;
+}
+.btn:hover{
+  background:rgba(59,130,246,0.18);
+  border-color:rgba(59,130,246,0.25);
+  box-shadow:0 0 20px rgba(59,130,246,0.1);
+}
+.btn:active{transform:scale(0.97)}
+.btn:disabled{opacity:0.35;cursor:default;transform:none;box-shadow:none}
+.btn.done{
+  background:rgba(52,211,153,0.12);
+  border-color:rgba(52,211,153,0.15);
+  color:#34d399;
+}
+.btn.done:hover{
+  background:rgba(52,211,153,0.18);
+  border-color:rgba(52,211,153,0.25);
+  box-shadow:0 0 20px rgba(52,211,153,0.1);
 }
 
-/* Progress track */
-.progress-wrap {
-  margin-top: 14px;
-  width: 300px;
-  height: 4px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 2px;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.3s;
-  position: relative; z-index: 1;
-}
-.progress-wrap.visible { opacity: 1; }
-.progress-bar {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, #6c5ce7, #a78bfa);
-  border-radius: 2px;
-  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 0 12px rgba(108, 92, 231, 0.4);
-}
-
-/* Indeterminate animation */
-.progress-bar.indeterminate {
-  width: 30%;
-  animation: indeterminate 1.5s ease-in-out infinite;
-}
-@keyframes indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(433%); }
-}
-
-/* Install button */
-.install-btn {
-  margin-top: 24px;
-  width: 160px; height: 42px;
-  border: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #6c5ce7 0%, #5a4bd1 100%);
-  color: #fff;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 16px rgba(108, 92, 231, 0.3);
-  animation: fadeUp 0.5s 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
-  -webkit-app-region: no-drag;
-  position: relative; z-index: 1;
-  letter-spacing: 0.2px;
-}
-.install-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(108, 92, 231, 0.4);
-  background: linear-gradient(135deg, #7c6cf7 0%, #6a5be1 100%);
-}
-.install-btn:active {
-  transform: translateY(0) scale(0.98);
-}
-.install-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-  transform: none;
-  box-shadow: none;
-}
-.install-btn.success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
-}
-.install-btn.success:hover {
-  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.4);
-  background: linear-gradient(135deg, #20c997 0%, #10b981 100%);
-}
-
-/* Path display */
-.path-info {
-  margin-top: 16px;
-  font-size: 11px;
-  color: rgba(255,255,255,0.15);
-  max-width: 380px;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  position: relative; z-index: 1;
+/* ── Path ── */
+.path{
+  position:absolute;bottom:16px;
+  font-size:10px;color:rgba(255,255,255,0.1);
+  max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 </style>
 </head>
 <body>
-<div class="window">
-  <button class="close-btn" id="closeBtn">
-    <svg width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" stroke-width="1.5" fill="none">
-      <line x1="1" y1="1" x2="11" y2="11"/><line x1="11" y1="1" x2="1" y2="11"/>
+
+<div class="titlebar">
+  <button class="close" id="x">
+    <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.3" fill="none">
+      <line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/>
     </svg>
   </button>
-
-  <div class="logo">
-    <img id="logoImg" src="" alt="GB" />
-  </div>
-
-  <div class="title">GitBrowser</div>
-  <div class="version" id="versionLabel">v0.1.0</div>
-
-  <div class="status" id="statusLabel">Checking for updates...</div>
-
-  <div class="progress-wrap" id="progressWrap">
-    <div class="progress-bar" id="progressBar"></div>
-  </div>
-
-  <button class="install-btn" id="installBtn" disabled>Install</button>
-
-  <div class="path-info" id="pathInfo"></div>
 </div>
+
+<div class="logo"><img id="icon" src="" onerror="this.parentElement.innerHTML='<span style=color:#60a5fa;font-size:20px;font-weight:700>G</span>'" /></div>
+<div class="name">GitBrowser</div>
+<div class="ver" id="ver">v0.1.0</div>
+<div class="status" id="st">Checking for updates…</div>
+<div class="track" id="track"><div class="bar" id="bar"></div></div>
+<button class="btn" id="btn" disabled>Install</button>
+<div class="path" id="path"></div>
 
 <script>
 const api = window.installer;
-const statusEl = document.getElementById('statusLabel');
-const versionEl = document.getElementById('versionLabel');
-const progressWrap = document.getElementById('progressWrap');
-const progressBar = document.getElementById('progressBar');
-const installBtn = document.getElementById('installBtn');
-const pathInfo = document.getElementById('pathInfo');
-const logoImg = document.getElementById('logoImg');
+const $ = id => document.getElementById(id);
 
-let installDir = '';
 let downloadUrl = null;
 
-// Close button
-document.getElementById('closeBtn').onclick = () => api.close();
-
-// Drag window
-document.querySelector('.window').addEventListener('mousedown', (e) => {
-  if (e.target.closest('button')) return;
-});
+$('x').onclick = () => api.close();
 
 async function init() {
-  // Get info
-  const info = await api.getInfo();
-  versionEl.textContent = 'v' + info.version;
-  installDir = info.installDir;
-  pathInfo.textContent = installDir;
-
-  // Try to load logo
+  // Load icon from correct path (works in both dev and packaged mode)
   try {
-    logoImg.src = '../resources/icons/app-icon.png';
-    logoImg.onerror = () => { logoImg.parentElement.textContent = 'GB'; };
-  } catch { logoImg.parentElement.textContent = 'GB'; }
+    const iconPath = await api.getIconPath();
+    $('icon').src = iconPath;
+  } catch { /* fallback handled by onerror */ }
 
-  // Check for updates
-  statusEl.textContent = 'Checking for updates...';
-  progressWrap.classList.add('visible');
-  progressBar.classList.add('indeterminate');
+  const info = await api.getInfo();
+  $('ver').textContent = 'v' + info.version;
+  $('path').textContent = info.installDir;
 
-  const update = await api.checkUpdate();
+  // Check updates
+  $('track').classList.add('on');
+  $('bar').classList.add('pulse');
 
-  progressBar.classList.remove('indeterminate');
-  progressWrap.classList.remove('visible');
+  const upd = await api.checkUpdate();
 
-  if (update.latest && update.latest !== info.version && update.download) {
-    statusEl.textContent = 'New version available: v' + update.latest;
-    downloadUrl = update.download;
-    versionEl.textContent = 'v' + info.version + ' → v' + update.latest;
+  $('bar').classList.remove('pulse');
+  $('bar').style.width = '0%';
+  $('track').classList.remove('on');
+
+  if (upd.latest && upd.latest !== info.version && upd.download) {
+    $('st').textContent = 'v' + upd.latest + ' available';
+    $('st').style.color = '#60a5fa';
+    $('ver').textContent = 'v' + info.version + '  →  v' + upd.latest;
+    downloadUrl = upd.download;
   } else {
-    statusEl.textContent = 'Ready to install';
+    $('st').textContent = 'Ready to install';
+    $('st').style.color = '#4a5168';
   }
-
-  installBtn.disabled = false;
+  $('btn').disabled = false;
 }
 
-installBtn.onclick = async () => {
-  installBtn.disabled = true;
-  progressWrap.classList.add('visible');
-  progressBar.style.width = '0%';
+$('btn').onclick = async () => {
+  $('btn').disabled = true;
+  $('track').classList.add('on');
 
-  // Phase 1: Downloading / preparing (0-60%)
-  if (downloadUrl) {
-    statusEl.textContent = 'Downloading latest version...';
-    animateProgress(0, 55, 3000);
-  } else {
-    statusEl.textContent = 'Installing...';
-    animateProgress(0, 55, 1500);
-  }
+  // Phase 1: install
+  $('st').textContent = downloadUrl ? 'Downloading…' : 'Installing…';
+  $('st').style.color = '#7c8494';
+  anim(0, 50, 2000);
 
-  const result = await api.install({ downloadUrl });
-
-  if (!result.ok) {
-    statusEl.textContent = 'Error: ' + (result.error || 'Installation failed');
-    progressBar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
-    progressBar.style.width = '100%';
-    installBtn.textContent = 'Retry';
-    installBtn.disabled = false;
+  const res = await api.install({ downloadUrl });
+  if (!res.ok) {
+    $('st').textContent = res.error || 'Failed';
+    $('st').style.color = '#f87171';
+    $('bar').style.background = 'linear-gradient(90deg,#f87171,#dc2626)';
+    $('bar').style.width = '100%';
+    $('btn').textContent = 'Retry';
+    $('btn').disabled = false;
     return;
   }
 
-  // Phase 2: Creating shortcuts (60-90%)
-  statusEl.textContent = 'Creating shortcuts...';
-  animateProgress(55, 85, 800);
+  // Phase 2: shortcuts
+  $('st').textContent = 'Creating shortcuts…';
+  anim(50, 85, 600);
   await api.createShortcuts();
 
-  // Phase 3: Done (90-100%)
-  animateProgress(85, 100, 400);
-  await sleep(500);
+  // Phase 3: done
+  anim(85, 100, 300);
+  await new Promise(r => setTimeout(r, 400));
 
-  statusEl.textContent = 'Installation complete';
-  progressBar.style.width = '100%';
+  $('st').textContent = 'Done';
+  $('st').style.color = '#34d399';
+  $('bar').style.width = '100%';
+  $('bar').style.background = 'linear-gradient(90deg,#059669,#34d399)';
 
-  installBtn.textContent = 'Launch';
-  installBtn.classList.add('success');
-  installBtn.disabled = false;
-  installBtn.onclick = () => api.launchApp();
+  $('btn').textContent = 'Launch';
+  $('btn').classList.add('done');
+  $('btn').disabled = false;
+  $('btn').onclick = () => api.launchApp();
 };
 
-function animateProgress(from, to, duration) {
-  const start = performance.now();
-  function tick(now) {
-    const elapsed = now - start;
-    const t = Math.min(elapsed / duration, 1);
-    // Ease out cubic
-    const eased = 1 - Math.pow(1 - t, 3);
-    const value = from + (to - from) * eased;
-    progressBar.style.width = value + '%';
-    if (t < 1) requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
+function anim(from, to, ms) {
+  const t0 = performance.now();
+  (function tick(now) {
+    const p = Math.min((now - t0) / ms, 1);
+    const e = 1 - Math.pow(1 - p, 3);
+    $('bar').style.width = (from + (to - from) * e) + '%';
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
 }
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 init();
 </script>

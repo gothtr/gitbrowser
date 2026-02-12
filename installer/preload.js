@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld('installer', {
   createShortcuts: () => ipcRenderer.invoke('create-shortcuts'),
   launchApp: () => ipcRenderer.invoke('launch-app'),
   close: () => ipcRenderer.invoke('close-installer'),
+  getIconPath: () => ipcRenderer.invoke('get-icon-path'),
 });
