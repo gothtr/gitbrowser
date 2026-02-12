@@ -19,6 +19,7 @@ const downloads = new Map();
 let nextDownloadId = 1;
 const closedTabsStack = []; // Stack for reopening closed tabs (Ctrl+Shift+T)
 const MAX_CLOSED_TABS = 20;
+let isHtmlFullscreen = false; // Track HTML5 fullscreen (e.g. YouTube video)
 
 // Internal pages that get preload (need IPC access)
 const INTERNAL_PAGES = {
@@ -44,6 +45,7 @@ function createWindow() {
     width: 1280, height: 800,
     title: 'GitBrowser',
     backgroundColor: '#0a0e14',
+    icon: path.join(__dirname, '..', 'resources', 'icons', 'app.ico'),
     minWidth: 800, minHeight: 600,
   });
 
@@ -113,6 +115,17 @@ function createWindow() {
 function layoutViews() {
   if (!mainWindow) return;
   const { width: w, height: h } = mainWindow.getContentBounds();
+
+  if (isHtmlFullscreen) {
+    // Hide sidebar and toolbar, tab takes full window
+    if (sidebarView) sidebarView.setBounds({ x: -SIDEBAR_WIDTH, y: 0, width: SIDEBAR_WIDTH, height: h });
+    if (toolbarView) toolbarView.setBounds({ x: 0, y: -TOOLBAR_HEIGHT, width: w, height: TOOLBAR_HEIGHT });
+    if (activeTabId && tabs.has(activeTabId)) {
+      tabs.get(activeTabId).view.setBounds({ x: 0, y: 0, width: w, height: h });
+    }
+    return;
+  }
+
   const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
   if (sidebarView) sidebarView.setBounds({ x: 0, y: 0, width: sw, height: h });
   if (toolbarView) toolbarView.setBounds({ x: sw, y: 0, width: w - sw, height: TOOLBAR_HEIGHT });
@@ -239,6 +252,16 @@ function createTab(url, activate = true) {
   // Custom context menu with AI actions
   view.webContents.on('context-menu', (_e, params) => {
     buildPageContextMenu(view.webContents, params);
+  });
+
+  // HTML5 fullscreen (e.g. YouTube video player)
+  view.webContents.on('enter-html-full-screen', () => {
+    isHtmlFullscreen = true;
+    layoutViews();
+  });
+  view.webContents.on('leave-html-full-screen', () => {
+    isHtmlFullscreen = false;
+    layoutViews();
   });
 
   loadUrlInView(view, url);
@@ -574,6 +597,7 @@ ipcMain.on('open-private-window', () => {
   let privTabOrder = [];
   let privActiveTabId = null;
   let privNextTabId = 1;
+  let privHtmlFullscreen = false;
   // Ephemeral partition — no 'persist:' prefix means in-memory only, destroyed when all webContents using it are closed
   const privPartition = 'private-' + Date.now();
 
@@ -611,6 +635,10 @@ ipcMain.on('open-private-window', () => {
       if (newUrl && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) privCreateTab(newUrl);
       return { action: 'deny' };
     });
+
+    // HTML5 fullscreen
+    view.webContents.on('enter-html-full-screen', () => { privHtmlFullscreen = true; layoutPriv(); });
+    view.webContents.on('leave-html-full-screen', () => { privHtmlFullscreen = false; layoutPriv(); });
 
     const page = INTERNAL_PAGES[url];
     if (page) view.webContents.loadFile(path.join(__dirname, 'ui', page));
@@ -659,6 +687,13 @@ ipcMain.on('open-private-window', () => {
 
   function layoutPriv() {
     const { width: w, height: h } = privWin.getContentBounds();
+    if (privHtmlFullscreen) {
+      privToolbar.setBounds({ x: 0, y: -TOOLBAR_HEIGHT, width: w, height: TOOLBAR_HEIGHT });
+      if (privActiveTabId && privTabs.has(privActiveTabId)) {
+        privTabs.get(privActiveTabId).view.setBounds({ x: 0, y: 0, width: w, height: h });
+      }
+      return;
+    }
     privToolbar.setBounds({ x: 0, y: 0, width: w, height: TOOLBAR_HEIGHT });
     if (privActiveTabId && privTabs.has(privActiveTabId)) {
       privTabs.get(privActiveTabId).view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width: w, height: h - TOOLBAR_HEIGHT });

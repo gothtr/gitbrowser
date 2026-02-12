@@ -83,8 +83,16 @@ body.collapsed .separator { margin: 4px 6px; }
   color: var(--fg-default);
   letter-spacing: 0.3px;
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .logo-text span { color: var(--accent-fg); }
+.logo-img {
+  height: 20px;
+  width: auto;
+  flex-shrink: 0;
+}
 .collapse-btn {
   width: 28px; height: 28px;
   border: none; background: none;
@@ -303,6 +311,7 @@ html.light .tab-item.active {
 </head>
 <body>
 <div class="sidebar-header">
+  <img class="logo-img" src="../../resources/icons/logo-sidebar-22.png" alt="G" />
   <div class="logo-text">Git<span>Browser</span></div>
   <button class="collapse-btn" id="collapse-btn" title="Toggle sidebar (Ctrl+B)">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.823 7.823a.25.25 0 0 1 0 .354l-2.396 2.396A.25.25 0 0 1 4 10.396V5.604a.25.25 0 0 1 .427-.177Z"/><path d="M1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25V1.75C0 .784.784 0 1.75 0ZM1.5 1.75v12.5c0 .138.112.25.25.25H9.5v-13H1.75a.25.25 0 0 0-.25.25ZM11 14.5h3.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25H11Z"/></svg>
