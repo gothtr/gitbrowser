@@ -71,6 +71,16 @@ function createWindow() {
   mainWindow.contentView.addChildView(toolbarView);
   toolbarView.webContents.loadFile(path.join(__dirname, 'ui', 'toolbar.html'));
 
+  // Custom glass context menu for toolbar and sidebar
+  toolbarView.webContents.on('context-menu', (e, params) => {
+    e.preventDefault();
+    buildPageContextMenu(toolbarView.webContents, params);
+  });
+  sidebarView.webContents.on('context-menu', (e, params) => {
+    e.preventDefault();
+    buildPageContextMenu(sidebarView.webContents, params);
+  });
+
   layoutViews();
   mainWindow.on('resize', layoutViews);
 
@@ -250,7 +260,8 @@ function createTab(url, activate = true) {
   });
   
   // Custom context menu with AI actions
-  view.webContents.on('context-menu', (_e, params) => {
+  view.webContents.on('context-menu', (e, params) => {
+    e.preventDefault();
     buildPageContextMenu(view.webContents, params);
   });
 
@@ -592,6 +603,12 @@ ipcMain.on('open-private-window', () => {
   privWin.contentView.addChildView(privToolbar);
   privToolbar.webContents.loadFile(path.join(__dirname, 'ui', 'toolbar.html'));
 
+  // Glass context menu for private toolbar
+  privToolbar.webContents.on('context-menu', (e, params) => {
+    e.preventDefault();
+    buildPageContextMenu(privToolbar.webContents, params);
+  });
+
   // Private window tab management
   const privTabs = new Map();
   let privTabOrder = [];
@@ -639,6 +656,12 @@ ipcMain.on('open-private-window', () => {
     // HTML5 fullscreen
     view.webContents.on('enter-html-full-screen', () => { privHtmlFullscreen = true; layoutPriv(); });
     view.webContents.on('leave-html-full-screen', () => { privHtmlFullscreen = false; layoutPriv(); });
+
+    // Glass context menu for private tabs
+    view.webContents.on('context-menu', (e, params) => {
+      e.preventDefault();
+      buildPageContextMenu(view.webContents, params);
+    });
 
     const page = INTERNAL_PAGES[url];
     if (page) view.webContents.loadFile(path.join(__dirname, 'ui', page));
@@ -983,65 +1006,179 @@ function buildPageContextMenu(wc, params) {
   const selText = (params.selectionText || '').trim();
   const isEditable = params.isEditable;
 
-  const template = [];
+  // Build menu items as JSON array for injection
+  const items = [];
 
-  // Standard items
   if (hasSelection) {
-    template.push({ label: cmL('context_menu.copy', 'Copy'), accelerator: 'CmdOrCtrl+C', click: () => wc.copy() });
+    items.push({ label: cmL('context_menu.copy', 'Копировать'), accel: 'Ctrl+C', action: 'copy' });
   }
   if (isEditable) {
-    template.push({ label: cmL('context_menu.cut', 'Cut'), accelerator: 'CmdOrCtrl+X', enabled: hasSelection, click: () => wc.cut() });
-    template.push({ label: cmL('context_menu.paste', 'Paste'), accelerator: 'CmdOrCtrl+V', click: () => wc.paste() });
+    items.push({ label: cmL('context_menu.cut', 'Вырезать'), accel: 'Ctrl+X', action: 'cut', disabled: !hasSelection });
+    items.push({ label: cmL('context_menu.paste', 'Вставить'), accel: 'Ctrl+V', action: 'paste' });
   }
-  template.push({ label: cmL('context_menu.select_all', 'Select All'), accelerator: 'CmdOrCtrl+A', click: () => wc.selectAll() });
+  items.push({ label: cmL('context_menu.select_all', 'Выделить всё'), accel: 'Ctrl+A', action: 'selectAll' });
 
-  // Link actions
   if (params.linkURL) {
-    template.push({ type: 'separator' });
-    template.push({ label: cmL('context_menu.open_link_new_tab', 'Open Link in New Tab'), click: () => createTab(params.linkURL) });
-    template.push({ label: cmL('context_menu.copy_link', 'Copy Link'), click: () => { clipboard.writeText(params.linkURL); } });
+    items.push({ type: 'separator' });
+    items.push({ label: cmL('context_menu.open_link_new_tab', 'Открыть ссылку в новой вкладке'), action: 'openLink', data: params.linkURL });
+    items.push({ label: cmL('context_menu.copy_link', 'Копировать ссылку'), action: 'copyLink', data: params.linkURL });
   }
 
-  // Image actions — save image from web
   if (params.mediaType === 'image' && params.srcURL) {
-    template.push({ type: 'separator' });
-    template.push({ label: cmL('context_menu.save_image', 'Save Image As...'), click: () => {
-      wc.downloadURL(params.srcURL);
-    }});
-    template.push({ label: cmL('context_menu.copy_image_url', 'Copy Image URL'), click: () => {
-      clipboard.writeText(params.srcURL);
-    }});
-    template.push({ label: cmL('context_menu.open_image_new_tab', 'Open Image in New Tab'), click: () => {
-      createTab(params.srcURL);
-    }});
+    items.push({ type: 'separator' });
+    items.push({ label: cmL('context_menu.save_image', 'Сохранить изображение...'), action: 'saveImage', data: params.srcURL });
+    items.push({ label: cmL('context_menu.copy_image_url', 'Копировать URL изображения'), action: 'copyImageUrl', data: params.srcURL });
+    items.push({ label: cmL('context_menu.open_image_new_tab', 'Открыть изображение в новой вкладке'), action: 'openImageTab', data: params.srcURL });
   }
 
-  // AI submenu (only when text is selected)
   if (hasSelection && selText.length >= 2) {
-    template.push({ type: 'separator' });
-    template.push({
-      label: cmL('context_menu.ai', 'AI'),
-      submenu: [
-        { label: cmL('context_menu.fix_errors', 'Fix Errors'), click: () => runAiAction(wc, 'fix', selText) },
-        { label: cmL('context_menu.rephrase', 'Rephrase'), click: () => runAiAction(wc, 'rephrase', selText) },
-        { type: 'separator' },
-        { label: cmL('context_menu.translate_en', 'Translate to English'), click: () => runAiAction(wc, 'translate_en', selText) },
-        { label: cmL('context_menu.translate_ru', 'Translate to Russian'), click: () => runAiAction(wc, 'translate_ru', selText) },
-        { type: 'separator' },
-        { label: cmL('context_menu.summarize', 'Summarize'), click: () => runAiAction(wc, 'summarize', selText) },
-        { label: cmL('context_menu.explain', 'Explain'), click: () => runAiAction(wc, 'explain', selText) },
-      ],
-    });
+    items.push({ type: 'separator' });
+    items.push({ label: cmL('context_menu.ai', 'AI'), submenu: [
+      { label: cmL('context_menu.fix_errors', 'Исправить ошибки'), action: 'ai', data: 'fix' },
+      { label: cmL('context_menu.rephrase', 'Перефразировать'), action: 'ai', data: 'rephrase' },
+      { type: 'separator' },
+      { label: cmL('context_menu.translate_en', 'Перевести на English'), action: 'ai', data: 'translate_en' },
+      { label: cmL('context_menu.translate_ru', 'Перевести на Русский'), action: 'ai', data: 'translate_ru' },
+      { type: 'separator' },
+      { label: cmL('context_menu.summarize', 'Резюмировать'), action: 'ai', data: 'summarize' },
+      { label: cmL('context_menu.explain', 'Объяснить'), action: 'ai', data: 'explain' },
+    ]});
   }
 
-  // Inspect element (dev mode)
   if (process.argv.includes('--dev')) {
-    template.push({ type: 'separator' });
-    template.push({ label: cmL('context_menu.inspect', 'Inspect Element'), click: () => wc.inspectElement(params.x, params.y) });
+    items.push({ type: 'separator' });
+    items.push({ label: cmL('context_menu.inspect', 'Инспектировать элемент'), action: 'inspect' });
   }
 
-  const menu = Menu.buildFromTemplate(template);
-  menu.popup();
+  const menuData = JSON.stringify(items);
+  const selTextEsc = JSON.stringify(selText);
+  const x = params.x;
+  const y = params.y;
+
+  // Inject custom glass context menu
+  wc.executeJavaScript(`(function(){
+    // Remove existing
+    var old=document.getElementById('__gb-ctx');if(old)old.remove();
+    var oldS=document.getElementById('__gb-ctx-style');if(oldS)oldS.remove();
+    var oldOv=document.getElementById('__gb-ctx-ov');if(oldOv)oldOv.remove();
+
+    var style=document.createElement('style');style.id='__gb-ctx-style';
+    style.textContent=\`
+      #__gb-ctx-ov{position:fixed;inset:0;z-index:2147483646;}
+      #__gb-ctx{position:fixed;z-index:2147483647;
+        background:rgba(18,22,30,0.92);
+        backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+        border:1px solid rgba(255,255,255,0.08);border-radius:12px;
+        padding:6px;min-width:200px;
+        box-shadow:0 12px 48px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#e2e8f0;
+        animation:__gbCtxIn 0.15s cubic-bezier(0.16,1,0.3,1);
+        user-select:none;-webkit-user-select:none;}
+      @keyframes __gbCtxIn{from{opacity:0;transform:scale(0.96) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+      #__gb-ctx .ctx-item{display:flex;align-items:center;justify-content:space-between;
+        padding:7px 12px;border-radius:8px;cursor:pointer;transition:background 0.1s,color 0.1s;gap:24px;}
+      #__gb-ctx .ctx-item:hover{background:rgba(96,165,250,0.12);color:#fff;}
+      #__gb-ctx .ctx-item.disabled{opacity:0.4;pointer-events:none;}
+      #__gb-ctx .ctx-accel{font-size:11px;color:rgba(255,255,255,0.3);font-weight:500;}
+      #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(255,255,255,0.5);}
+      #__gb-ctx .ctx-sep{height:1px;background:rgba(255,255,255,0.06);margin:4px 8px;}
+      #__gb-ctx .ctx-sub{position:relative;}
+      #__gb-ctx .ctx-sub .ctx-arrow{font-size:10px;color:rgba(255,255,255,0.3);margin-left:8px;}
+      #__gb-ctx .ctx-submenu{display:none;position:absolute;left:100%;top:-6px;
+        background:rgba(18,22,30,0.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+        border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:6px;min-width:180px;
+        box-shadow:0 12px 48px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);
+        animation:__gbCtxIn 0.12s cubic-bezier(0.16,1,0.3,1);}
+      #__gb-ctx .ctx-sub:hover .ctx-submenu{display:block;}
+      @media (prefers-color-scheme:light){
+        #__gb-ctx,#__gb-ctx .ctx-submenu{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.08);color:#1e293b;
+          box-shadow:0 12px 48px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.8);}
+        #__gb-ctx .ctx-item:hover{background:rgba(37,99,235,0.1);}
+        #__gb-ctx .ctx-accel{color:rgba(0,0,0,0.3);}
+        #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(0,0,0,0.5);}
+        #__gb-ctx .ctx-sep{background:rgba(0,0,0,0.06);}
+        #__gb-ctx .ctx-sub .ctx-arrow{color:rgba(0,0,0,0.3);}
+      }
+      html.light #__gb-ctx,html.light #__gb-ctx .ctx-submenu{background:rgba(255,255,255,0.92);border-color:rgba(0,0,0,0.08);color:#1e293b;
+        box-shadow:0 12px 48px rgba(0,0,0,0.12),0 2px 8px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.8);}
+      html.light #__gb-ctx .ctx-item:hover{background:rgba(37,99,235,0.1);}
+      html.light #__gb-ctx .ctx-accel{color:rgba(0,0,0,0.3);}
+      html.light #__gb-ctx .ctx-item:hover .ctx-accel{color:rgba(0,0,0,0.5);}
+      html.light #__gb-ctx .ctx-sep{background:rgba(0,0,0,0.06);}
+      html.light #__gb-ctx .ctx-sub .ctx-arrow{color:rgba(0,0,0,0.3);}
+    \`;
+    document.documentElement.appendChild(style);
+
+    // Overlay to catch clicks outside
+    var ov=document.createElement('div');ov.id='__gb-ctx-ov';
+    ov.onclick=function(){ov.remove();menu.remove();style.remove();};
+    ov.oncontextmenu=function(e){e.preventDefault();ov.remove();menu.remove();style.remove();};
+    document.documentElement.appendChild(ov);
+
+    var menu=document.createElement('div');menu.id='__gb-ctx';
+    var items=${menuData};
+
+    function buildItems(container,list){
+      list.forEach(function(it){
+        if(it.type==='separator'){var s=document.createElement('div');s.className='ctx-sep';container.appendChild(s);return;}
+        if(it.submenu){
+          var sub=document.createElement('div');sub.className='ctx-item ctx-sub';
+          sub.innerHTML=it.label+'<span class="ctx-arrow">▶</span>';
+          var sm=document.createElement('div');sm.className='ctx-submenu';
+          buildItems(sm,it.submenu);
+          sub.appendChild(sm);
+          container.appendChild(sub);
+          return;
+        }
+        var d=document.createElement('div');d.className='ctx-item'+(it.disabled?' disabled':'');
+        d.innerHTML=it.label+(it.accel?'<span class="ctx-accel">'+it.accel+'</span>':'');
+        d.dataset.action=it.action||'';
+        d.dataset.data=it.data||'';
+        d.onclick=function(){
+          ov.remove();menu.remove();style.remove();
+          var a=this.dataset.action,dd=this.dataset.data;
+          if(a==='copy')document.execCommand('copy');
+          else if(a==='cut')document.execCommand('cut');
+          else if(a==='paste')document.execCommand('paste');
+          else if(a==='selectAll')document.execCommand('selectAll');
+          else{
+            // Send action to main process via console message
+            console.log('__gb_ctx:'+JSON.stringify({action:a,data:dd}));
+          }
+        };
+        container.appendChild(d);
+      });
+    }
+    buildItems(menu,items);
+    document.documentElement.appendChild(menu);
+
+    // Position: clamp to viewport
+    var mx=${x},my=${y};
+    var r=menu.getBoundingClientRect();
+    if(mx+r.width>window.innerWidth)mx=window.innerWidth-r.width-8;
+    if(my+r.height>window.innerHeight)my=window.innerHeight-r.height-8;
+    if(mx<4)mx=4;if(my<4)my=4;
+    menu.style.left=mx+'px';menu.style.top=my+'px';
+  })();`);
+
+  // Listen for context menu actions via console message
+  const consoleHandler = (_e, _level, message) => {
+    if (!message || !message.startsWith('__gb_ctx:')) return;
+    wc.removeListener('console-message', consoleHandler);
+    try {
+      const payload = JSON.parse(message.replace('__gb_ctx:', ''));
+      const { action, data } = payload;
+      if (action === 'openLink') createTab(data);
+      else if (action === 'copyLink' || action === 'copyImageUrl') clipboard.writeText(data);
+      else if (action === 'saveImage') wc.downloadURL(data);
+      else if (action === 'openImageTab') createTab(data);
+      else if (action === 'ai') runAiAction(wc, data, selText);
+      else if (action === 'inspect') wc.inspectElement(params.x, params.y);
+    } catch {}
+  };
+  wc.on('console-message', consoleHandler);
+  // Clean up listener after 10s if no action taken
+  setTimeout(() => wc.removeListener('console-message', consoleHandler), 10000);
 }
 
 // Run AI action and show result in an injected popup
