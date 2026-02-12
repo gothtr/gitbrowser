@@ -1,4 +1,9 @@
 {
+  "sidebar": {
+    "pinned": "Pinned",
+    "tabs": "Tabs",
+    "new_tab": "New Tab"
+  },
   "tabs": {
     "new_tab": "New Tab",
     "close_tab": "Close Tab",
@@ -85,6 +90,7 @@
     "general": "General",
     "privacy": "Privacy and Security",
     "appearance": "Appearance",
+    "advanced": "Advanced",
     "search": "Search",
     "shortcuts": "Keyboard Shortcuts",
     "languages": "Languages",

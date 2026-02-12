@@ -7,10 +7,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: var(--font-sans);
-  font-size: var(--text-base);
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  font-size: var(--text-md);
   color: var(--fg-default);
   user-select: none;
   -webkit-user-select: none;
@@ -19,193 +16,320 @@ body {
   flex-direction: column;
   overflow: hidden;
   -webkit-app-region: drag;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 6%),
+    linear-gradient(180deg, #141920 0%, #111720 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset -1px 0 0 rgba(255,255,255,0.03);
+  position: relative;
 }
+html.light body {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.95) 0%, transparent 6%),
+    linear-gradient(180deg, #f0f2f5 0%, #ebeef2 100%);
+  border-right: 1px solid rgba(0,0,0,0.08);
+  box-shadow: inset -1px 0 0 rgba(255,255,255,0.5);
+}
+
+/* ─── Collapsed mode with smooth transitions ─── */
+.logo-text, .section-label, .tab-title, .tab-close,
+.nav-label, .nav-badge, .new-tab-label,
+.tab-group-name, .tab-group-count, .tab-group-actions {
+  transition: opacity var(--duration-normal) var(--ease-out),
+              max-width var(--duration-normal) var(--ease-out),
+              margin var(--duration-normal) var(--ease-out),
+              padding var(--duration-normal) var(--ease-out);
+  overflow: hidden;
+  white-space: nowrap;
+}
+body.collapsed .logo-text,
+body.collapsed .section-label,
+body.collapsed .tab-title,
+body.collapsed .tab-close,
+body.collapsed .nav-label,
+body.collapsed .nav-badge,
+body.collapsed .new-tab-label,
+body.collapsed .tab-group-name,
+body.collapsed .tab-group-count,
+body.collapsed .tab-group-actions { opacity: 0; max-width: 0; padding: 0; margin: 0; pointer-events: none; }
+body.collapsed .sidebar-header { justify-content: center; padding: 14px 4px 10px; }
+body.collapsed .tab-item { justify-content: center; padding: 8px 0; gap: 0; border-color: transparent; }
+body.collapsed .tab-item.active { border-color: transparent; box-shadow: none; }
+body.collapsed .tab-item.active::before { display: none; }
+body.collapsed .nav-item { justify-content: center; padding: 8px 0; gap: 0; }
+body.collapsed .new-tab-btn { justify-content: center; padding: 8px 0; gap: 0; }
+body.collapsed .pinned-tabs { justify-content: center; }
+body.collapsed .tabs-section { padding: 2px 4px; }
+body.collapsed .quick-nav { padding: 6px 4px 12px; }
+body.collapsed .new-tab-area { padding: 4px 4px; }
+body.collapsed .collapse-btn svg { transform: rotate(180deg); }
+body.collapsed .tab-group-header { justify-content: center; }
+body.collapsed .separator { margin: 4px 6px; }
 
 /* ─── Header ─── */
 .sidebar-header {
   display: flex;
   align-items: center;
-  padding: 12px 12px 8px;
+  padding: 16px 16px 12px;
   gap: 8px;
   -webkit-app-region: drag;
   flex-shrink: 0;
+  transition: padding var(--duration-panel) var(--ease-out),
+              justify-content var(--duration-panel) var(--ease-out);
 }
-.logo {
-  font-size: var(--text-md);
+.logo-text {
+  font-size: 14px;
   font-weight: 700;
   color: var(--fg-default);
-  letter-spacing: -0.3px;
+  letter-spacing: 0.3px;
   flex: 1;
 }
-.logo span { color: var(--accent-fg); }
+.logo-text span { color: var(--accent-fg); }
 .collapse-btn {
   width: 28px; height: 28px;
   border: none; background: none;
   color: var(--fg-subtle);
-  cursor: pointer; border-radius: var(--radius-sm);
+  cursor: pointer; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  transition: all var(--duration-fast);
+  transition: all var(--duration-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
-.collapse-btn:hover { background: var(--bg-subtle); color: var(--fg-default); }
+.collapse-btn:hover { background: var(--glass-bg-active); color: var(--fg-default); }
+.collapse-btn svg { transition: transform var(--duration-panel) var(--spring); }
 
 /* ─── Sections ─── */
 .section-label {
-  font-size: 10px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.5px; color: var(--fg-subtle);
-  padding: 4px 14px 4px; -webkit-app-region: no-drag;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--fg-subtle);
+  padding: 14px 16px 6px; -webkit-app-region: no-drag;
 }
 .separator {
-  height: 1px; background: rgba(255,255,255,0.06);
-  margin: 4px 12px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 5%, var(--glass-border) 50%, transparent 95%);
+  margin: 4px 14px;
 }
-html.light .separator { background: rgba(0,0,0,0.06); }
 
 /* ─── Pinned tabs ─── */
-.pinned-section { padding: 0 8px; flex-shrink: 0; -webkit-app-region: no-drag; }
-.pinned-tabs {
-  display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 4px 2px;
-}
+.pinned-section { padding: 0 10px; flex-shrink: 0; -webkit-app-region: no-drag; }
+.pinned-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 2px 2px; }
 .pinned-tab {
-  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  width: 36px; height: 36px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: all var(--duration-fast);
+  cursor: pointer; transition: all var(--duration-fast) var(--ease-out);
   font-size: 12px; font-weight: 600; color: var(--fg-muted);
-  background: transparent;
+  background: transparent; position: relative;
 }
-.pinned-tab:hover { background: var(--bg-subtle); }
+.pinned-tab:hover { background: var(--glass-bg-active); }
 .pinned-tab.active {
-  background: var(--bg-subtle);
-  box-shadow: inset 2px 0 0 var(--accent-emphasis);
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--accent-fg);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+.pinned-tab.active::after {
+  content: ''; position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
+  width: 14px; height: 2px; border-radius: 1px; background: var(--accent-fg);
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 
 /* ─── Tab list ─── */
 .tabs-section {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 2px 8px; -webkit-app-region: no-drag;
-  scrollbar-width: thin; scrollbar-color: var(--fg-subtle) transparent;
+  scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent;
+  transition: padding var(--duration-panel) var(--ease-out);
 }
-.tabs-list { display: flex; flex-direction: column; gap: 1px; }
+.tabs-section::-webkit-scrollbar { width: 4px; }
+.tabs-section::-webkit-scrollbar-track { background: transparent; }
+.tabs-section::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+html.light .tabs-section::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.08); }
+.tabs-list { display: flex; flex-direction: column; gap: 2px; }
 
 .tab-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 12px; border-radius: var(--radius-sm);
-  cursor: pointer; transition: all var(--duration-fast) var(--ease-out);
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 10px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out),
+              gap var(--duration-normal) var(--ease-out),
+              padding var(--duration-panel) var(--ease-out);
   color: var(--fg-muted); position: relative;
-  animation: tabAppear 0.2s var(--ease-out);
+  border: 1px solid transparent;
+  animation: tabAppear var(--duration-normal) var(--ease-out);
   -webkit-app-region: no-drag;
 }
 @keyframes tabAppear {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateX(-8px) scale(0.97); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
 }
-.tab-item:hover { background: var(--bg-subtle); color: var(--fg-default); }
+.tab-item:hover { background: var(--glass-bg-hover); color: var(--fg-default); }
 .tab-item.active {
-  background: var(--bg-subtle); color: var(--fg-default);
+  background: rgba(96, 165, 250, 0.08);
+  color: var(--fg-default);
+  border: 1px solid rgba(96, 165, 250, 0.12);
+  box-shadow: 0 0 16px rgba(96, 165, 250, 0.06);
+}
+html.light .tab-item.active {
+  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(37, 99, 235, 0.1);
 }
 .tab-item.active::before {
-  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
-  width: 2px; background: var(--accent-emphasis);
-  border-radius: 0 2px 2px 0;
+  content: ''; position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 3px; background: var(--accent-fg); border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 .tab-item.loading .tab-title::after {
-  content: ''; display: inline-block; width: 8px; height: 8px;
+  content: ''; display: inline-block; width: 10px; height: 10px;
   border: 1.5px solid var(--accent-fg); border-top-color: transparent;
   border-radius: 50%; margin-left: 6px; vertical-align: middle;
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.tab-item.dragging { opacity: 0.4; }
-.tab-item.drag-over { border-top: 2px solid var(--accent-emphasis); }
+.tab-item.dragging { opacity: 0.4; transform: scale(0.97); }
+.tab-item.drag-over { box-shadow: 0 -2px 0 var(--accent-fg), 0 -2px 8px var(--accent-glow); }
 
-.tab-favicon { width: 14px; height: 14px; border-radius: 2px; flex-shrink: 0; }
+.tab-favicon {
+  width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0;
+  background: var(--bg-subtle); object-fit: contain;
+}
 .tab-title {
-  flex: 1; font-size: var(--text-sm); overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
+  flex: 1; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; font-weight: 400;
 }
 .tab-close {
-  width: 18px; height: 18px; border: none; background: none;
-  color: var(--fg-subtle); cursor: pointer; border-radius: 4px;
+  width: 22px; height: 22px; border: none; background: none;
+  color: var(--fg-subtle); cursor: pointer; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; line-height: 1; padding: 0;
+  font-size: 15px; line-height: 1; padding: 0;
   opacity: 0; transition: all var(--duration-fast); flex-shrink: 0;
 }
-.tab-item:hover .tab-close { opacity: 1; }
-.tab-close:hover { background: var(--danger-emphasis); color: #fff; }
+.tab-item:hover .tab-close { opacity: 0.7; }
+.tab-close:hover { opacity: 1 !important; background: rgba(248,81,73,0.2); color: var(--danger-fg); }
 
 /* ─── New tab ─── */
-.new-tab-area { padding: 4px 8px; flex-shrink: 0; -webkit-app-region: no-drag; }
+.new-tab-area {
+  padding: 4px 8px; flex-shrink: 0; -webkit-app-region: no-drag;
+  transition: padding var(--duration-panel) var(--ease-out);
+}
 .new-tab-btn {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 7px 12px;
-  border: 1px dashed var(--border-muted); border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 8px 10px;
+  border: none; border-radius: 10px;
   background: none; color: var(--fg-subtle);
-  cursor: pointer; font-family: var(--font-sans); font-size: var(--text-sm);
-  transition: all var(--duration-fast);
+  cursor: pointer; font-family: var(--font-sans); font-size: 13px;
+  transition: all var(--duration-fast) var(--ease-out),
+              gap var(--duration-normal) var(--ease-out),
+              padding var(--duration-panel) var(--ease-out);
 }
 .new-tab-btn:hover {
-  border-color: var(--accent-fg); color: var(--accent-fg);
-  background: rgba(88,166,255,0.06);
+  color: var(--accent-fg);
+  background: rgba(96, 165, 250, 0.06);
 }
 
 /* ─── Quick nav ─── */
 .quick-nav {
-  padding: 6px 8px 10px; flex-shrink: 0;
-  display: flex; flex-direction: column; gap: 1px;
+  padding: 4px 8px 14px; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 2px;
   -webkit-app-region: no-drag;
+  transition: padding var(--duration-panel) var(--ease-out);
 }
 .nav-item {
   display: flex; align-items: center; gap: 10px;
-  padding: 6px 12px; border: none; background: none;
-  color: var(--fg-muted); cursor: pointer; border-radius: var(--radius-sm);
-  font-family: var(--font-sans); font-size: var(--text-sm);
-  transition: all var(--duration-fast); position: relative;
-  text-align: left;
+  padding: 7px 10px; border: none; background: none;
+  color: var(--fg-muted); cursor: pointer; border-radius: 10px;
+  font-family: var(--font-sans); font-size: 13px;
+  transition: all var(--duration-fast) var(--ease-out),
+              gap var(--duration-normal) var(--ease-out); position: relative; text-align: left;
 }
-.nav-item:hover { background: var(--bg-subtle); color: var(--fg-default); }
+.nav-item:hover {
+  background: var(--glass-bg-hover);
+  color: var(--fg-default);
+}
 .nav-item:active { transform: scale(0.98); }
+.nav-item svg { opacity: 0.5; transition: opacity var(--duration-fast); flex-shrink: 0; }
+.nav-item:hover svg { opacity: 1; }
 .nav-label { flex: 1; }
 .nav-badge {
-  min-width: 16px; height: 16px; padding: 0 4px;
-  border-radius: 8px; background: var(--danger-fg);
-  color: #fff; font-size: 9px; font-weight: 700;
-  line-height: 16px; text-align: center;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--accent-emphasis);
+  color: #fff; font-size: 10px; font-weight: 700;
+  line-height: 18px; text-align: center;
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* ─── Tab Groups ─── */
+.tab-group-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; cursor: pointer; border-radius: 8px;
+  transition: all var(--duration-fast) var(--ease-out); margin-top: 6px;
+  -webkit-app-region: no-drag;
+}
+.tab-group-header:hover { background: var(--glass-bg-hover); }
+.tab-group-color {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  transition: transform var(--duration-normal) var(--spring);
+  box-shadow: 0 0 6px currentColor;
+}
+.tab-group-header.collapsed .tab-group-color { transform: scale(0.7); }
+.tab-group-name {
+  font-size: 12px; font-weight: 600; color: var(--fg-muted);
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tab-group-count { font-size: 11px; color: var(--fg-subtle); }
+.tab-group-actions { opacity: 0; transition: opacity var(--duration-fast); display: flex; gap: 2px; }
+.tab-group-header:hover .tab-group-actions { opacity: 1; }
+.tab-group-action {
+  width: 20px; height: 20px; border: none; background: none;
+  color: var(--fg-subtle); cursor: pointer; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; padding: 0;
+}
+.tab-group-action:hover { background: var(--glass-bg-active); color: var(--fg-default); }
+.tab-group-tabs {
+  overflow: hidden;
+  transition: max-height var(--duration-normal) var(--ease-out),
+              opacity var(--duration-normal) var(--ease-out);
+  opacity: 1;
+}
+.tab-group-tabs.collapsed { max-height: 0 !important; opacity: 0; }
+.tab-group-drop {
+  box-shadow: 0 0 0 2px var(--accent-fg), 0 0 12px var(--accent-glow);
+  border-radius: 8px;
+}
+
+/* ─── Context menu animation ─── */
+@keyframes menuIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 </style>
 </head>
 <body>
 <div class="sidebar-header">
-  <div class="logo">Git<span>Browser</span></div>
-  <button class="collapse-btn" id="collapse-btn" title="Toggle sidebar">
+  <div class="logo-text">Git<span>Browser</span></div>
+  <button class="collapse-btn" id="collapse-btn" title="Toggle sidebar (Ctrl+B)">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.823 7.823a.25.25 0 0 1 0 .354l-2.396 2.396A.25.25 0 0 1 4 10.396V5.604a.25.25 0 0 1 .427-.177Z"/><path d="M1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25V1.75C0 .784.784 0 1.75 0ZM1.5 1.75v12.5c0 .138.112.25.25.25H9.5v-13H1.75a.25.25 0 0 0-.25.25ZM11 14.5h3.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25H11Z"/></svg>
   </button>
 </div>
 
-<!-- Pinned tabs -->
-<div class="pinned-section" id="pinned-section">
+<div class="pinned-section" id="pinned-section" style="display:none">
   <div class="section-label">Pinned</div>
   <div class="pinned-tabs" id="pinned-tabs"></div>
 </div>
 
-<!-- Separator -->
 <div class="separator"></div>
 
-<!-- Tab list -->
+<div class="section-label" id="tabs-label">TABS</div>
 <div class="tabs-section" id="tabs-section">
   <div class="tabs-list" id="tabs-list"></div>
 </div>
 
-<!-- New tab button -->
 <div class="new-tab-area">
   <button class="new-tab-btn" id="new-tab-btn">
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
-    <span id="new-tab-label">New Tab</span>
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>
+    <span class="new-tab-label" id="new-tab-label">New Tab</span>
   </button>
 </div>
 
-<!-- Separator -->
 <div class="separator"></div>
 
-<!-- Quick nav buttons -->
 <div class="quick-nav" id="quick-nav"></div>
 
 <script>
@@ -214,25 +338,30 @@ const tabsList = document.getElementById('tabs-list');
 const pinnedTabs = document.getElementById('pinned-tabs');
 let currentActiveId = null;
 let pinnedIds = new Set();
+let isCollapsed = false;
 
-// Load pinned state
 try { const p = JSON.parse(localStorage.getItem('pinned_tabs') || '[]'); pinnedIds = new Set(p); } catch {}
 function savePinned() { localStorage.setItem('pinned_tabs', JSON.stringify([...pinnedIds])); }
 
-// ─── Buttons ───
 document.getElementById('new-tab-btn').onclick = () => gb.newTab();
 document.getElementById('collapse-btn').onclick = () => gb.toggleSidebar();
 
-// ─── Quick nav ───
+if (gb && gb.onSidebarCollapsed) {
+  gb.onSidebarCollapsed((d) => {
+    isCollapsed = d.collapsed;
+    document.body.classList.toggle('collapsed', isCollapsed);
+  });
+}
+
 const NAV_ITEMS = [
-  { id: 'bookmarks', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>', label: 'Bookmarks', action: () => gb.openBookmarks() },
-  { id: 'history', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm.5 4.75a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 .37.65l2.5 1.5a.75.75 0 1 0 .77-1.29L8.5 7.94Z"/></svg>', label: 'History', action: () => gb.openHistory() },
-  { id: 'downloads', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>', label: 'Downloads', action: () => gb.openDownloads() },
-  { id: 'passwords', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M4 4a4 4 0 0 1 8 0v2h.25c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-5.5C2 6.784 2.784 6 3.75 6H4Zm8.25 3.5h-8.5a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM10.5 6V4a2.5 2.5 0 1 0-5 0v2Z"/></svg>', label: 'Passwords', action: () => gb.openPasswords() },
-  { id: 'extensions', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.5 1.75C7.5.784 8.284 0 9.25 0h5.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.75 9H9.25A1.75 1.75 0 0 1 7.5 7.25Zm1.75-.25a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h5.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM0 9.25C0 8.284.784 7.5 1.75 7.5h5.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 7.25 16.5h-5.5A1.75 1.75 0 0 1 0 14.75Zm1.75-.25a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h5.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM0 1.75C0 .784.784 0 1.75 0h5.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 7.25 9h-5.5A1.75 1.75 0 0 1 0 7.25Zm1.75-.25a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h5.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25Z"/></svg>', label: 'Extensions', action: () => gb.openExtensions() },
-  { id: 'ai', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 3.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4.001 4.001 0 0 0-6.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 4.6 8.048 3.486 3.486 0 0 1 2 5.5ZM11 4a.75.75 0 1 0 0 1.5 1.5 1.5 0 0 1 .666 2.844.75.75 0 0 0-.416.672v.352a.75.75 0 0 0 .574.73c1.2.289 2.162 1.2 2.522 2.372a.75.75 0 1 0 1.434-.44 5.01 5.01 0 0 0-2.56-3.012A3 3 0 0 0 11 4Z"/></svg>', label: 'AI', action: () => gb.openAI() },
-  { id: 'github', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>', label: 'GitHub', action: () => gb.openGitHub(), badge: true },
-  { id: 'settings', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.1-.303c.652-.18 1.34.03 1.73.545a8.042 8.042 0 0 1 1.088 1.89c.238.572.1 1.252-.337 1.71l-.812.804a.395.395 0 0 0-.112.29c.013.26.013.52 0 .78a.394.394 0 0 0 .112.29l.812.804c.436.458.575 1.138.337 1.71a8.04 8.04 0 0 1-1.088 1.89c-.39.515-1.078.725-1.73.545l-1.1-.303a.352.352 0 0 0-.3.071 5.834 5.834 0 0 1-.667.386.35.35 0 0 0-.212.224l-.289 1.106c-.169.646-.715 1.196-1.458 1.26a8.28 8.28 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106a.35.35 0 0 0-.212-.224 5.738 5.738 0 0 1-.668-.386.352.352 0 0 0-.299-.071l-1.1.303c-.652.18-1.34-.03-1.73-.545a8.042 8.042 0 0 1-1.088-1.89c-.238-.572-.1-1.252.337-1.71l.812-.804a.395.395 0 0 0 .112-.29 6.046 6.046 0 0 1 0-.78.394.394 0 0 0-.112-.29l-.812-.804c-.436-.458-.575-1.138-.337-1.71a8.04 8.04 0 0 1 1.088-1.89c.39-.515 1.078-.725 1.73-.545l1.1.303a.352.352 0 0 0 .3-.071c.214-.143.437-.272.667-.386a.35.35 0 0 0 .212-.224l.289-1.106C6.01.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.046-.219.29-.411.6-.573.925-.014.028-.042.112.017.182l.812.803c.407.404.63.953.63 1.52s-.223 1.116-.63 1.52l-.812.803c-.059.07-.031.154-.017.182.162.325.354.634.573.925.02.03.086.077.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.16.107.327.204.5.29.449.222.851.628.998 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.03.175-.016.195-.046.219-.29.411-.6.573-.925.014-.028.042-.112-.017-.182l-.812-.803a2.15 2.15 0 0 1-.63-1.52c0-.567.223-1.116.63-1.52l.812-.803c.059-.07.031-.154.017-.182a6.588 6.588 0 0 0-.573-.925c-.02-.03-.086-.077-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.5-.29c-.449-.222-.851-.628-.998-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/></svg>', label: 'Settings', action: () => gb.openSettings() },
+  { id: 'bookmarks', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>', label: 'Bookmarks', action: () => gb.openBookmarks() },
+  { id: 'history', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0ZM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm.5 4.75a.75.75 0 0 0-1.5 0v3.5a.75.75 0 0 0 .37.65l2.5 1.5a.75.75 0 1 0 .77-1.29L8.5 7.94Z"/></svg>', label: 'History', action: () => gb.openHistory() },
+  { id: 'downloads', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>', label: 'Downloads', action: () => gb.openDownloads() },
+  { id: 'passwords', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M4 4a4 4 0 0 1 8 0v2h.25c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-5.5C2 6.784 2.784 6 3.75 6H4Zm8.25 3.5h-8.5a.25.25 0 0 0-.25.25v5.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25ZM10.5 6V4a2.5 2.5 0 1 0-5 0v2Z"/></svg>', label: 'Passwords', action: () => gb.openPasswords() },
+  { id: 'extensions', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 4.002h2.962C10.045 4.002 11.5 5.164 11.5 6.5c0 1.652-1.258 2.5-2.962 2.5H7.5v3H5.5V4.002Zm2 3.498h.845c.636 0 1.155-.347 1.155-1s-.52-1-1.155-1H7.5v2Z"/><path d="M1 2a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2Zm1 0v12h12V2H2Z"/></svg>', label: 'Extensions', action: () => gb.openExtensions() },
+  { id: 'ai', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M7.657.429 8.845 3.6l3.17.188a.5.5 0 0 1 .285.878L9.716 7.003l.838 3.084a.5.5 0 0 1-.746.556L7 8.813l-2.808 1.83a.5.5 0 0 1-.746-.556l.838-3.084L1.7 4.666a.5.5 0 0 1 .285-.878L5.155 3.6 6.343.429a.5.5 0 0 1 .914 0ZM2.5 12.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1a.5.5 0 0 1 .5-.5Zm0-2a.5.5 0 0 1 .5.5v.5a.5.5 0 0 1-1 0V11a.5.5 0 0 1 .5-.5Zm11 2a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-1a.5.5 0 0 1 .5-.5Zm0-2a.5.5 0 0 1 .5.5v.5a.5.5 0 0 1-1 0V11a.5.5 0 0 1 .5-.5Z"/></svg>', label: 'AI', action: () => gb.openAI() },
+  { id: 'github', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>', label: 'GitHub', action: () => gb.openGitHub(), badge: true },
+  { id: 'settings', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.1-.303c.652-.18 1.34.03 1.73.545a8.042 8.042 0 0 1 1.088 1.89c.238.572.1 1.252-.337 1.71l-.812.804a.395.395 0 0 0-.112.29c.013.26.013.52 0 .78a.394.394 0 0 0 .112.29l.812.804c.436.458.575 1.138.337 1.71a8.04 8.04 0 0 1-1.088 1.89c-.39.515-1.078.725-1.73.545l-1.1-.303a.352.352 0 0 0-.3.071 5.834 5.834 0 0 1-.667.386.35.35 0 0 0-.212.224l-.289 1.106c-.169.646-.715 1.196-1.458 1.26a8.28 8.28 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106a.35.35 0 0 0-.212-.224 5.738 5.738 0 0 1-.668-.386.352.352 0 0 0-.299-.071l-1.1.303c-.652.18-1.34-.03-1.73-.545a8.042 8.042 0 0 1-1.088-1.89c-.238-.572-.1-1.252.337-1.71l.812-.804a.395.395 0 0 0 .112-.29 6.046 6.046 0 0 1 0-.78.394.394 0 0 0-.112-.29l-.812-.804c-.436-.458-.575-1.138-.337-1.71a8.04 8.04 0 0 1 1.088-1.89c.39-.515 1.078-.725 1.73-.545l1.1.303a.352.352 0 0 0 .3-.071c.214-.143.437-.272.667-.386a.35.35 0 0 0 .212-.224l.289-1.106C6.01.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.046-.219.29-.411.6-.573.925-.014.028-.042.112.017.182l.812.803c.407.404.63.953.63 1.52s-.223 1.116-.63 1.52l-.812.803c-.059.07-.031.154-.017.182.162.325.354.634.573.925.02.03.086.077.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.16.107.327.204.5.29.449.222.851.628.998 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.03.175-.016.195-.046.219-.29.411-.6.573-.925.014-.028.042-.112-.017-.182l-.812-.803a2.15 2.15 0 0 1-.63-1.52c0-.567.223-1.116.63-1.52l.812-.803c.059-.07.031-.154.017-.182a6.588 6.588 0 0 0-.573-.925c-.02-.03-.086-.077-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.5-.29c-.449-.222-.851-.628-.998-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/></svg>', label: 'Settings', action: () => gb.openSettings() },
 ];
 
 function renderQuickNav() {
@@ -251,17 +380,12 @@ function renderQuickNav() {
 }
 renderQuickNav();
 
-// ─── Tabs rendering ───
 const loadingTabs = new Set();
 
 gb.onTabsUpdate((data) => {
   const { tabs: tabList, activeId } = data;
   currentActiveId = activeId;
-  
   const pinned = tabList.filter(t => pinnedIds.has(t.id));
-  const regular = tabList.filter(t => !pinnedIds.has(t.id));
-  
-  // Render pinned
   const pinnedSection = document.getElementById('pinned-section');
   if (pinned.length > 0) {
     pinnedSection.style.display = '';
@@ -271,7 +395,7 @@ gb.onTabsUpdate((data) => {
       div.className = 'pinned-tab' + (t.id === activeId ? ' active' : '');
       div.title = t.title || 'New Tab';
       if (t.favicon) {
-        div.innerHTML = `<img src="${t.favicon}" width="16" height="16" style="border-radius:2px" onerror="this.parentElement.textContent='${(t.title||'N')[0]}'" />`;
+        div.innerHTML = `<img src="${t.favicon}" width="18" height="18" style="border-radius:4px" onerror="this.parentElement.textContent='${(t.title||'N')[0]}'" />`;
       } else {
         div.textContent = (t.title || 'N')[0].toUpperCase();
       }
@@ -279,118 +403,239 @@ gb.onTabsUpdate((data) => {
       div.oncontextmenu = (e) => { e.preventDefault(); gb.tabContextMenu(t.id); };
       pinnedTabs.appendChild(div);
     });
-  } else {
-    pinnedSection.style.display = 'none';
-  }
-  
-  // Render regular tabs
-  tabsList.innerHTML = '';
-  regular.forEach(t => {
-    const div = document.createElement('div');
-    div.className = 'tab-item' + (t.id === activeId ? ' active' : '') + (loadingTabs.has(t.id) ? ' loading' : '');
-    div.dataset.tabId = t.id;
-    
-    let faviconHtml = '';
-    if (t.favicon) {
-      faviconHtml = `<img class="tab-favicon" src="${t.favicon}" onerror="this.style.display='none'" />`;
-    }
-    
-    let title = t.title || 'New Tab';
-    div.innerHTML = `
-      ${faviconHtml}
-      <span class="tab-title">${esc(title)}</span>
-      <button class="tab-close" title="Close">&times;</button>
-    `;
-    
-    div.addEventListener('click', (e) => {
-      if (!e.target.closest('.tab-close')) gb.switchTab(t.id);
-    });
-    div.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      gb.tabContextMenu(t.id);
-    });
-    div.querySelector('.tab-close').addEventListener('click', (e) => {
-      e.stopPropagation();
-      // Animate close
-      div.style.height = div.offsetHeight + 'px';
-      div.style.overflow = 'hidden';
-      requestAnimationFrame(() => {
-        div.style.transition = 'all 0.2s var(--ease-out)';
-        div.style.height = '0';
-        div.style.opacity = '0';
-        div.style.padding = '0 12px';
-        div.style.margin = '0';
-      });
-      setTimeout(() => gb.closeTab(t.id), 200);
-    });
-    
-    // Drag and drop
-    div.draggable = true;
-    div.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', t.id);
-      div.classList.add('dragging');
-    });
-    div.addEventListener('dragend', () => {
-      div.classList.remove('dragging');
-      document.querySelectorAll('.tab-item.drag-over').forEach(el => el.classList.remove('drag-over'));
-    });
-    div.addEventListener('dragover', (e) => { e.preventDefault(); div.classList.add('drag-over'); });
-    div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
-    div.addEventListener('drop', (e) => {
-      e.preventDefault();
-      div.classList.remove('drag-over');
-      const fromId = e.dataTransfer.getData('text/plain');
-      if (fromId && t.id && fromId !== t.id) gb.reorderTab(fromId, t.id);
-    });
-    
-    tabsList.appendChild(div);
-  });
+  } else { pinnedSection.style.display = 'none'; }
+  renderTabsWithGroups(tabList, activeId);
 });
 
-gb.onTabLoading((data) => {
-  if (data.loading) loadingTabs.add(data.id);
-  else loadingTabs.delete(data.id);
-});
-
-// GitHub notification badge
-gb.onGhNotifCount((d) => {
-  const badge = document.getElementById('gh-badge');
-  if (!badge) return;
-  const count = d.count || 0;
-  badge.textContent = count > 99 ? '99+' : count;
-  badge.style.display = count > 0 ? '' : 'none';
-});
+gb.onTabLoading((data) => { if (data.loading) loadingTabs.add(data.id); else loadingTabs.delete(data.id); });
+gb.onGhNotifCount((d) => { const badge = document.getElementById('gh-badge'); if (!badge) return; badge.textContent = (d.count||0)>99?'99+':d.count; badge.style.display = d.count>0?'':'none'; });
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-// ─── Theme ───
-function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+function applyTheme(t) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', t === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb) {
   gb.onThemeChanged((d) => applyTheme(d.theme));
-  gb.getSettings().then(s => {
-    if (s && s.appearance) {
-      let t = s.appearance.theme;
-      if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
-      applyTheme(t);
-    }
-  }).catch(() => {});
+  gb.getSettings().then(s => { if (s&&s.appearance) { let t=s.appearance.theme; if(t==='System') t=window.matchMedia('(prefers-color-scheme:light)').matches?'Light':'Dark'; applyTheme(t); } }).catch(()=>{});
 }
 
-// ─── Keyboard shortcuts ───
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.key === 't') { e.preventDefault(); gb.newTab(); }
   if (e.ctrlKey && e.key === 'w') { e.preventDefault(); if (currentActiveId) gb.closeTab(currentActiveId); }
   if (e.ctrlKey && e.shiftKey && e.key === 'T') { e.preventDefault(); gb.reopenClosedTab(); }
-  if (e.ctrlKey && e.key === 'Tab') { e.preventDefault(); gb.nextTab(); }
-  if (e.ctrlKey && e.shiftKey && e.key === 'Tab') { e.preventDefault(); gb.prevTab(); }
-  if (e.ctrlKey && e.key === 'b') { e.preventDefault(); gb.openBookmarks(); }
-  if (e.ctrlKey && e.key === 'h') { e.preventDefault(); gb.openHistory(); }
-  if (e.ctrlKey && e.key === 'j') { e.preventDefault(); gb.openDownloads(); }
-  if (e.ctrlKey && e.key === ',') { e.preventDefault(); gb.openSettings(); }
+  if (e.ctrlKey && e.key === 'b') { e.preventDefault(); gb.toggleSidebar(); }
   if (e.ctrlKey && e.shiftKey && e.key === 'N') { e.preventDefault(); gb.openPrivateWindow(); }
 });
 
 gb.getTabs();
+
+// ─── Tab Groups ───
+const GROUP_COLORS = ['#58a6ff','#3fb950','#f85149','#d29922','#a371f7','#f0883e','#f778ba','#56d4dd'];
+let tabGroups = [];
+try { tabGroups = JSON.parse(localStorage.getItem('tab_groups') || '[]'); } catch {}
+function saveGroups() { localStorage.setItem('tab_groups', JSON.stringify(tabGroups)); }
+function getGroupForTab(tabId) { return tabGroups.find(g => g.tabIds.includes(tabId)); }
+
+function createGroup(name, color, tabIds) {
+  const g = { id: 'grp-' + Date.now(), name: name || 'Group', color: color || GROUP_COLORS[tabGroups.length % GROUP_COLORS.length], collapsed: false, tabIds: tabIds || [] };
+  tabGroups.push(g); saveGroups(); return g;
+}
+function removeGroup(groupId) { tabGroups = tabGroups.filter(g => g.id !== groupId); saveGroups(); }
+function addTabToGroup(groupId, tabId) {
+  tabGroups.forEach(g => { g.tabIds = g.tabIds.filter(id => id !== tabId); });
+  const g = tabGroups.find(g => g.id === groupId);
+  if (g) g.tabIds.push(tabId); saveGroups();
+}
+function removeTabFromGroup(tabId) {
+  tabGroups.forEach(g => { g.tabIds = g.tabIds.filter(id => id !== tabId); });
+  tabGroups = tabGroups.filter(g => g.tabIds.length > 0); saveGroups();
+}
+
+document.addEventListener('contextmenu', (e) => { window._lastCtxX = e.clientX; window._lastCtxY = e.clientY; });
+
+function showGroupMenu(tabId, x, y) {
+  const existing = document.querySelector('.group-menu');
+  if (existing) existing.remove();
+  const menu = document.createElement('div');
+  menu.className = 'group-menu';
+  menu.style.cssText = `position:fixed;z-index:100;background:var(--glass-bg-solid);border:1px solid var(--glass-border);border-radius:12px;padding:6px;box-shadow:var(--glass-shadow-lg),var(--glass-inner-glow);min-width:180px;font-size:13px;top:${y}px;left:${x}px;animation:menuIn 0.2s cubic-bezier(0.16,1,0.3,1);`;
+  const currentGroup = getGroupForTab(tabId);
+  
+  // Header
+  const hdr = document.createElement('div');
+  hdr.style.cssText = 'padding:4px 10px 6px;font-size:11px;color:var(--fg-subtle);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;';
+  hdr.textContent = 'Add to group';
+  menu.appendChild(hdr);
+  
+  tabGroups.forEach(g => {
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:7px 10px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:8px;';
+    item.innerHTML = `<span style="width:10px;height:10px;border-radius:50%;background:${g.color};flex-shrink:0"></span>${esc(g.name)}`;
+    item.onmouseenter = () => item.style.background = 'var(--glass-bg-active)';
+    item.onmouseleave = () => item.style.background = '';
+    item.onclick = () => { addTabToGroup(g.id, tabId); menu.remove(); gb.getTabs(); };
+    menu.appendChild(item);
+  });
+  
+  const newItem = document.createElement('div');
+  newItem.style.cssText = 'padding:7px 10px;cursor:pointer;border-radius:6px;color:var(--accent-fg);display:flex;align-items:center;gap:8px;';
+  newItem.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg> New group';
+  newItem.onmouseenter = () => newItem.style.background = 'var(--glass-bg-active)';
+  newItem.onmouseleave = () => newItem.style.background = '';
+  newItem.onclick = () => { const name = prompt('Group name:'); if (name) { const g = createGroup(name); addTabToGroup(g.id, tabId); menu.remove(); gb.getTabs(); } };
+  menu.appendChild(newItem);
+  
+  if (currentGroup) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'height:1px;background:var(--glass-border);margin:4px 6px;';
+    menu.appendChild(sep);
+    const ungroupItem = document.createElement('div');
+    ungroupItem.style.cssText = 'padding:7px 10px;cursor:pointer;border-radius:6px;color:var(--danger-fg);';
+    ungroupItem.textContent = 'Remove from group';
+    ungroupItem.onmouseenter = () => ungroupItem.style.background = 'var(--glass-bg-active)';
+    ungroupItem.onmouseleave = () => ungroupItem.style.background = '';
+    ungroupItem.onclick = () => { removeTabFromGroup(tabId); menu.remove(); gb.getTabs(); };
+    menu.appendChild(ungroupItem);
+  }
+  
+  document.body.appendChild(menu);
+  // Clamp position
+  const mRect = menu.getBoundingClientRect();
+  if (mRect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - mRect.height - 8) + 'px';
+  if (mRect.right > window.innerWidth) menu.style.left = (window.innerWidth - mRect.width - 8) + 'px';
+  const closeMenu = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } };
+  setTimeout(() => document.addEventListener('click', closeMenu), 10);
+}
+
+function renderTabsWithGroups(tabList, activeId) {
+  tabsList.innerHTML = '';
+  const regular = tabList.filter(t => !pinnedIds.has(t.id));
+  const existingIds = new Set(regular.map(t => t.id));
+  tabGroups.forEach(g => { g.tabIds = g.tabIds.filter(id => existingIds.has(id)); });
+  tabGroups = tabGroups.filter(g => g.tabIds.length > 0);
+  saveGroups();
+  const groupedTabIds = new Set(tabGroups.flatMap(g => g.tabIds));
+  const ungrouped = regular.filter(t => !groupedTabIds.has(t.id));
+  
+  tabGroups.forEach(g => {
+    const groupEl = document.createElement('div');
+    groupEl.dataset.groupId = g.id;
+    const header = document.createElement('div');
+    header.className = 'tab-group-header' + (g.collapsed ? ' collapsed' : '');
+    header.innerHTML = `<span class="tab-group-color" style="background:${g.color}"></span><span class="tab-group-name">${esc(g.name)}</span><span class="tab-group-count">${g.tabIds.length}</span><div class="tab-group-actions"><button class="tab-group-action" data-action="close" title="Close group">&times;</button></div>`;
+    header.addEventListener('click', (e) => { if (e.target.closest('.tab-group-action')) return; g.collapsed = !g.collapsed; saveGroups(); gb.getTabs(); });
+    header.querySelector('[data-action="close"]').addEventListener('click', (e) => { e.stopPropagation(); removeGroup(g.id); gb.getTabs(); });
+    header.addEventListener('contextmenu', (e) => { e.preventDefault(); showGroupContextMenu(g, e.clientX, e.clientY); });
+    header.addEventListener('dragover', (e) => { e.preventDefault(); groupEl.classList.add('tab-group-drop'); });
+    header.addEventListener('dragleave', () => groupEl.classList.remove('tab-group-drop'));
+    header.addEventListener('drop', (e) => { e.preventDefault(); groupEl.classList.remove('tab-group-drop'); const fromId = e.dataTransfer.getData('text/plain'); if (fromId) { addTabToGroup(g.id, fromId); gb.getTabs(); } });
+    groupEl.appendChild(header);
+    
+    const tabsContainer = document.createElement('div');
+    tabsContainer.className = 'tab-group-tabs' + (g.collapsed ? ' collapsed' : '');
+    tabsContainer.style.borderLeft = `2px solid ${g.color}`;
+    tabsContainer.style.marginLeft = '8px';
+    tabsContainer.style.paddingLeft = '4px';
+    if (!g.collapsed) {
+      g.tabIds.map(id => regular.find(t => t.id === id)).filter(Boolean).forEach(t => tabsContainer.appendChild(createTabElement(t, activeId)));
+    }
+    groupEl.appendChild(tabsContainer);
+    tabsList.appendChild(groupEl);
+  });
+  ungrouped.forEach(t => tabsList.appendChild(createTabElement(t, activeId)));
+}
+
+function showGroupContextMenu(group, x, y) {
+  const existing = document.querySelector('.group-menu');
+  if (existing) existing.remove();
+  const menu = document.createElement('div');
+  menu.className = 'group-menu';
+  menu.style.cssText = `position:fixed;z-index:100;background:var(--glass-bg-solid);border:1px solid var(--glass-border);border-radius:12px;padding:6px;box-shadow:var(--glass-shadow-lg),var(--glass-inner-glow);min-width:180px;font-size:13px;top:${y}px;left:${x}px;animation:menuIn 0.2s cubic-bezier(0.16,1,0.3,1);`;
+  [
+    { label: 'Rename', action: () => { const n = prompt('New name:', group.name); if (n) { group.name = n; saveGroups(); gb.getTabs(); } }},
+    { label: 'Change color', action: () => { const idx = GROUP_COLORS.indexOf(group.color); group.color = GROUP_COLORS[(idx+1)%GROUP_COLORS.length]; saveGroups(); gb.getTabs(); }},
+    { label: 'Close all tabs', action: () => { group.tabIds.forEach(id => gb.closeTab(id)); removeGroup(group.id); }, danger: true },
+    { label: 'Ungroup', action: () => { removeGroup(group.id); gb.getTabs(); }},
+  ].forEach(item => {
+    const el = document.createElement('div');
+    el.style.cssText = `padding:7px 10px;cursor:pointer;border-radius:6px;${item.danger?'color:var(--danger-fg);':''}`;
+    el.textContent = item.label;
+    el.onmouseenter = () => el.style.background = 'var(--glass-bg-active)';
+    el.onmouseleave = () => el.style.background = '';
+    el.onclick = () => { item.action(); menu.remove(); };
+    menu.appendChild(el);
+  });
+  document.body.appendChild(menu);
+  const closeMenu = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', closeMenu); } };
+  setTimeout(() => document.addEventListener('click', closeMenu), 10);
+}
+
+function createTabElement(t, activeId) {
+  const div = document.createElement('div');
+  div.className = 'tab-item' + (t.id === activeId ? ' active' : '') + (loadingTabs.has(t.id) ? ' loading' : '');
+  div.dataset.tabId = t.id;
+  if (t.url) div.dataset.url = t.url;
+  let faviconHtml = '';
+  if (t.favicon) {
+    faviconHtml = `<img class="tab-favicon" src="${t.favicon}" onerror="this.style.display='none'" />`;
+  }
+  div.innerHTML = `${faviconHtml}<span class="tab-title">${esc(t.title || 'New Tab')}</span><button class="tab-close" title="Close">&times;</button>`;
+  div.addEventListener('click', (e) => { if (!e.target.closest('.tab-close')) gb.switchTab(t.id); });
+  // Right-click always shows group menu (with "Add to group" option)
+  div.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showGroupMenu(t.id, e.clientX, e.clientY);
+  });
+  div.querySelector('.tab-close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    div.style.height = div.offsetHeight + 'px'; div.style.overflow = 'hidden';
+    requestAnimationFrame(() => {
+      div.style.transition = 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
+      div.style.height = '0'; div.style.opacity = '0';
+      div.style.padding = '0 10px'; div.style.margin = '0';
+      div.style.transform = 'translateX(-12px) scale(0.95)';
+    });
+    setTimeout(() => { removeTabFromGroup(t.id); gb.closeTab(t.id); }, 250);
+  });
+  div.draggable = true;
+  div.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', t.id); div.classList.add('dragging'); });
+  div.addEventListener('dragend', () => { div.classList.remove('dragging'); document.querySelectorAll('.drag-over,.tab-group-drop').forEach(el => { el.classList.remove('drag-over','tab-group-drop'); }); });
+  div.addEventListener('dragover', (e) => { e.preventDefault(); div.classList.add('drag-over'); });
+  div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
+  div.addEventListener('drop', (e) => { e.preventDefault(); div.classList.remove('drag-over'); const fromId = e.dataTransfer.getData('text/plain'); if (fromId && t.id && fromId !== t.id) gb.reorderTab(fromId, t.id); });
+  return div;
+}
+
+// ─── Localization ───
+async function loadLocale() {
+  if (!gb || !gb.getLocaleData) return;
+  try {
+    const { data: t } = await gb.getLocaleData();
+    if (!t) return;
+    const tb = t.toolbar || {};
+    const labelMap = {
+      bookmarks: tb.bookmarks || t.bookmarks?.title || 'Bookmarks',
+      history: tb.history || t.history?.title || 'History',
+      downloads: tb.downloads || t.downloads?.title || 'Downloads',
+      passwords: t.passwords?.title || 'Passwords',
+      extensions: t.extensions?.title || 'Extensions',
+      ai: tb.ai_assistant || t.ai?.title || 'AI',
+      github: tb.github || t.github?.title || 'GitHub',
+      settings: tb.settings || t.settings?.title || 'Settings',
+    };
+    document.querySelectorAll('.nav-item').forEach(btn => {
+      const id = btn.dataset.id;
+      if (id && labelMap[id]) { const lbl = btn.querySelector('.nav-label'); if (lbl) lbl.textContent = labelMap[id]; btn.title = labelMap[id]; }
+    });
+    const ntl = document.getElementById('new-tab-label');
+    if (ntl && t.tabs?.new_tab) ntl.textContent = t.tabs.new_tab;
+  } catch {}
+}
+loadLocale();
+
+// ─── Context menus on quick nav ───
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('contextmenu', (e) => { e.preventDefault(); const id = btn.dataset.id; if (id && gb && gb.sidebarQuickNavMenu) gb.sidebarQuickNavMenu(id); });
+});
 </script>
 </body>
 </html>

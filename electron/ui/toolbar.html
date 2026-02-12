@@ -7,14 +7,14 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: var(--font-sans);
-  font-size: var(--text-base);
+  font-size: var(--text-md);
   background: transparent;
   color: var(--fg-default);
   user-select: none;
   -webkit-user-select: none;
   overflow: hidden;
   -webkit-app-region: drag;
-  height: 44px;
+  height: 48px;
 }
 
 /* ─── Nav bar ─── */
@@ -22,46 +22,64 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 12px;
-  height: 44px;
-  background: var(--bg-default);
-  border-bottom: 1px solid var(--border-muted);
+  padding: 6px 14px;
+  height: 48px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 8%),
+    linear-gradient(180deg, #141920 0%, #111720 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   -webkit-app-region: drag;
   position: relative;
+  box-shadow: var(--glass-inner-glow), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+html.light #navbar {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.95) 0%, transparent 8%),
+    linear-gradient(180deg, #f0f2f5 0%, #ebeef2 100%);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  box-shadow: var(--glass-inner-glow), 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 /* ─── Nav buttons ─── */
 .nav-btn {
-  width: 32px; height: 32px;
+  width: 34px; height: 34px;
   border: none; background: none;
-  color: var(--fg-muted); cursor: pointer;
-  border-radius: var(--radius-sm);
+  color: var(--fg-subtle); cursor: pointer;
+  border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
   transition: all var(--duration-fast) var(--ease-out);
   -webkit-app-region: no-drag; flex-shrink: 0;
 }
 .nav-btn:hover {
-  background: var(--bg-subtle);
+  background: var(--glass-bg-active);
   color: var(--fg-default);
 }
-.nav-btn:active { transform: scale(0.92); }
+.nav-btn:active { transform: scale(0.9); }
 
 /* ─── URL bar (glass style) ─── */
 #urlbox {
   flex: 1;
   display: flex; align-items: center;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.04);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: 0 12px; height: 32px;
+  border-radius: 12px;
+  padding: 0 14px; height: 36px;
   transition: all var(--duration-fast) var(--ease-out);
   -webkit-app-region: no-drag;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.15), var(--glass-inner-glow);
 }
-html.light #urlbox { background: rgba(0,0,0,0.04); }
+html.light #urlbox {
+  background: rgba(0,0,0,0.03);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+}
 #urlbox:focus-within {
   border-color: var(--accent-emphasis);
-  box-shadow: 0 0 0 2px rgba(88,166,255,0.4);
-  background: var(--bg-canvas);
+  box-shadow: 0 0 0 3px var(--accent-glow), inset 0 1px 2px rgba(0,0,0,0.1);
+  background: rgba(255,255,255,0.06);
+}
+html.light #urlbox:focus-within {
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 #lock-icon {
   color: var(--fg-subtle); margin-right: 6px; display: none;
@@ -72,7 +90,7 @@ html.light #urlbox { background: rgba(0,0,0,0.04); }
 #url {
   flex: 1; border: none; background: none;
   color: var(--fg-default); font-family: var(--font-sans);
-  font-size: var(--text-base); outline: none;
+  font-size: var(--text-md); outline: none;
 }
 #url::placeholder { color: var(--fg-subtle); }
 
@@ -91,22 +109,24 @@ html.light #urlbox { background: rgba(0,0,0,0.04); }
 
 /* ─── More menu button ─── */
 #more-btn {
-  width: 32px; height: 32px;
+  width: 34px; height: 34px;
   border: none; background: none;
-  color: var(--fg-muted); cursor: pointer;
-  border-radius: var(--radius-sm);
+  color: var(--fg-subtle); cursor: pointer;
+  border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
-  transition: all var(--duration-fast);
+  transition: all var(--duration-fast) var(--ease-out);
   -webkit-app-region: no-drag;
 }
-#more-btn:hover { background: var(--bg-subtle); color: var(--fg-default); }
+#more-btn:hover { background: var(--glass-bg-active); color: var(--fg-default); }
 
 /* ─── Loading bar ─── */
 #loading-bar {
   position: absolute; bottom: 0; left: 0; height: 2px;
-  background: var(--accent-emphasis); width: 0;
+  background: linear-gradient(90deg, var(--accent-emphasis), var(--accent-fg));
+  width: 0;
   transition: width 0.3s ease; z-index: 10;
   border-radius: 0 1px 0 0;
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 #loading-bar.active { animation: loadProgress 2s ease-in-out; }
 @keyframes loadProgress { 0%{width:0} 30%{width:40%} 60%{width:70%} 100%{width:95%} }
@@ -117,14 +137,14 @@ html.light #urlbox { background: rgba(0,0,0,0.04); }
   position: fixed; top: 8px; right: 8px;
   padding: 8px 18px;
   background: var(--glass-bg-solid);
-  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill);
   color: var(--fg-default); font-size: var(--text-sm);
-  box-shadow: var(--glass-shadow); z-index: 1000;
-  animation: toastIn 0.25s var(--spring);
+  box-shadow: var(--glass-shadow), var(--glass-inner-glow);
+  z-index: 1000;
+  animation: toastIn 0.3s var(--spring);
 }
-@keyframes toastIn { from { opacity:0; transform:translateX(20px); } }
+@keyframes toastIn { from { opacity:0; transform:translateX(20px) scale(0.95); } }
 </style>
 </head>
 <body>
@@ -156,7 +176,7 @@ html.light #urlbox { background: rgba(0,0,0,0.04); }
   <div id="loading-bar"></div>
 </div>
 <!-- Find bar -->
-<div id="findbar" style="display:none;position:absolute;top:44px;right:12px;background:var(--bg-default);border:1px solid var(--border-default);border-radius:0 0 var(--radius-sm) var(--radius-sm);padding:6px 10px;gap:6px;align-items:center;z-index:20;box-shadow:var(--glass-shadow);">
+<div id="findbar" style="display:none;position:absolute;top:48px;right:12px;background:var(--bg-default);border:1px solid var(--border-default);border-radius:0 0 var(--radius-sm) var(--radius-sm);padding:6px 10px;gap:6px;align-items:center;z-index:20;box-shadow:var(--glass-shadow);">
   <input id="find-input" type="text" placeholder="Find on page..." style="width:200px;padding:4px 8px;border:1px solid var(--border-default);border-radius:4px;background:var(--bg-canvas);color:var(--fg-default);font-family:inherit;font-size:12px;outline:none;" />
   <button id="find-close" style="width:20px;height:20px;border:none;background:none;color:var(--fg-muted);cursor:pointer;border-radius:4px;font-size:14px;display:flex;align-items:center;justify-content:center;">&times;</button>
 </div>
@@ -259,6 +279,13 @@ gb.onToast((data) => {
     t.appendChild(dismissBtn);
     document.body.appendChild(t);
     setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 8000);
+  } else if (data.action === 'open-download' && data.data && data.data.savePath) {
+    t.textContent = data.message;
+    t.style.cursor = 'pointer';
+    t.title = 'Click to open file';
+    t.onclick = () => { gb.openDownloadFile(data.data.savePath); t.remove(); };
+    document.body.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 4000);
   } else {
     t.textContent = data.message;
     document.body.appendChild(t);
@@ -304,7 +331,9 @@ gb.onCloseFind(() => {
 
 // ─── Theme ───
 function applyTheme(theme) {
+  document.documentElement.classList.add('theme-transition');
   document.documentElement.classList.toggle('light', theme === 'Light');
+  setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300);
 }
 gb.onThemeChanged((data) => applyTheme(data.theme));
 gb.getSettings().then(s => {

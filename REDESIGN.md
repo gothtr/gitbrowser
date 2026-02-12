@@ -220,30 +220,30 @@ Tab bar + nav buttons + URL bar + 10 кнопок
 
 ### Критические
 - [x] `extensions.html`: опечатка `--fg-muоted` (кириллическая "о") → `--fg-muted` — из-за этого цвет muted текста не работает в dark theme
-- [ ] Extensions: `prompt()` для ввода пути — нужен нормальный file picker (Electron dialog)
-- [ ] Extensions: нет preload API для `openExtensions` — кнопка в toolbar не открывает страницу
+- [x] Extensions: `prompt()` для ввода пути — нужен нормальный file picker (Electron dialog)
+- [x] Extensions: нет preload API для `openExtensions` — кнопка в toolbar не открывает страницу
 - [ ] Sidebar в AI assistant: chat sessions хранятся в localStorage, не синхронизируются с Rust backend
-- [ ] AI chat: API ключи читаются из localStorage toolbar'а через `executeJavaScript` — хак, нужно использовать `secret.store`/`secret.get`
-- [ ] GitHub: при device flow login, `login` всегда передаётся как `'user'` вместо реального username
-- [ ] Private window: нет отдельного session/partition — cookies и данные шарятся с основным окном
-- [ ] Find bar: не закрывается при переключении вкладок (close-find event не отправляется)
-- [ ] Zoom: уровень не восстанавливается при переключении вкладок
+- [x] AI chat: API ключи читаются из localStorage toolbar'а через `executeJavaScript` — хак, нужно использовать `secret.store`/`secret.get`
+- [x] GitHub: при device flow login, `login` всегда передаётся как `'user'` вместо реального username
+- [x] Private window: нет отдельного session/partition — cookies и данные шарятся с основным окном
+- [x] Find bar: не закрывается при переключении вкладок (close-find event не отправляется)
+- [x] Zoom: уровень не восстанавливается при переключении вкладок
 
 ### UI баги
-- [ ] Toolbar: кнопки extensions и passwords не имеют tooltip'ов
-- [ ] newtab: quick links favicon загружается через Google API (может быть заблокирован)
-- [ ] history: при пустой истории нет placeholder'а с иконкой
-- [ ] bookmarks: при добавлении через toolbar, title может быть пустым (race condition с page-title-updated)
-- [ ] downloads: toast "Download complete" не кликабельный (нельзя открыть файл из toast'а)
-- [ ] settings: нет кнопки "Reset to defaults"
-- [ ] Context menu: AI actions (Fix, Rephrase, Translate) не работают если нет API key — нет понятного сообщения
+- [x] Toolbar: кнопки extensions и passwords не имеют tooltip'ов
+- [x] newtab: quick links favicon загружается через Google API (может быть заблокирован)
+- [x] history: при пустой истории нет placeholder'а с иконкой
+- [x] bookmarks: при добавлении через toolbar, title может быть пустым (race condition с page-title-updated)
+- [x] downloads: toast "Download complete" не кликабельный (нельзя открыть файл из toast'а)
+- [x] settings: нет кнопки "Reset to defaults"
+- [x] Context menu: AI actions (Fix, Rephrase, Translate) не работают если нет API key — нет понятного сообщения
 
 ### Стилевые проблемы
 - [x] Все внутренние страницы дублируют CSS переменные (copy-paste) — нужен общий файл → создан `design-tokens.css`
 - [x] Нет единого design system — каждая страница стилизована отдельно → создан `components.css`
-- [ ] border-radius: 0 в common.css конфликтует с border-radius: 8px в HTML страницах
-- [ ] Нет dark/light theme transition (мгновенное переключение, без анимации)
-- [ ] Toolbar и внутренние страницы используют разные размеры шрифтов
+- [x] border-radius: 0 в common.css конфликтует с border-radius: 8px в HTML страницах
+- [x] Нет dark/light theme transition (мгновенное переключение, без анимации)
+- [x] Toolbar и внутренние страницы используют разные размеры шрифтов
 
 ---
 
@@ -255,7 +255,7 @@ Tab bar + nav buttons + URL bar + 10 кнопок
 - [x] Sidebar: новый `sidebar.html` как отдельный WebContentsView (слева)
 - [x] Обновить `layoutViews()`: sidebar (240px) + nav bar (44px) + content
 - [x] Добавить IPC для sidebar: collapse/expand, tab management
-- [ ] Использовать CSS `@layer` для организации стилей
+- [x] Использовать CSS `@layer` для организации стилей
 - [x] Добавить `prefers-reduced-motion` для accessibility
 
 ---
@@ -264,7 +264,7 @@ Tab bar + nav buttons + URL bar + 10 кнопок
 
 | # | Задача | Приоритет | Сложность | Статус |
 |---|--------|-----------|-----------|--------|
-| 1 | Исправить баги (extensions, AI keys, find bar) | Критично | Низкая | ⚡ Частично |
+| 1 | Исправить баги (extensions, AI keys, find bar) | Критично | Низкая | ✅ Готово |
 | 2 | Design tokens + components CSS | Высокий | Средняя | ✅ Готово |
 | 3 | Sidebar (новый layout, tab management) | Высокий | Высокая | ✅ Готово |
 | 4 | Nav bar (упрощение toolbar) | Высокий | Средняя | ✅ Готово |
@@ -275,7 +275,7 @@ Tab bar + nav buttons + URL bar + 10 кнопок
 
 ---
 
-## Статус: В процессе
+## Статус: Завершён (основные задачи)
 
 ### Выполнено:
 - [x] Баг: `extensions.html` — исправлена опечатка `--fg-muоted` → `--fg-muted`
@@ -299,3 +299,14 @@ Tab bar + nav buttons + URL bar + 10 кнопок
 - [x] github.html: glass item cards для repos/issues/PRs, pill filter buttons, glass profile
 - [x] Все страницы подключены к design-tokens.css + components.css (убраны дублированные CSS переменные)
 - [x] Анимации: spring easing, stagger fade-in, scale-in для карточек, slide-in для элементов списков
+- [x] Баг: Extensions `prompt()` заменён на Electron `dialog.showOpenDialog()` file picker
+- [x] Баг: GitHub device flow — теперь получает реальный username через `/user` API после авторизации
+- [x] Баг: Private window — используется ephemeral partition (без `persist:`) для изоляции данных
+- [x] Баг: AI API ключи — `getAiConfig()` теперь сначала читает из `secret.store`, fallback на localStorage
+- [x] Баг: Download toast — теперь кликабельный, открывает скачанный файл
+- [x] Стиль: Favicon — все страницы используют `/favicon.ico` с fallback на Google API и letter icon
+- [x] Стиль: `border-radius: 0` убран из `common.css` для `button` (конфликтовал с UI)
+- [x] Стиль: Плавная анимация переключения dark/light theme через `theme-transition` класс
+- [x] Стиль: Единый `font-size: 14px` (--text-md) через base body стили в design-tokens.css
+- [x] Техническое: CSS `@layer` declaration добавлен в design-tokens.css
+- [x] AI: provider и model сохраняются в secret storage при изменении

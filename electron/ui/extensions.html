@@ -78,13 +78,18 @@ async function load() {
 }
 
 document.getElementById('installBtn').onclick = async () => {
-  const path = prompt('Enter extension path:');
-  if (path) { try { await gb.extensionInstall(path); load(); } catch {} }
+  try {
+    const result = await gb.extensionSelectPath();
+    if (result && !result.canceled && result.path) {
+      await gb.extensionInstall(result.path);
+      load();
+    }
+  } catch {}
 };
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+function applyTheme(t) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', t === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb) { gb.onThemeChanged((d) => applyTheme(d.theme)); gb.getSettings().then(s => { if(s&&s.appearance){let t=s.appearance.theme;if(t==='System')t=window.matchMedia('(prefers-color-scheme:light)').matches?'Light':'Dark';applyTheme(t)} }).catch(()=>{}); }
 load();
 if (gb && gb.getLocaleData) { gb.getLocaleData().then(({data:t}) => { if(t&&t.extensions){document.getElementById('title').textContent=t.extensions.title||'Extensions';document.getElementById('desc').textContent=t.extensions.desc||'Manage your browser extensions'} }).catch(()=>{}); }

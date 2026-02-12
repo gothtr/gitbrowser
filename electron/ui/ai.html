@@ -282,8 +282,8 @@ function uMod(){
   gcm(p).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent='\u2605 '+c;if(c===sv)o.selected=true;modEl.appendChild(o)});
   mmb.style.display=p==='openrouter'?'':'none';
 }
-provEl.onchange=()=>{localStorage.setItem('ai_provider',provEl.value);uMod();uKI();uIA()};
-modEl.onchange=()=>{localStorage.setItem('ai_model_'+provEl.value,modEl.value)};
+provEl.onchange=()=>{localStorage.setItem('ai_provider',provEl.value);if(gb&&gb.secretStore)gb.secretStore('ai_provider',provEl.value).catch(()=>{});uMod();uKI();uIA()};
+modEl.onchange=()=>{localStorage.setItem('ai_model_'+provEl.value,modEl.value);if(gb&&gb.secretStore)gb.secretStore('ai_model_'+provEl.value,modEl.value).catch(()=>{})};
 const sp=localStorage.getItem('ai_provider');bProv();if(sp&&PROVS[sp])provEl.value=sp;uMod();uKI();
 
 function showK(){
@@ -355,7 +355,7 @@ ldUI();rSB();
 loadLocale().then(()=>{ldUI();rSB()});
 if(hk(provEl.value))msgEl.focus();
 
-function applyTheme(t){document.documentElement.classList.toggle('light',t==='Light')}
+function applyTheme(t){document.documentElement.classList.add('theme-transition');document.documentElement.classList.toggle('light',t==='Light');setTimeout(()=>document.documentElement.classList.remove('theme-transition'),300)}
 if(gb){gb.onThemeChanged(d=>applyTheme(d.theme));gb.getSettings().then(s=>{if(s&&s.appearance){let t=s.appearance.theme;if(t==='System')t=window.matchMedia('(prefers-color-scheme:light)').matches?'Light':'Dark';applyTheme(t)}}).catch(()=>{})}
 </script>
 </body>

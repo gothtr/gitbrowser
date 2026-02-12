@@ -14,7 +14,7 @@
 .timeline { position: relative; padding-left: 24px; }
 .timeline::before {
   content: ''; position: absolute; left: 7px; top: 0; bottom: 0;
-  width: 2px; background: var(--border-muted); border-radius: 1px;
+  width: 2px; background: var(--glass-border); border-radius: 1px;
 }
 .day-group { margin-bottom: var(--space-xl); }
 .day-label {
@@ -27,6 +27,7 @@
   content: ''; position: absolute; left: -21px; top: 6px;
   width: 10px; height: 10px; border-radius: 50%;
   background: var(--accent-emphasis); border: 2px solid var(--bg-canvas);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 .h-item {
   display: flex; align-items: center; padding: var(--space-sm) var(--space-md); gap: var(--space-sm);
@@ -34,7 +35,7 @@
   transition: all var(--duration-fast) var(--ease-out);
   animation: itemSlideIn var(--duration-normal) var(--ease-out) both;
 }
-.h-item:hover { background: var(--bg-subtle); }
+.h-item:hover { background: var(--glass-bg-hover); }
 .h-favicon { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
 .h-info { flex: 1; min-width: 0; }
 .h-title { font-size: var(--text-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -111,11 +112,11 @@ async function load(query) {
   });
 }
 
-function getFaviconUrl(url) { try { return 'https://www.google.com/s2/favicons?sz=16&domain=' + new URL(url).hostname; } catch { return ''; } }
+function getFaviconUrl(url) { try { return 'https://' + new URL(url).hostname + '/favicon.ico'; } catch { return ''; } }
 function formatTime(t) { try { const d = new Date(t); return d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); } catch { return ''; } }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+function applyTheme(t) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', t === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb) {
   gb.onThemeChanged((d) => applyTheme(d.theme));
   gb.getSettings().then(s => { if (s && s.appearance) { let t = s.appearance.theme; if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark'; applyTheme(t); } }).catch(() => {});

@@ -107,7 +107,11 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   extensionUninstall: (id) => ipcRenderer.invoke('extension-uninstall', { id }),
   extensionEnable: (id) => ipcRenderer.invoke('extension-enable', { id }),
   extensionDisable: (id) => ipcRenderer.invoke('extension-disable', { id }),
+  extensionSelectPath: () => ipcRenderer.invoke('extension-select-path'),
   openExtensions: () => ipcRenderer.send('open-extensions'),
+
+  // Sidebar quick nav context menu
+  sidebarQuickNavMenu: (navId) => ipcRenderer.send('sidebar-quick-nav-menu', navId),
 
   // Navigation from internal pages
   openUrl: (url) => ipcRenderer.send('open-url', url),
@@ -124,5 +128,6 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   onDownloadDone: (cb) => ipcRenderer.on('download-done', (_e, d) => cb(d)),
   onThemeChanged: (cb) => ipcRenderer.on('theme-changed', (_e, d) => cb(d)),
   onCloseFind: (cb) => ipcRenderer.on('close-find', (_e, d) => cb(d)),
+  onSidebarCollapsed: (cb) => ipcRenderer.on('sidebar-collapsed', (_e, d) => cb(d)),
   onGhNotifCount: (cb) => ipcRenderer.on('gh-notif-count', (_e, d) => cb(d)),
 });

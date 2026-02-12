@@ -39,8 +39,7 @@ body {
   font-size: var(--text-sm);
   font-weight: 500;
   letter-spacing: 1px;
-  color: var(--fg-subtle);
-  text-transform: uppercase;
+  color: var(--fg-default);
   margin-bottom: var(--space-xs);
 }
 
@@ -79,7 +78,7 @@ body {
 
 .search input:focus {
   border-color: var(--accent-emphasis);
-  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.25);
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 4px 20px rgba(0, 0, 0, 0.15);
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -122,13 +121,13 @@ body {
   color: var(--fg-default);
   font-size: var(--text-sm);
   position: relative;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--glass-shadow), var(--glass-inner-glow);
 }
 
 .quick-link:hover {
-  border-color: var(--accent-fg);
+  border-color: var(--glass-border-hover);
   transform: translateY(-3px);
-  box-shadow: var(--glass-shadow);
+  box-shadow: var(--glass-shadow-lg), var(--glass-inner-glow);
 }
 
 .quick-link:active { transform: translateY(0) scale(0.97); }
@@ -186,10 +185,10 @@ body {
   gap: var(--space-xs);
   padding: var(--space-lg) var(--space-md);
   background: transparent;
-  border: 2px dashed var(--border-muted);
+  border: 2px dashed var(--glass-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--duration-fast);
+  transition: all var(--duration-fast) var(--ease-out);
   color: var(--fg-subtle);
   font-size: var(--text-sm);
 }
@@ -197,6 +196,7 @@ body {
 .quick-link-add:hover {
   border-color: var(--accent-fg);
   color: var(--accent-fg);
+  background: rgba(96, 165, 250, 0.04);
 }
 
 .quick-link-add .plus { font-size: 24px; font-weight: 300; }
@@ -284,9 +284,13 @@ function renderLinks() {
     div.className = 'quick-link';
     const letter = (l.name || l.url || '?')[0].toUpperCase();
     let faviconUrl = '';
-    try { faviconUrl = 'https://www.google.com/s2/favicons?sz=32&domain=' + new URL(l.url).hostname; } catch {}
+    try {
+      const hostname = new URL(l.url).hostname;
+      // Use the site's own favicon first, with Google API as fallback
+      faviconUrl = 'https://' + hostname + '/favicon.ico';
+    } catch {}
     const iconContent = faviconUrl
-      ? `<img src="${esc(faviconUrl)}" onerror="this.parentElement.textContent='${esc(letter)}'" />`
+      ? `<img src="${esc(faviconUrl)}" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?sz=32&domain=${esc(new URL(l.url).hostname)}';this.onerror=function(){this.parentElement.textContent='${esc(letter)}'}" />`
       : esc(letter);
     div.innerHTML = `<div class="quick-link-icon">${iconContent}</div>${esc(l.name)}<button class="ql-del" title="Remove">\u00D7</button>`;
     div.addEventListener('click', (e) => {
@@ -351,7 +355,7 @@ document.getElementById('search').addEventListener('keydown', (e) => {
 
 // Theme
 const gb = window.gitbrowser;
-function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+function applyTheme(t) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', t === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb) {
   gb.onThemeChanged((d) => applyTheme(d.theme));
   gb.getSettings().then(s => {

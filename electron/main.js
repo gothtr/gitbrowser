@@ -1,4 +1,4 @@
-const { app, BaseWindow, WebContentsView, ipcMain, session, Menu, nativeTheme, net, clipboard } = require('electron');
+const { app, BaseWindow, WebContentsView, ipcMain, session, Menu, nativeTheme, net, clipboard, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const rustBridge = require('./rust-bridge');
@@ -12,7 +12,7 @@ const tabs = new Map();
 let tabOrder = [];
 let activeTabId = null;
 let nextTabId = 1;
-const TOOLBAR_HEIGHT = 44;
+const TOOLBAR_HEIGHT = 48;
 const SIDEBAR_WIDTH = 240;
 let sidebarCollapsed = false;
 const downloads = new Map();
@@ -43,7 +43,7 @@ function createWindow() {
   mainWindow = new BaseWindow({
     width: 1280, height: 800,
     title: 'GitBrowser',
-    backgroundColor: '#0d1117',
+    backgroundColor: '#0a0e14',
     minWidth: 800, minHeight: 600,
   });
 
@@ -427,7 +427,7 @@ function handleDownload(item) {
     downloadItems.delete(dlId);
     sendToToolbar('download-done', { id: dlId, state, savePath: dl.savePath, filename: dl.filename });
     if (state === 'completed') {
-      sendToToolbar('toast', { message: cmL('downloads.completed', 'Downloaded') + ': ' + dl.filename });
+      sendToToolbar('toast', { message: cmL('downloads.completed', 'Downloaded') + ': ' + dl.filename, action: 'open-download', data: { savePath: dl.savePath } });
     }
   });
 }
@@ -548,6 +548,10 @@ ipcMain.on('toggle-fullscreen', () => {
 ipcMain.on('toggle-sidebar', () => {
   sidebarCollapsed = !sidebarCollapsed;
   layoutViews();
+  // Notify sidebar view about collapse state
+  if (sidebarView && !sidebarView.webContents.isDestroyed()) {
+    sidebarView.webContents.send('sidebar-collapsed', { collapsed: sidebarCollapsed });
+  }
 });
 
 // Private mode
@@ -570,11 +574,13 @@ ipcMain.on('open-private-window', () => {
   let privTabOrder = [];
   let privActiveTabId = null;
   let privNextTabId = 1;
+  // Ephemeral partition — no 'persist:' prefix means in-memory only, destroyed when all webContents using it are closed
+  const privPartition = 'private-' + Date.now();
 
   function privCreateTab(url, activate = true) {
     const id = 'priv-tab-' + (privNextTabId++);
     const view = new WebContentsView({
-      webPreferences: { contextIsolation: true, partition: 'private' },
+      webPreferences: { contextIsolation: true, partition: privPartition },
     });
     const tabData = { view, url: url || 'gb://newtab', title: 'New Tab' };
     privTabs.set(id, tabData);
@@ -760,6 +766,59 @@ ipcMain.on('open-history', () => createTab('gb://history'));
 ipcMain.on('open-downloads', () => createTab('gb://downloads'));
 ipcMain.on('open-ai', () => createTab('gb://ai'));
 ipcMain.on('open-github', () => createTab('gb://github'));
+
+// Sidebar quick nav context menus
+ipcMain.on('sidebar-quick-nav-menu', (_e, navId) => {
+  const menuTemplates = {
+    bookmarks: [
+      { label: cmL('bookmarks.add', 'Add bookmark'), click: () => {
+        if (activeTabId && tabs.has(activeTabId)) {
+          const t = tabs.get(activeTabId);
+          rustBridge.call('bookmark.add', { url: t.url, title: t.title }).catch(() => {});
+        }
+      }},
+      { label: cmL('bookmarks.title', 'Open bookmarks'), click: () => createTab('gb://bookmarks') },
+    ],
+    history: [
+      { label: cmL('history.title', 'Open history'), click: () => createTab('gb://history') },
+      { label: cmL('history.clear_all', 'Clear history'), click: () => rustBridge.call('history.clear', {}).catch(() => {}) },
+    ],
+    downloads: [
+      { label: cmL('downloads.title', 'Open downloads'), click: () => createTab('gb://downloads') },
+    ],
+    passwords: [
+      { label: cmL('passwords.title', 'Open passwords'), click: () => createTab('gb://passwords') },
+      { label: cmL('passwords.lock', 'Lock vault'), click: () => rustBridge.call('password.lock', {}).catch(() => {}) },
+    ],
+    extensions: [
+      { label: cmL('extensions.title', 'Open extensions'), click: () => createTab('gb://extensions') },
+      { label: cmL('extensions.install', 'Install extension'), click: () => {
+        dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] }).then(r => {
+          if (!r.canceled && r.filePaths[0]) rustBridge.call('extension.install', { path: r.filePaths[0] }).catch(() => {});
+        });
+      }},
+    ],
+    ai: [
+      { label: cmL('ai.title', 'Open AI'), click: () => createTab('gb://ai') },
+      { label: cmL('ai.new_chat', 'New chat'), click: () => createTab('gb://ai') },
+    ],
+    github: [
+      { label: cmL('github.title', 'Open GitHub'), click: () => createTab('gb://github') },
+      { label: cmL('github.notifications', 'Notifications'), click: () => createTab('gb://github') },
+    ],
+    settings: [
+      { label: cmL('settings.title', 'Open settings'), click: () => createTab('gb://settings') },
+      { label: cmL('settings.reset', 'Reset settings'), click: () => {
+        rustBridge.call('settings.reset', {}).catch(() => {});
+      }},
+    ],
+  };
+  const template = menuTemplates[navId];
+  if (template) {
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup();
+  }
+});
 
 ipcMain.on('navigate', (_e, input) => {
   if (!activeTabId) return;
@@ -1128,10 +1187,22 @@ function injectAiPopup(wc, result, loading, originalText) {
   wc.executeJavaScript(js).catch(() => {});
 }
 
-// Get AI provider config from toolbar localStorage
+// Get AI provider config — prefer secure secret storage, fallback to toolbar localStorage
 let cachedAiConfig = null;
 async function getAiConfig() {
-  // Read from toolbar (always loaded, shares localStorage with internal pages)
+  // Try reading from secure secret storage first
+  try {
+    const providerResult = await rustBridge.call('secret.get', { key: 'ai_provider' });
+    const provider = (providerResult && providerResult.value) || 'openai';
+    const keyResult = await rustBridge.call('secret.get', { key: 'ai_key_' + provider });
+    const modelResult = await rustBridge.call('secret.get', { key: 'ai_model_' + provider });
+    if (keyResult && keyResult.value) {
+      cachedAiConfig = { provider, apiKey: keyResult.value, model: (modelResult && modelResult.value) || '' };
+      return cachedAiConfig;
+    }
+  } catch { /* secret store not available, fallback */ }
+
+  // Fallback: read from toolbar localStorage (for backward compatibility)
   if (toolbarView && !toolbarView.webContents.isDestroyed()) {
     try {
       const result = await toolbarView.webContents.executeJavaScript(`
@@ -1265,6 +1336,16 @@ ipcMain.handle('extension-disable', async (_e, { id }) => {
 });
 ipcMain.on('open-extensions', () => createTab('gb://extensions'));
 
+// Extension file picker dialog (replaces prompt())
+ipcMain.handle('extension-select-path', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Extension Folder',
+    properties: ['openDirectory'],
+  });
+  if (result.canceled || !result.filePaths.length) return { canceled: true };
+  return { path: result.filePaths[0] };
+});
+
 // ─── GitHub Device Flow OAuth ───
 
 let githubToken = null;
@@ -1333,8 +1414,20 @@ ipcMain.handle('github-device-poll', async (_e, { clientId, deviceCode }) => {
     const data = await res.json();
     if (data.access_token) {
       githubToken = data.access_token;
+      // Fetch real user profile to get login and avatar
+      let login = 'user', avatarUrl = null;
+      try {
+        const userRes = await net.fetch('https://api.github.com/user', {
+          headers: { 'Authorization': 'Bearer ' + data.access_token, 'Accept': 'application/vnd.github+json' },
+        });
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          login = userData.login || 'user';
+          avatarUrl = userData.avatar_url || null;
+        }
+      } catch { /* use defaults */ }
       // Store token securely in Rust backend
-      rustBridge.call('github.store_token', { token: data.access_token, login: 'user', avatar_url: null }).catch(() => {});
+      rustBridge.call('github.store_token', { token: data.access_token, login, avatar_url: avatarUrl }).catch(() => {});
       startGhNotifPolling();
       return { status: 'ok', token: data.access_token };
     }

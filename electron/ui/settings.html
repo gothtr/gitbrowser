@@ -12,8 +12,10 @@ body { display: flex; height: 100vh; overflow: hidden; }
   width: 200px;
   min-width: 200px;
   padding: var(--space-xl) var(--space-md);
-  border-right: 1px solid var(--border-muted);
-  background: var(--bg-default);
+  border-right: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -45,9 +47,13 @@ body { display: flex; height: 100vh; overflow: hidden; }
   text-align: left;
 }
 
-.nav-item:hover { background: var(--bg-subtle); color: var(--fg-default); }
-.nav-item.active { background: var(--accent-emphasis); color: #fff; }
-.nav-item .nav-icon { font-size: 15px; width: 20px; text-align: center; }
+.nav-item:hover { background: var(--glass-bg-hover); color: var(--fg-default); }
+.nav-item.active {
+  background: var(--accent-emphasis);
+  color: #fff;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+.nav-item .nav-icon { width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
 /* Content area */
 .settings-content {
@@ -78,8 +84,8 @@ body { display: flex; height: 100vh; overflow: hidden; }
 .settings-section.active { display: block; animation: fadeSection var(--duration-normal) var(--ease-out); }
 
 @keyframes fadeSection {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(10px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* Settings card */
@@ -91,6 +97,11 @@ body { display: flex; height: 100vh; overflow: hidden; }
   border-radius: var(--radius-md);
   overflow: hidden;
   margin-bottom: var(--space-lg);
+  box-shadow: var(--glass-shadow), var(--glass-inner-glow);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.settings-card:hover {
+  border-color: var(--glass-border-hover);
 }
 
 .row {
@@ -98,34 +109,34 @@ body { display: flex; height: 100vh; overflow: hidden; }
   align-items: center;
   justify-content: space-between;
   padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--border-muted);
-  transition: background var(--duration-fast);
+  border-bottom: 1px solid var(--glass-border);
+  transition: background var(--duration-fast) var(--ease-out);
   gap: var(--space-md);
 }
 
 .row:last-child { border-bottom: none; }
-.row:hover { background: rgba(255, 255, 255, 0.02); }
+.row:hover { background: var(--glass-bg-hover); }
 
 .row-info { flex: 1; }
 .row-label { font-size: var(--text-md); font-weight: 500; }
 .row-desc { font-size: var(--text-sm); color: var(--fg-muted); margin-top: 2px; }
 
 select, input[type="number"] {
-  background: var(--bg-default);
-  border: 1px solid var(--border-default);
+  background: var(--glass-bg-hover);
+  border: 1px solid var(--glass-border);
   color: var(--fg-default);
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-size: var(--text-base);
   cursor: pointer;
-  transition: border-color var(--duration-fast);
+  transition: all var(--duration-fast) var(--ease-out);
   outline: none;
 }
 
 select:focus, input[type="number"]:focus {
   border-color: var(--accent-emphasis);
-  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.2);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .saved-indicator {
@@ -151,10 +162,10 @@ select:focus, input[type="number"]:focus {
 
 <nav class="settings-nav">
   <div class="nav-title">Settings</div>
-  <button class="nav-item active" data-section="general"><span class="nav-icon">⚙</span> General</button>
-  <button class="nav-item" data-section="privacy"><span class="nav-icon">🛡</span> Privacy</button>
-  <button class="nav-item" data-section="appearance"><span class="nav-icon">🎨</span> Appearance</button>
-  <button class="nav-item" data-section="advanced"><span class="nav-icon">🔧</span> Advanced</button>
+  <button class="nav-item active" data-section="general"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.1-.303c.652-.18 1.34.03 1.73.545a8.042 8.042 0 0 1 1.088 1.89c.238.572.1 1.252-.337 1.71l-.812.804a.395.395 0 0 0-.112.29c.013.26.013.52 0 .78a.394.394 0 0 0 .112.29l.812.804c.436.458.575 1.138.337 1.71a8.04 8.04 0 0 1-1.088 1.89c-.39.515-1.078.725-1.73.545l-1.1-.303a.352.352 0 0 0-.3.071 5.834 5.834 0 0 1-.667.386.35.35 0 0 0-.212.224l-.289 1.106c-.169.646-.715 1.196-1.458 1.26a8.28 8.28 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106a.35.35 0 0 0-.212-.224 5.738 5.738 0 0 1-.668-.386.352.352 0 0 0-.299-.071l-1.1.303c-.652.18-1.34-.03-1.73-.545a8.042 8.042 0 0 1-1.088-1.89c-.238-.572-.1-1.252.337-1.71l.812-.804a.395.395 0 0 0 .112-.29 6.046 6.046 0 0 1 0-.78.394.394 0 0 0-.112-.29l-.812-.804c-.436-.458-.575-1.138-.337-1.71a8.04 8.04 0 0 1 1.088-1.89c.39-.515 1.078-.725 1.73-.545l1.1.303a.352.352 0 0 0 .3-.071c.214-.143.437-.272.667-.386a.35.35 0 0 0 .212-.224l.289-1.106C6.01.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.046-.219.29-.411.6-.573.925-.014.028-.042.112.017.182l.812.803c.407.404.63.953.63 1.52s-.223 1.116-.63 1.52l-.812.803c-.059.07-.031.154-.017.182.162.325.354.634.573.925.02.03.086.077.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.16.107.327.204.5.29.449.222.851.628.998 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.03.175-.016.195-.046.219-.29.411-.6.573-.925.014-.028.042-.112-.017-.182l-.812-.803a2.15 2.15 0 0 1-.63-1.52c0-.567.223-1.116.63-1.52l.812-.803c.059-.07.031-.154.017-.182a6.588 6.588 0 0 0-.573-.925c-.02-.03-.086-.077-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.5-.29c-.449-.222-.851-.628-.998-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/></svg></span> General</button>
+  <button class="nav-item" data-section="privacy"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M7.467.133a1.748 1.748 0 0 1 1.066 0l5.25 1.68A1.75 1.75 0 0 1 15 3.48V7c0 1.566-.32 3.182-1.303 4.682-.983 1.498-2.585 2.813-5.032 3.855a1.697 1.697 0 0 1-1.33 0c-2.447-1.042-4.049-2.357-5.032-3.855C1.32 10.182 1 8.566 1 7V3.48a1.75 1.75 0 0 1 1.217-1.667Zm.61 1.429a.25.25 0 0 0-.153 0l-5.25 1.68a.25.25 0 0 0-.174.238V7c0 1.358.275 2.666 1.057 3.86.784 1.194 2.121 2.34 4.366 3.297a.196.196 0 0 0 .154 0c2.245-.956 3.582-2.104 4.366-3.298C13.225 9.666 13.5 8.36 13.5 7V3.48a.251.251 0 0 0-.174-.237l-5.25-1.68ZM8.75 4.75v3a.75.75 0 0 1-1.5 0v-3a.75.75 0 0 1 1.5 0ZM9 10.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg></span> Privacy</button>
+  <button class="nav-item" data-section="appearance"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2ZM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-3a1 1 0 0 0-1 1v4a1 1 0 0 0 2 0V6a1 1 0 0 0-1-1Zm3.5 1.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm-5 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg></span> Appearance</button>
+  <button class="nav-item" data-section="advanced"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M5.433 2.304A4.492 4.492 0 0 0 3.5 6c0 1.598.832 3.002 2.09 3.802.518.328.929.923.902 1.64v.008l-.164 3.337a.75.75 0 1 1-1.498-.073l.163-3.33c.002-.085-.05-.216-.25-.348A5.992 5.992 0 0 1 2 6a5.993 5.993 0 0 1 2.567-4.92.598.598 0 0 1 .866.224Zm5.134 0A.598.598 0 0 1 11.433 2.08 5.993 5.993 0 0 1 14 6a5.992 5.992 0 0 1-2.743 5.036c-.2.132-.252.263-.25.348l.164 3.33a.75.75 0 0 1-1.499.074l-.163-3.337v-.008c-.027-.717.384-1.312.902-1.64A4.495 4.495 0 0 0 12.5 6a4.492 4.492 0 0 0-1.933-3.696ZM8.005 1c-.462 0-.826.02-.826.02A.75.75 0 0 0 6.5 1.77v1a.75.75 0 0 0 1.5 0V2.5s.164-.001.005-.001c-.159 0 .005.001.005.001v.269a.75.75 0 0 0 1.5 0v-1A.75.75 0 0 0 8.831 1.02S8.467 1 8.005 1Z"/></svg></span> Advanced</button>
 </nav>
 
 <div class="settings-content">
@@ -201,7 +212,7 @@ select:focus, input[type="number"]:focus {
       </div>
       <div class="settings-card">
         <div class="row" style="cursor:pointer" id="open-passwords">
-          <div class="row-info"><div class="row-label">🔑 Password Manager</div><div class="row-desc">Manage saved credentials</div></div>
+          <div class="row-info"><div class="row-label"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M6.5 5.5a4 4 0 1 1 2.731 3.795l-1.96 1.96a.25.25 0 0 1-.177.073H6.5v.75a.75.75 0 0 1-.75.75h-.75v.75a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1-.75-.75v-2.086a.75.75 0 0 1 .22-.53l3.435-3.437A4.001 4.001 0 0 1 6.5 5.5ZM10.5 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"/></svg>Password Manager</div><div class="row-desc">Manage saved credentials</div></div>
           <span style="color:var(--fg-subtle);font-size:var(--text-base)">→</span>
         </div>
       </div>
@@ -298,7 +309,7 @@ async function saveSetting(key, value) {
   } catch (e) { console.error('Failed to save setting:', e); }
 }
 
-function applyTheme(theme) { document.documentElement.classList.toggle('light', theme === 'Light'); }
+function applyTheme(theme) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', theme === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb && gb.onThemeChanged) gb.onThemeChanged((data) => applyTheme(data.theme));
 
 // Wire up selects
@@ -349,14 +360,16 @@ async function loadLocale() {
     document.getElementById('saved').textContent = s.saved || 'Saved';
     // Nav items
     const navItems = document.querySelectorAll('.nav-item');
-    if (navItems[0] && s.general) navItems[0].innerHTML = '<span class="nav-icon">⚙</span> ' + s.general;
-    if (navItems[1] && s.privacy) navItems[1].innerHTML = '<span class="nav-icon">🛡</span> ' + s.privacy;
-    if (navItems[2] && s.appearance) navItems[2].innerHTML = '<span class="nav-icon">🎨</span> ' + s.appearance;
+    if (navItems[0] && s.general) { const lbl = navItems[0].querySelector('.nav-icon'); navItems[0].childNodes[navItems[0].childNodes.length - 1].textContent = ' ' + s.general; }
+    if (navItems[1] && s.privacy) { navItems[1].childNodes[navItems[1].childNodes.length - 1].textContent = ' ' + s.privacy; }
+    if (navItems[2] && s.appearance) { navItems[2].childNodes[navItems[2].childNodes.length - 1].textContent = ' ' + s.appearance; }
+    if (navItems[3] && s.advanced) { navItems[3].childNodes[navItems[3].childNodes.length - 1].textContent = ' ' + s.advanced; }
     // Section titles
     const sections = document.querySelectorAll('.section-title');
     if (sections[0] && s.general) sections[0].textContent = s.general;
     if (sections[1] && s.privacy) sections[1].textContent = s.privacy;
     if (sections[2] && s.appearance) sections[2].textContent = s.appearance;
+    if (sections[3] && s.advanced) sections[3].textContent = s.advanced;
     // Row labels
     const labels = [
       [s.language_label, s.language_desc],

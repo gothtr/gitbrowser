@@ -18,7 +18,7 @@
   display: flex; flex-direction: column; gap: var(--space-sm);
   animation: cardIn var(--duration-normal) var(--ease-out) both;
 }
-.bm-card:hover { border-color: var(--accent-fg); transform: translateY(-2px); box-shadow: var(--glass-shadow); }
+.bm-card:hover { border-color: var(--glass-border-hover); transform: translateY(-2px); box-shadow: var(--glass-shadow-lg), var(--glass-inner-glow); }
 .bm-card:active { transform: translateY(0) scale(0.98); }
 .bm-card-top { display: flex; align-items: center; gap: var(--space-sm); }
 .bm-icon {
@@ -80,8 +80,8 @@ async function load(query) {
     div.style.animationDelay = Math.min(i * 30, 300) + 'ms';
     const letter = (bm.title || bm.url || '?')[0].toUpperCase();
     let fav = '';
-    try { fav = 'https://www.google.com/s2/favicons?sz=32&domain=' + new URL(bm.url).hostname; } catch {}
-    const ic = fav ? `<img src="${esc(fav)}" onerror="this.parentElement.textContent='${esc(letter)}'" />` : esc(letter);
+    try { const hostname = new URL(bm.url).hostname; fav = 'https://' + hostname + '/favicon.ico'; } catch {}
+    const ic = fav ? `<img src="${esc(fav)}" onerror="this.onerror=null;this.src='https://www.google.com/s2/favicons?sz=32&domain=${esc(new URL(bm.url).hostname)}';this.onerror=function(){this.parentElement.textContent='${esc(letter)}'}" />` : esc(letter);
     div.innerHTML = `<div class="bm-card-top"><div class="bm-icon">${ic}</div><div class="bm-title">${esc(bm.title || bm.url)}</div></div>
       <div class="bm-url">${esc(bm.url)}</div><button class="bm-del" title="Remove">\u00D7</button>`;
     div.addEventListener('click', (e) => { if (!e.target.closest('.bm-del')) gb.openUrl(bm.url); });
@@ -95,7 +95,7 @@ async function load(query) {
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-function applyTheme(t) { document.documentElement.classList.toggle('light', t === 'Light'); }
+function applyTheme(t) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', t === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb) {
   gb.onThemeChanged((d) => applyTheme(d.theme));
   gb.getSettings().then(s => { if (s && s.appearance) { let t = s.appearance.theme; if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark'; applyTheme(t); } }).catch(() => {});
