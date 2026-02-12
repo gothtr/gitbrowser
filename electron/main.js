@@ -36,6 +36,7 @@ function userDataPath(...segments) {
 }
 
 let currentTheme = 'Dark'; // Track current theme
+let currentSearchEngine = 'google'; // Track current search engine
 
 let mainWindow = null;
 let toolbarView = null;
@@ -1417,6 +1418,10 @@ ipcMain.handle('settings-set', async (_e, { key, value }) => {
     if (key === 'appearance.theme') {
       broadcastTheme(value);
     }
+    // Cache search engine
+    if (key === 'general.default_search_engine') {
+      currentSearchEngine = value || 'google';
+    }
     // Reload locale for context menu when language changes
     if (key === 'general.language') {
       loadContextMenuLocale();
@@ -2707,7 +2712,14 @@ function normalizeUrl(input) {
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   if (trimmed.startsWith('gb://')) return trimmed;
   if (trimmed.includes('.') && !trimmed.includes(' ')) return 'https://' + trimmed;
-  return 'https://www.google.com/search?q=' + encodeURIComponent(trimmed);
+  const q = encodeURIComponent(trimmed);
+  const engines = {
+    google: 'https://www.google.com/search?q=' + q,
+    duckduckgo: 'https://duckduckgo.com/?q=' + q,
+    bing: 'https://www.bing.com/search?q=' + q,
+    yandex: 'https://yandex.com/search/?text=' + q,
+  };
+  return engines[currentSearchEngine] || engines.google;
 }
 
 // ─── App lifecycle ───
@@ -2737,6 +2749,9 @@ async function loadInitialTheme() {
     const settings = await rustBridge.call('settings.get', {});
     if (settings && settings.appearance && settings.appearance.theme) {
       currentTheme = settings.appearance.theme;
+    }
+    if (settings && settings.general && settings.general.default_search_engine) {
+      currentSearchEngine = settings.general.default_search_engine;
     }
   } catch {}
   broadcastTheme(currentTheme);
