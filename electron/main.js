@@ -47,6 +47,7 @@ function createWindow() {
     backgroundColor: '#0a0e14',
     icon: path.join(__dirname, '..', 'resources', 'icons', 'app.ico'),
     minWidth: 800, minHeight: 600,
+    frame: false,
   });
 
   // Sidebar view (left panel with tabs)
@@ -578,6 +579,20 @@ ipcMain.on('toggle-fullscreen', () => {
   if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
 });
 
+// Window controls (frameless)
+ipcMain.on('win-minimize', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+ipcMain.on('win-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+  }
+});
+ipcMain.on('win-close', () => {
+  if (mainWindow) mainWindow.close();
+});
+
 // Sidebar toggle
 ipcMain.on('toggle-sidebar', () => {
   sidebarCollapsed = !sidebarCollapsed;
@@ -593,6 +608,7 @@ ipcMain.on('open-private-window', () => {
   const privWin = new BaseWindow({
     width: 1100, height: 700, title: 'GitBrowser — Private',
     backgroundColor: '#1a0a2e', minWidth: 600, minHeight: 400,
+    frame: false,
   });
   const privToolbar = new WebContentsView({
     webPreferences: {
@@ -743,6 +759,9 @@ ipcMain.on('open-private-window', () => {
     else if (channel === 'go-back') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.goBack(); }
     else if (channel === 'go-forward') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.goForward(); }
     else if (channel === 'reload') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.reload(); }
+    else if (channel === 'win-minimize') privWin.minimize();
+    else if (channel === 'win-maximize') { if (privWin.isMaximized()) privWin.unmaximize(); else privWin.maximize(); }
+    else if (channel === 'win-close') privWin.close();
   });
 
   privCreateTab('gb://newtab');

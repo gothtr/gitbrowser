@@ -27,6 +27,11 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   // Fullscreen
   toggleFullscreen: () => ipcRenderer.send('toggle-fullscreen'),
 
+  // Window controls (frameless)
+  winMinimize: () => ipcRenderer.send('win-minimize'),
+  winMaximize: () => ipcRenderer.send('win-maximize'),
+  winClose: () => ipcRenderer.send('win-close'),
+
   // Sidebar
   toggleSidebar: () => ipcRenderer.send('toggle-sidebar'),
 

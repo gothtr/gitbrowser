@@ -22,7 +22,7 @@ body {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 14px;
+  padding: 6px 0 6px 14px;
   height: 48px;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 8%),
@@ -119,6 +119,26 @@ html.light #urlbox:focus-within {
 }
 #more-btn:hover { background: var(--glass-bg-active); color: var(--fg-default); }
 
+/* ─── Window controls ─── */
+.win-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 4px;
+  -webkit-app-region: no-drag;
+}
+.win-btn {
+  width: 46px; height: 34px;
+  border: none; background: none;
+  color: var(--fg-subtle); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+.win-btn:hover { background: rgba(255,255,255,0.08); color: var(--fg-default); }
+.win-btn.close:hover { background: #e81123; color: #fff; }
+html.light .win-btn:hover { background: rgba(0,0,0,0.06); }
+html.light .win-btn.close:hover { background: #e81123; color: #fff; }
+
 /* ─── Loading bar ─── */
 #loading-bar {
   position: absolute; bottom: 0; left: 0; height: 2px;
@@ -173,6 +193,17 @@ html.light #urlbox:focus-within {
   <button id="more-btn" title="More">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>
   </button>
+  <div class="win-controls">
+    <button class="win-btn" id="win-min" title="Minimize">
+      <svg width="10" height="1" viewBox="0 0 10 1"><rect fill="currentColor" width="10" height="1"/></svg>
+    </button>
+    <button class="win-btn" id="win-max" title="Maximize">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="9" height="9"/></svg>
+    </button>
+    <button class="win-btn close" id="win-close" title="Close">
+      <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.2"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></svg>
+    </button>
+  </div>
   <div id="loading-bar"></div>
 </div>
 <!-- Find bar -->
@@ -199,6 +230,11 @@ document.getElementById('more-btn').onclick = () => {
   // For now, open settings as a fallback
   gb.openSettings();
 };
+
+// ─── Window controls ───
+document.getElementById('win-min').onclick = () => gb.winMinimize();
+document.getElementById('win-max').onclick = () => gb.winMaximize();
+document.getElementById('win-close').onclick = () => gb.winClose();
 
 urlEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { gb.navigate(e.target.value); urlEl.blur(); }
