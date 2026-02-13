@@ -6,11 +6,36 @@
 
 use std::sync::Mutex;
 use std::io::{self, BufRead, Write};
+use std::time::Instant;
 
 use gitbrowser::app::App;
 use gitbrowser::rpc_handler::handle_method;
 
 use serde_json::{json, Value};
+
+/// Simple rate limiter: max requests per second per method.
+struct RateLimiter {
+    window_start: Instant,
+    request_count: u32,
+    max_per_second: u32,
+}
+
+impl RateLimiter {
+    fn new(max_per_second: u32) -> Self {
+        Self { window_start: Instant::now(), request_count: 0, max_per_second }
+    }
+
+    /// Returns true if the request is allowed, false if rate-limited.
+    fn check(&mut self) -> bool {
+        let elapsed = self.window_start.elapsed();
+        if elapsed.as_secs() >= 1 {
+            self.window_start = Instant::now();
+            self.request_count = 0;
+        }
+        self.request_count += 1;
+        self.request_count <= self.max_per_second
+    }
+}
 
 fn main() {
     // BUG-08: Use absolute path for DB — prefer GITBROWSER_DATA_DIR, fallback to exe directory
@@ -27,6 +52,9 @@ fn main() {
     let ready = json!({"event":"ready","version":env!("CARGO_PKG_VERSION")});
     println!("{}", ready);
     io::stdout().flush().unwrap();
+
+    // 2.10: Rate limiting — max 200 RPC requests per second to prevent DoS
+    let mut rate_limiter = RateLimiter::new(200);
 
     let stdin = io::stdin();
     for line in stdin.lock().lines() {
@@ -47,6 +75,15 @@ fn main() {
         };
 
         let id = req.get("id").cloned().unwrap_or(Value::Null);
+
+        // 2.10: Check rate limit before processing
+        if !rate_limiter.check() {
+            let response = json!({"id": id, "error": "rate limit exceeded"});
+            println!("{}", response);
+            io::stdout().flush().unwrap();
+            continue;
+        }
+
         let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
         let params = req.get("params").cloned().unwrap_or(json!({}));
 

@@ -368,7 +368,7 @@ function createTab(ctx, url, activate = true) {
   wcToWindow.set(view.webContents.id, ctx);
 
   view.webContents.setWindowOpenHandler(({ url: newUrl }) => {
-    if (newUrl && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) {
+    if (newUrl && !isBlockedUrl(newUrl) && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) {
       createTab(ctx, newUrl);
     }
     return { action: 'deny' };
@@ -685,6 +685,19 @@ function switchTab(ctx, id) {
   }
   ctx.activeTabId = id;
   const { view, url } = ctx.tabs.get(id);
+
+  // FEAT-04: Resume suspended tab when switching to it
+  const tabData = ctx.tabs.get(id);
+  if (tabData.suspended) {
+    resumeTab(ctx, id);
+  }
+  // FEAT-04: Start suspend timer for the tab we're leaving
+  if (prevTabId && prevTabId !== id && ctx.tabs.has(prevTabId)) {
+    resetSuspendTimer(ctx, prevTabId);
+  }
+  // Clear suspend timer for the active tab
+  clearSuspendTimer(id);
+
   // Set correct bounds BEFORE adding to prevent layout jump
   const { width: w, height: h } = ctx.baseWindow.getContentBounds();
   const sw = ctx.sidebarView ? (ctx.sidebarCollapsed ? 48 : SIDEBAR_WIDTH) : 0;
@@ -703,6 +716,8 @@ function switchTab(ctx, id) {
 function closeTab(ctx, id) {
   if (!ctx || !ctx.tabs.has(id)) return;
   const { view, url, title } = ctx.tabs.get(id);
+  // FEAT-04: Clean up suspend timer
+  clearSuspendTimer(id);
   // Save to closed tabs stack for Ctrl+Shift+T
   if (url && url !== 'gb://newtab') {
     ctx.closedTabsStack.push({ url, title });
@@ -776,7 +791,7 @@ function sendTabsUpdate(ctx) {
     if (url.startsWith('gb://')) {
       title = getInternalTitle(url) || title;
     }
-    return { id, title, url, favicon: t.favicon || null, audible: t.view.webContents.isCurrentlyAudible(), muted: t.view.webContents.isAudioMuted() };
+    return { id, title, url, favicon: t.favicon || null, audible: t.view.webContents.isCurrentlyAudible(), muted: t.view.webContents.isAudioMuted(), suspended: !!t.suspended };
   }).filter(Boolean);
   sendToToolbar(ctx, 'tabs-update', { tabs: data, activeId: ctx.activeTabId });
   }, 16));
@@ -804,6 +819,79 @@ function reopenClosedTab(ctx) {
   if (!ctx || ctx.closedTabsStack.length === 0) return;
   const { url } = ctx.closedTabsStack.pop();
   createTab(ctx, url);
+}
+
+// FEAT-04: Tab suspension — unload WebContents to free memory
+const TAB_SUSPEND_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes of inactivity
+const suspendTimers = new Map(); // tabId -> timeout
+
+function suspendTab(ctx, id) {
+  if (!ctx || !ctx.tabs.has(id)) return;
+  // Don't suspend the active tab, pinned tabs, or internal pages
+  if (ctx.activeTabId === id) return;
+  const tabData = ctx.tabs.get(id);
+  if (tabData.suspended) return;
+  const url = tabData.view.webContents.getURL() || tabData.url;
+  if (url.startsWith('gb://')) return; // don't suspend internal pages
+
+  // Save the URL and title before unloading
+  tabData.suspendedUrl = url;
+  tabData.suspendedTitle = tabData.title;
+  tabData.suspended = true;
+
+  // Remove from view tree and navigate to blank to free memory
+  try {
+    ctx.baseWindow.contentView.removeChildView(tabData.view);
+  } catch {}
+  tabData.view.webContents.loadURL('about:blank').catch(() => {});
+
+  // Notify Rust backend
+  rustBridge.callQueued('tab.suspend', { tab_id: id });
+
+  sendTabsUpdate(ctx);
+  sendToToolbar(ctx, 'tab-suspended', { id });
+  console.log(`[FEAT-04] Tab ${id} suspended (${tabData.suspendedUrl})`);
+}
+
+function resumeTab(ctx, id) {
+  if (!ctx || !ctx.tabs.has(id)) return;
+  const tabData = ctx.tabs.get(id);
+  if (!tabData.suspended) return;
+
+  const url = tabData.suspendedUrl || tabData.url;
+  tabData.suspended = false;
+  tabData.suspendedUrl = null;
+
+  // Reload the original URL
+  const resolvedUrl = INTERNAL_PAGES[url]
+    ? 'file://' + path.join(__dirname, 'ui', INTERNAL_PAGES[url])
+    : url;
+  tabData.view.webContents.loadURL(resolvedUrl).catch(() => {});
+
+  // Notify Rust backend
+  rustBridge.callQueued('tab.resume', { tab_id: id });
+
+  sendTabsUpdate(ctx);
+  sendToToolbar(ctx, 'tab-resumed', { id });
+  console.log(`[FEAT-04] Tab ${id} resumed (${url})`);
+}
+
+// Auto-suspend tabs after inactivity
+function resetSuspendTimer(ctx, id) {
+  if (suspendTimers.has(id)) clearTimeout(suspendTimers.get(id));
+  suspendTimers.set(id, setTimeout(() => {
+    suspendTimers.delete(id);
+    if (ctx && !ctx.closing && ctx.tabs.has(id) && ctx.activeTabId !== id) {
+      suspendTab(ctx, id);
+    }
+  }, TAB_SUSPEND_TIMEOUT_MS));
+}
+
+function clearSuspendTimer(id) {
+  if (suspendTimers.has(id)) {
+    clearTimeout(suspendTimers.get(id));
+    suspendTimers.delete(id);
+  }
 }
 
 function addBookmarkCurrent(ctx) {
@@ -1020,6 +1108,16 @@ ipcMain.on('toggle-mute', (e, id) => {
     wc.setAudioMuted(!wc.isAudioMuted());
     sendTabsUpdate(ctx);
   }
+});
+
+// FEAT-04: Tab suspension — unload inactive tabs to save memory
+ipcMain.on('suspend-tab', (e, id) => {
+  const ctx = getWindowCtx(e.sender);
+  suspendTab(ctx, id);
+});
+ipcMain.on('resume-tab', (e, id) => {
+  const ctx = getWindowCtx(e.sender);
+  resumeTab(ctx, id);
 });
 
 // Zoom
@@ -2875,10 +2973,10 @@ function injectAiPopup(wc, result, loading, originalText) {
   wc.executeJavaScript(js).catch(() => {});
 }
 
-// Get AI provider config — prefer secure secret storage, fallback to toolbar localStorage
+// Get AI provider config — use secure secret storage only (2.9: removed insecure localStorage fallback)
 let cachedAiConfig = null;
 async function getAiConfig() {
-  // Try reading from secure secret storage first
+  // Try reading from secure secret storage
   try {
     const providerResult = await rustBridge.call('secret.get', { key: 'ai_provider' });
     const provider = (providerResult && providerResult.value) || 'openai';
@@ -2888,23 +2986,9 @@ async function getAiConfig() {
       cachedAiConfig = { provider, apiKey: keyResult.value, model: (modelResult && modelResult.value) || '' };
       return cachedAiConfig;
     }
-  } catch { /* secret store not available, fallback */ }
+  } catch { /* secret store not available */ }
 
-  // Fallback: read from toolbar localStorage (for backward compatibility)
-  const _tv = primaryWindowCtx ? primaryWindowCtx.toolbarView : null;
-  if (_tv && !_tv.webContents.isDestroyed()) {
-    try {
-      const result = await _tv.webContents.executeJavaScript(`
-        JSON.stringify({
-          provider: localStorage.getItem('ai_provider') || 'openai',
-          apiKey: localStorage.getItem('ai_key_' + (localStorage.getItem('ai_provider') || 'openai')) || '',
-          model: localStorage.getItem('ai_model_' + (localStorage.getItem('ai_provider') || 'openai')) || ''
-        })
-      `);
-      const config = JSON.parse(result);
-      if (config.apiKey) { cachedAiConfig = config; return config; }
-    } catch {}
-  }
+  // Return cached config or null — no localStorage fallback for security
   return cachedAiConfig;
 }
 
@@ -3857,6 +3941,8 @@ ipcMain.on('tab-context-menu', (e, id, clientX, clientY) => {
 
   const isMuted = ctx.tabs.has(id) && ctx.tabs.get(id).view.webContents.isAudioMuted();
   const muteLabel = isMuted ? cmL('tabs.unmute', 'Включить звук') : cmL('tabs.mute', 'Выключить звук');
+  const isSuspended = ctx.tabs.has(id) && !!ctx.tabs.get(id).suspended;
+  const suspendLabel = isSuspended ? cmL('tabs.resume', 'Возобновить вкладку') : cmL('tabs.suspend', 'Приостановить вкладку');
 
   const items = [
     { label: cmL('tabs.new_tab', 'Новая вкладка'), action: 'new_tab' },
@@ -3865,6 +3951,7 @@ ipcMain.on('tab-context-menu', (e, id, clientX, clientY) => {
     { label: cmL('tabs.duplicate', 'Дублировать'), action: 'duplicate' },
     { type: 'separator' },
     { label: muteLabel, action: 'mute' },
+    { label: suspendLabel, action: 'suspend' },
     { type: 'separator' },
     { label: cmL('tabs.close_tab', 'Закрыть вкладку'), action: 'close' },
     { label: cmL('tabs.close_others', 'Закрыть другие'), action: 'close_others' },
@@ -3939,6 +4026,7 @@ ipcMain.on('tab-context-menu', (e, id, clientX, clientY) => {
       else if (action === 'reload') { if (ctx.tabs.has(id)) ctx.tabs.get(id).view.webContents.reload(); }
       else if (action === 'duplicate') { if (ctx.tabs.has(id)) createTab(ctx, ctx.tabs.get(id).url); }
       else if (action === 'mute') { if (ctx.tabs.has(id)) { const wc2 = ctx.tabs.get(id).view.webContents; wc2.setAudioMuted(!wc2.isAudioMuted()); sendTabsUpdate(ctx); } }
+      else if (action === 'suspend') { if (ctx.tabs.has(id)) { const td = ctx.tabs.get(id); if (td.suspended) resumeTab(ctx, id); else suspendTab(ctx, id); } }
       else if (action === 'close') closeTab(ctx, id);
       else if (action === 'close_others') { ctx.tabOrder.filter(tid => tid !== id).forEach(tid => closeTab(ctx, tid)); }
       else if (action === 'close_right') { const idx = ctx.tabOrder.indexOf(id); if (idx >= 0) ctx.tabOrder.slice(idx + 1).forEach(tid => closeTab(ctx, tid)); }
@@ -3954,19 +4042,33 @@ ipcMain.on('tab-context-menu', (e, id, clientX, clientY) => {
 // Password autofill injection for external pages
 async function injectPasswordAutofill(wc, pageUrl) {
   try {
+    // 1.10: Validate URL before autofill — only inject on pages whose origin matches a saved credential
+    if (!pageUrl || (!pageUrl.startsWith('http://') && !pageUrl.startsWith('https://'))) return;
     // Check if password manager is unlocked and has credentials for this URL
     const unlocked = await rustBridge.call('password.is_unlocked', {});
     if (!unlocked || !unlocked.unlocked) return;
-    const creds = await rustBridge.call('password.list', { url: pageUrl });
+    // Match credentials by exact URL first, then by origin (scheme + host)
+    let creds = await rustBridge.call('password.list', { url: pageUrl });
+    if (!Array.isArray(creds) || creds.length === 0) {
+      // Try matching by origin (e.g. https://github.com)
+      try {
+        const origin = new URL(pageUrl).origin;
+        creds = await rustBridge.call('password.list', { url: origin });
+      } catch { /* invalid URL */ }
+    }
     if (!Array.isArray(creds) || creds.length === 0) return;
     // SEC-04: Only send usernames to the page, decrypt passwords on demand via IPC
     // SEC-13: Safe data passing — double-serialize to avoid interpolation risks
+    const pageOrigin = JSON.stringify(JSON.stringify(new URL(pageUrl).origin));
     const credsPayload = JSON.stringify(JSON.stringify(creds.map(c => ({ id: c.id, username: c.username }))));
     wc.executeJavaScript(`
       (function() {
         if (window.__gbAutofillInjected) return;
         window.__gbAutofillInjected = true;
         const creds = JSON.parse(${credsPayload});
+        const expectedOrigin = JSON.parse(${pageOrigin});
+        // 1.10: Verify current page origin matches before showing autofill
+        if (location.origin !== expectedOrigin) return;
         const pwFields = document.querySelectorAll('input[type="password"]');
         if (pwFields.length === 0) return;
         pwFields.forEach(pwField => {
@@ -3981,7 +4083,7 @@ async function injectPasswordAutofill(wc, pageUrl) {
           btn.style.top = (window.scrollY + rect.top + (rect.height - 20) / 2) + 'px';
           btn.style.left = (window.scrollX + rect.right - 24) + 'px';
           document.body.appendChild(btn);
-          // Dropdown
+          // Dropdown — user must explicitly click to autofill (1.10: confirmation via user action)
           btn.onclick = (e) => {
             e.stopPropagation();
             let dd = document.getElementById('__gb_autofill_dd');
@@ -3991,6 +4093,11 @@ async function injectPasswordAutofill(wc, pageUrl) {
             dd.style.cssText = 'position:absolute;z-index:1000000;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:4px;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
             dd.style.top = (window.scrollY + rect.bottom + 4) + 'px';
             dd.style.left = (window.scrollX + rect.left) + 'px';
+            // Header showing which site credentials are for
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'padding:6px 12px 4px;font-size:11px;color:#8b949e;border-bottom:1px solid #21262d;margin-bottom:4px;';
+            hdr.textContent = 'Autofill for ' + location.hostname;
+            dd.appendChild(hdr);
             creds.forEach(c => {
               const item = document.createElement('div');
               item.style.cssText = 'padding:8px 12px;cursor:pointer;border-radius:4px;color:#e6edf3;font-size:13px;font-family:system-ui;';
@@ -4175,6 +4282,25 @@ app.whenReady().then(async () => {
 
   // Start rust bridge (non-blocking)
   rustBridge.start();
+
+  // FEAT-06: Graceful degradation — notify UI on Rust process crash/reconnect
+  rustBridge.on('disconnected', ({ code }) => {
+    console.warn(`[FEAT-06] Rust backend disconnected (exit code ${code})`);
+    for (const ctx of windowRegistry.values()) {
+      sendToToolbar(ctx, 'rust-status', { connected: false });
+      sendToToolbar(ctx, 'toast', { message: cmL('errors.backend_disconnected', 'Backend disconnected — some features unavailable'), type: 'warning' });
+    }
+  });
+  rustBridge.on('reconnected', () => {
+    console.log('[FEAT-06] Rust backend reconnected');
+    for (const ctx of windowRegistry.values()) {
+      sendToToolbar(ctx, 'rust-status', { connected: true });
+      sendToToolbar(ctx, 'toast', { message: cmL('errors.backend_reconnected', 'Backend reconnected'), type: 'success' });
+    }
+    // Re-load theme and locale after reconnect
+    loadInitialTheme();
+    loadContextMenuLocale().catch(() => {});
+  });
 
   // Don't block on locale — load it in background, use English fallback for now
   loadContextMenuLocale().catch(() => {});

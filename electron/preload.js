@@ -180,4 +180,16 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   onSidebarCollapsed: (cb) => ipcRenderer.on('sidebar-collapsed', (_e, d) => cb(d)),
   onGhNotifCount: (cb) => ipcRenderer.on('gh-notif-count', (_e, d) => cb(d)),
   onGhBtnVisible: (cb) => ipcRenderer.on('gh-btn-visible', (_e, d) => cb(d)),
+
+  // Rust backend status (FEAT-06)
+  onRustStatus: (cb) => ipcRenderer.on('rust-status', (_e, d) => cb(d)),
+
+  // Private mode indicator
+  onPrivateMode: (cb) => ipcRenderer.on('private-mode', (_e, d) => cb(d)),
+
+  // Tab suspension (FEAT-04)
+  suspendTab: (id) => ipcRenderer.send('suspend-tab', id),
+  resumeTab: (id) => ipcRenderer.send('resume-tab', id),
+  onTabSuspended: (cb) => ipcRenderer.on('tab-suspended', (_e, d) => cb(d)),
+  onTabResumed: (cb) => ipcRenderer.on('tab-resumed', (_e, d) => cb(d)),
 });

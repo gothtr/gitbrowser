@@ -15,6 +15,21 @@ class RustBridge {
     this.readyPromise = null;
     this._reconnecting = false;
     this._healthInterval = null;
+    this._listeners = { disconnected: [], reconnected: [] };
+    this._offlineQueue = []; // queued calls while disconnected
+  }
+
+  /** Register event listener: 'disconnected' or 'reconnected' */
+  on(event, fn) {
+    if (this._listeners[event]) this._listeners[event].push(fn);
+  }
+
+  _emit(event, data) {
+    if (this._listeners[event]) {
+      for (const fn of this._listeners[event]) {
+        try { fn(data); } catch {}
+      }
+    }
   }
 
   start() {
@@ -62,10 +77,15 @@ class RustBridge {
         const msg = JSON.parse(line);
         if (msg.event === 'ready') {
           this.ready = true;
+          const wasReconnecting = this._reconnecting;
           this._reconnecting = false;
           console.log(`[RustBridge] connected, version ${msg.version}`);
           if (this._readyResolve) this._readyResolve();
           this._startHealthCheck();
+          if (wasReconnecting) {
+            this._emit('reconnected', { version: msg.version });
+            this._flushOfflineQueue();
+          }
           return;
         }
         if (msg.id !== undefined && this.pending.has(msg.id)) {
@@ -92,6 +112,7 @@ class RustBridge {
         reject(new Error('RPC process exited'));
       }
       this.pending.clear();
+      this._emit('disconnected', { code });
       // Auto-reconnect after 2s
       if (!this._reconnecting) {
         this._reconnecting = true;
@@ -143,6 +164,22 @@ class RustBridge {
       this.process.stdin.end();
       this.process.kill();
       this.process = null;
+    }
+  }
+
+  /** Queue a call to be retried when the bridge reconnects (fire-and-forget). */
+  callQueued(method, params = {}) {
+    if (this.ready) {
+      this.call(method, params).catch(() => {});
+    } else {
+      this._offlineQueue.push({ method, params });
+    }
+  }
+
+  _flushOfflineQueue() {
+    const queue = this._offlineQueue.splice(0);
+    for (const { method, params } of queue) {
+      this.call(method, params).catch(() => {});
     }
   }
 }

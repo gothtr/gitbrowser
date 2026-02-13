@@ -299,5 +299,9 @@
     "details": "Details",
     "permissions": "Permissions",
     "chrome_hint": "Supports unpacked Chrome extensions (Manifest V2/V3). Download and unpack a Chrome extension, then select its folder."
+  },
+  "errors": {
+    "backend_disconnected": "Backend disconnected — some features unavailable",
+    "backend_reconnected": "Backend reconnected"
   }
 }

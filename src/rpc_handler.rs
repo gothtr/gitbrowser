@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use crate::app::App;
 use crate::managers::bookmark_manager::{BookmarkManager, BookmarkManagerTrait};
 use crate::managers::history_manager::{HistoryManager, HistoryManagerTrait};
+use crate::managers::tab_manager::TabManagerTrait;
 use crate::services::password_manager::PasswordManagerTrait;
 use crate::services::settings_engine::SettingsEngineTrait;
 use crate::services::localization_engine::LocalizationEngineTrait;
@@ -165,6 +166,8 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
             let tabs_val = params.get("tabs").ok_or("missing tabs")?;
             let session_path = if let Ok(dir) = std::env::var("GITBROWSER_DATA_DIR") {
                 std::path::PathBuf::from(dir).join("session.json")
+            } else if let Ok(exe) = std::env::current_exe() {
+                exe.parent().unwrap_or(std::path::Path::new(".")).join("session.json")
             } else {
                 std::path::PathBuf::from("session.json")
             };
@@ -175,6 +178,8 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
         "session.restore" => {
             let session_path = if let Ok(dir) = std::env::var("GITBROWSER_DATA_DIR") {
                 std::path::PathBuf::from(dir).join("session.json")
+            } else if let Ok(exe) = std::env::current_exe() {
+                exe.parent().unwrap_or(std::path::Path::new(".")).join("session.json")
             } else {
                 std::path::PathBuf::from("session.json")
             };
@@ -261,6 +266,13 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
             let lowercase = params.get("lowercase").and_then(|v| v.as_bool()).unwrap_or(true);
             let numbers = params.get("numbers").and_then(|v| v.as_bool()).unwrap_or(true);
             let symbols = params.get("symbols").and_then(|v| v.as_bool()).unwrap_or(true);
+            // BUG: Validate that at least one charset is selected
+            if !uppercase && !lowercase && !numbers && !symbols {
+                return Err("at least one character set must be enabled".to_string());
+            }
+            if length == 0 || length > 1024 {
+                return Err("password length must be between 1 and 1024".to_string());
+            }
             let a = app.lock().map_err(|e| e.to_string())?;
             let opts = crate::types::credential::PasswordGenOptions {
                 length, uppercase, lowercase, numbers, symbols,
@@ -328,8 +340,10 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
             let login = params.get("login").and_then(|v| v.as_str()).ok_or("missing login")?;
             let avatar_url = params.get("avatar_url").and_then(|v| v.as_str());
             let a = app.lock().map_err(|e| e.to_string())?;
+            // SEC-01: Warn if master password is not set — token will use fallback key
+            let uses_master = a.password_manager.is_unlocked();
             a.github_integration.store_token(token, login, avatar_url).map_err(|e| e.to_string())?;
-            Ok(json!({"ok": true}))
+            Ok(json!({"ok": true, "master_key_active": uses_master}))
         }
         "github.get_token" => {
             let a = app.lock().map_err(|e| e.to_string())?;
@@ -371,6 +385,8 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
             let key = params.get("key").and_then(|v| v.as_str()).ok_or("missing key")?;
             let value = params.get("value").and_then(|v| v.as_str()).ok_or("missing value")?;
             let a = app.lock().map_err(|e| e.to_string())?;
+            // SEC-01: Track whether master key is active for the response
+            let master_key_active = a.password_manager.get_derived_key().is_some();
             let encrypted = if let Some(master_key) = a.password_manager.get_derived_key() {
                 let crypto = crate::services::crypto_service::CryptoService::new();
                 use crate::services::crypto_service::CryptoServiceTrait;
@@ -383,13 +399,13 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
                 "CREATE TABLE IF NOT EXISTS secure_store (key TEXT PRIMARY KEY, ciphertext BLOB, iv BLOB, auth_tag BLOB, updated_at INTEGER, uses_master INTEGER DEFAULT 0)",
                 [],
             ).map_err(|e| e.to_string())?;
-            let uses_master = if a.password_manager.get_derived_key().is_some() { 1i32 } else { 0i32 };
+            let uses_master = if master_key_active { 1i32 } else { 0i32 };
             let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() as i64;
             conn.execute(
                 "INSERT OR REPLACE INTO secure_store (key, ciphertext, iv, auth_tag, updated_at, uses_master) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 rusqlite::params![key, encrypted.ciphertext, encrypted.iv, encrypted.auth_tag, now, uses_master],
             ).map_err(|e| e.to_string())?;
-            Ok(json!({"ok": true}))
+            Ok(json!({"ok": true, "master_key_active": master_key_active}))
         }
         "secret.get" => {
             let key = params.get("key").and_then(|v| v.as_str()).ok_or("missing key")?;
@@ -433,6 +449,20 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
             let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let _ = conn.execute("DELETE FROM secure_store WHERE key = ?1", rusqlite::params![key]);
+            Ok(json!({"ok": true}))
+        }
+
+        // ─── Tab suspension (FEAT-04) ───
+        "tab.suspend" => {
+            let tab_id = params.get("tab_id").and_then(|v| v.as_str()).ok_or("missing tab_id")?;
+            let mut a = app.lock().map_err(|e| e.to_string())?;
+            a.tab_manager.suspend_tab(tab_id).map_err(|e| e.to_string())?;
+            Ok(json!({"ok": true}))
+        }
+        "tab.resume" => {
+            let tab_id = params.get("tab_id").and_then(|v| v.as_str()).ok_or("missing tab_id")?;
+            let mut a = app.lock().map_err(|e| e.to_string())?;
+            a.tab_manager.resume_tab(tab_id).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
 
