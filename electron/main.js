@@ -2574,7 +2574,10 @@ let githubToken = null;
 (async () => {
   try {
     const res = await rustBridge.call('github.get_token', {});
-    if (res && res.token) githubToken = res.token;
+    if (res && res.token) {
+      githubToken = res.token;
+      startGhNotifPolling();
+    }
   } catch { /* no stored token */ }
 })();
 
@@ -2662,9 +2665,11 @@ ipcMain.handle('github-device-poll', async (_e, { clientId, deviceCode }) => {
 
 ipcMain.handle('github-api', async (_e, { endpoint, token, method, body }) => {
   try {
+    const t = token || githubToken;
+    if (!t) return { error: 'not_authenticated' };
     const opts = {
       method: method || 'GET',
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
+      headers: { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' },
     };
     if (body) {
       opts.headers['Content-Type'] = 'application/json';
@@ -2695,6 +2700,8 @@ ipcMain.handle('secret-delete', async (_e, { key }) => {
 // GitHub bookmark sync via Gists
 ipcMain.handle('github-sync-bookmarks-upload', async (_e, { token }) => {
   try {
+    const t = token || githubToken;
+    if (!t) return { error: 'not_authenticated' };
     // Get bookmarks from Rust
     const bookmarks = await rustBridge.call('bookmark.list', {});
     const data = JSON.stringify(bookmarks);
@@ -2703,7 +2710,7 @@ ipcMain.handle('github-sync-bookmarks-upload', async (_e, { token }) => {
     const content = JSON.stringify(encrypted);
     // Check if sync gist already exists
     const gistsRes = await net.fetch('https://api.github.com/gists', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
+      headers: { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' },
     });
     const gists = await gistsRes.json();
     const syncGist = Array.isArray(gists) ? gists.find(g => g.description === 'GitBrowser Bookmark Sync') : null;
@@ -2713,17 +2720,15 @@ ipcMain.handle('github-sync-bookmarks-upload', async (_e, { token }) => {
       files: { 'bookmarks.enc.json': { content } },
     };
     if (syncGist) {
-      // Update existing gist
       await net.fetch('https://api.github.com/gists/' + syncGist.id, {
         method: 'PATCH',
-        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        headers: { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
         body: JSON.stringify(gistPayload),
       });
     } else {
-      // Create new gist
       await net.fetch('https://api.github.com/gists', {
         method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
+        headers: { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
         body: JSON.stringify(gistPayload),
       });
     }
@@ -2733,24 +2738,23 @@ ipcMain.handle('github-sync-bookmarks-upload', async (_e, { token }) => {
 
 ipcMain.handle('github-sync-bookmarks-download', async (_e, { token }) => {
   try {
+    const t = token || githubToken;
+    if (!t) return { error: 'not_authenticated' };
     const gistsRes = await net.fetch('https://api.github.com/gists', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
+      headers: { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' },
     });
     const gists = await gistsRes.json();
     const syncGist = Array.isArray(gists) ? gists.find(g => g.description === 'GitBrowser Bookmark Sync') : null;
     if (!syncGist) return { error: 'no_sync_gist' };
-    // Fetch full gist
     const gistRes = await net.fetch('https://api.github.com/gists/' + syncGist.id, {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' },
+      headers: { 'Authorization': 'Bearer ' + t, 'Accept': 'application/vnd.github+json' },
     });
     const gist = await gistRes.json();
     const file = gist.files && gist.files['bookmarks.enc.json'];
     if (!file || !file.content) return { error: 'no_bookmark_file' };
     const encrypted = JSON.parse(file.content);
-    // Decrypt via Rust
     const decrypted = await rustBridge.call('github.decrypt_sync', encrypted);
     const bookmarks = JSON.parse(decrypted.data);
-    // Import bookmarks (add missing ones)
     let imported = 0;
     for (const bm of bookmarks) {
       try {

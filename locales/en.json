@@ -157,7 +157,9 @@
     "account_login_hint": "Sign in to sync bookmarks, access repos, and more",
     "account_sync": "Sync Bookmarks",
     "account_sync_desc": "Upload or download bookmarks via GitHub Gist",
-    "account_logout_desc": "Disconnect your GitHub account"
+    "account_logout_desc": "Disconnect your GitHub account",
+    "account_full_page": "Open GitHub Dashboard",
+    "account_full_page_desc": "Full GitHub integration page with repos, PRs, issues"
   },
   "ai": {
     "title": "AI Assistant",

@@ -157,7 +157,9 @@
     "account_login_hint": "Войдите для синхронизации закладок, доступа к репозиториям и другого",
     "account_sync": "Синхронизация закладок",
     "account_sync_desc": "Загрузить или скачать закладки через GitHub Gist",
-    "account_logout_desc": "Отключить аккаунт GitHub"
+    "account_logout_desc": "Отключить аккаунт GitHub",
+    "account_full_page": "Открыть панель GitHub",
+    "account_full_page_desc": "Полная страница GitHub с репозиториями, PR, issues"
   },
   "ai": {
     "title": "AI-ассистент",
