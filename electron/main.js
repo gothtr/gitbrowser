@@ -1,4 +1,4 @@
-const { app, BaseWindow, WebContentsView, ipcMain, session, Menu, nativeTheme, net, clipboard, dialog } = require('electron');
+const { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, session, Menu, nativeTheme, net, clipboard, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const rustBridge = require('./rust-bridge');
@@ -53,6 +53,17 @@ let nextDownloadId = 1;
 const closedTabsStack = []; // Stack for reopening closed tabs (Ctrl+Shift+T)
 const MAX_CLOSED_TABS = 20;
 let isHtmlFullscreen = false; // Track HTML5 fullscreen (e.g. YouTube video)
+
+// ─── Picture-in-Picture state ───
+let pipView = null; // WebContentsView for PiP overlay
+let pipSourceTabId = null; // Which tab the PiP video came from
+let pipBounds = { x: 0, y: 0, width: 320, height: 180 }; // Default PiP position (bottom-right, set in layoutViews)
+
+// ─── Telegram Widget state ───
+let telegramWin = null;   // BrowserWindow (child, transparent, rounded)
+let telegramView = null;  // kept for compat — points to telegramWin
+let telegramVisible = false;
+let telegramBounds = { x: 0, y: 0, width: 380, height: 520 };
 
 // Internal pages that get preload (need IPC access)
 const INTERNAL_PAGES = {
@@ -155,7 +166,15 @@ function createWindow() {
       }
     }
   }, 3600000);
-  mainWindow.on('close', () => saveSession());
+  mainWindow.on('close', () => {
+    saveSession();
+    // Destroy telegram child window so it doesn't block quit
+    if (telegramWin && !telegramWin.isDestroyed()) {
+      telegramWin.removeAllListeners('close');
+      telegramWin.destroy();
+      telegramWin = null;
+    }
+  });
 }
 
 function layoutViews() {
@@ -394,8 +413,33 @@ function loadUrlInView(view, url) {
 
 function switchTab(id) {
   if (!tabs.has(id)) return;
-  if (activeTabId && tabs.has(activeTabId)) {
+  // Auto PiP: if leaving a tab with playing video, trigger PiP
+  if (activeTabId && tabs.has(activeTabId) && activeTabId !== id) {
+    const leavingView = tabs.get(activeTabId).view;
+    if (!leavingView.webContents.isDestroyed()) {
+      leavingView.webContents.executeJavaScript(`
+        (function() {
+          var v = document.querySelector('video');
+          if (v && !v.paused && v.readyState >= 2 && !document.pictureInPictureElement) {
+            try { v.requestPictureInPicture(); } catch(e) {}
+          }
+        })();
+      `).catch(() => {});
+    }
     mainWindow.contentView.removeChildView(tabs.get(activeTabId).view);
+  }
+  // If returning to the tab that has PiP, exit PiP
+  if (activeTabId !== id && tabs.has(id)) {
+    const returningView = tabs.get(id).view;
+    if (!returningView.webContents.isDestroyed()) {
+      returningView.webContents.executeJavaScript(`
+        (function() {
+          if (document.pictureInPictureElement) {
+            try { document.exitPictureInPicture(); } catch(e) {}
+          }
+        })();
+      `).catch(() => {});
+    }
   }
   activeTabId = id;
   const { view, url } = tabs.get(id);
@@ -404,9 +448,7 @@ function switchTab(id) {
   sendTabsUpdate();
   const realUrl = view.webContents.getURL() || url || '';
   sendToToolbar('tab-url-updated', { id, url: realUrl });
-  // Update zoom indicator for the new tab
   sendToToolbar('zoom-changed', { level: view.webContents.getZoomLevel() });
-  // Close find bar when switching tabs
   sendToToolbar('close-find', {});
 }
 
@@ -1422,6 +1464,11 @@ ipcMain.handle('settings-set', async (_e, { key, value }) => {
     if (key === 'general.default_search_engine') {
       currentSearchEngine = value || 'google';
     }
+    // Broadcast telegram button visibility
+    if (key === 'appearance.show_telegram') {
+      sendToToolbar('telegram-btn-visible', { visible: !!value });
+      if (!value && telegramVisible) hideTelegram();
+    }
     // Reload locale for context menu when language changes
     if (key === 'general.language') {
       loadContextMenuLocale();
@@ -2234,6 +2281,195 @@ ipcMain.handle('clear-cookies', async () => {
     await session.defaultSession.clearStorageData({ storages: ['cookies'] });
     return { ok: true };
   } catch { return { error: 'Failed' }; }
+});
+
+// ─── Telegram Widget ───
+// Uses a child BrowserWindow with transparent background for real rounded corners.
+// The window is cached (hidden, not destroyed) so Telegram loads only once.
+// Titlebar is injected as a fixed overlay on top of Telegram content.
+
+function showTelegram() {
+  if (!mainWindow) return;
+
+  if (!telegramWin) {
+    // Position bottom-right of main window
+    const mainBounds = mainWindow.getBounds();
+    const contentBounds = mainWindow.getContentBounds();
+    telegramBounds.x = mainBounds.x + contentBounds.width - telegramBounds.width - 20;
+    telegramBounds.y = mainBounds.y + contentBounds.height - telegramBounds.height - 20;
+
+    // Dedicated session for Telegram
+    const telegramSes = session.fromPartition('persist:telegram');
+    telegramSes.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    );
+
+    telegramWin = new BrowserWindow({
+      parent: mainWindow,
+      x: telegramBounds.x,
+      y: telegramBounds.y,
+      width: telegramBounds.width,
+      height: telegramBounds.height,
+      minWidth: 280,
+      minHeight: 350,
+      maxWidth: 800,
+      maxHeight: 900,
+      frame: false,
+      transparent: false,
+      roundedCorners: true,
+      thickFrame: true,
+      resizable: true,
+      skipTaskbar: true,
+      show: false,
+      backgroundColor: '#0d1117',
+      webPreferences: {
+        contextIsolation: true,
+        sandbox: false,
+        partition: 'persist:telegram',
+        preload: path.join(__dirname, 'preload.js'),
+      },
+    });
+
+    // Load Telegram directly
+    telegramWin.loadURL('https://web.telegram.org/k/');
+
+    // Inject titlebar overlay once page loads
+    const injectTitlebar = () => {
+      if (telegramWin.isDestroyed()) return;
+      telegramWin.webContents.insertCSS(`
+        #__gb-tg-bar{position:fixed;top:0;left:0;right:0;height:32px;z-index:999999;
+          background:rgba(18,22,30,0.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+          display:flex;align-items:center;justify-content:space-between;padding:0 8px;
+          -webkit-app-region:drag;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+          border-bottom:1px solid rgba(255,255,255,0.06);user-select:none;-webkit-user-select:none;}
+        #__gb-tg-bar *{-webkit-app-region:no-drag}
+        #__gb-tg-bar .lbl{font-size:11px;color:#7c8494;font-weight:600;display:flex;align-items:center;gap:6px;-webkit-app-region:drag}
+        #__gb-tg-bar .lbl svg{width:14px;height:14px;fill:#60a5fa}
+        #__gb-tg-bar .cbtn{width:24px;height:24px;border:none;background:none;color:#4a5168;cursor:pointer;
+          border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+        #__gb-tg-bar .cbtn:hover{background:rgba(220,38,38,0.15);color:#f87171}
+        body{padding-top:32px !important}
+      `).catch(() => {});
+      telegramWin.webContents.executeJavaScript(`
+        (function(){
+          if(document.getElementById('__gb-tg-bar'))return;
+          var bar=document.createElement('div');bar.id='__gb-tg-bar';
+          bar.innerHTML='<span class="lbl"><svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.479.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>Telegram</span><button class="cbtn" title="Close"><svg width="8" height="8" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.5" fill="none"><line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/></svg></button>';
+          bar.querySelector('.cbtn').onclick=function(){if(window.gitbrowser)window.gitbrowser.telegramToggle();};
+          document.body.prepend(bar);
+        })();
+      `).catch(() => {});
+    };
+
+    telegramWin.webContents.on('did-finish-load', injectTitlebar);
+    telegramWin.webContents.on('dom-ready', injectTitlebar);
+
+    telegramWin.webContents.setWindowOpenHandler(({ url }) => {
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) createTab(url);
+      return { action: 'deny' };
+    });
+
+    telegramWin.on('close', (e) => {
+      e.preventDefault();
+      hideTelegram();
+    });
+
+    telegramWin.on('moved', () => {
+      if (telegramWin && !telegramWin.isDestroyed()) {
+        const b = telegramWin.getBounds();
+        telegramBounds.x = b.x;
+        telegramBounds.y = b.y;
+      }
+    });
+
+    telegramWin.on('resized', () => {
+      if (telegramWin && !telegramWin.isDestroyed()) {
+        const b = telegramWin.getBounds();
+        telegramBounds.width = b.width;
+        telegramBounds.height = b.height;
+      }
+    });
+
+    telegramView = telegramWin; // compat reference
+  }
+
+  telegramWin.setBounds({
+    x: telegramBounds.x,
+    y: telegramBounds.y,
+    width: telegramBounds.width,
+    height: telegramBounds.height,
+  });
+  telegramWin.show();
+  telegramVisible = true;
+  sendToToolbar('telegram-state', { visible: true });
+}
+
+function hideTelegram() {
+  if (telegramWin && !telegramWin.isDestroyed()) {
+    telegramWin.hide();
+  }
+  telegramVisible = false;
+  sendToToolbar('telegram-state', { visible: false });
+}
+
+ipcMain.on('telegram-toggle', () => {
+  if (telegramVisible) hideTelegram();
+  else showTelegram();
+});
+
+ipcMain.on('telegram-drag', (_e, { dx, dy }) => {
+  // Drag handled natively by -webkit-app-region: drag
+});
+
+ipcMain.on('telegram-resize-delta', (_e, { dx, dy }) => {
+  // Resize handled natively by BrowserWindow
+});
+
+// ─── GitHub Telemetry (anonymous, consent-based) ───
+ipcMain.handle('telemetry-send', async (_e, { event, data }) => {
+  try {
+    // Check consent
+    const settings = await rustBridge.call('settings.get', {});
+    if (!settings || !settings.privacy || !settings.privacy.telemetry_consent) {
+      return { ok: false, reason: 'no_consent' };
+    }
+    // Check if user is authenticated with GitHub
+    const token = await rustBridge.call('github.get_token', {});
+    if (!token) return { ok: false, reason: 'not_authenticated' };
+
+    // Build anonymous telemetry payload
+    const payload = {
+      event,
+      version: '0.2.0',
+      platform: process.platform,
+      arch: process.arch,
+      locale: (settings.general && settings.general.language) || 'en',
+      timestamp: new Date().toISOString(),
+      data: data || {},
+    };
+
+    // Send as a GitHub Gist (private, linked to user)
+    const resp = await net.fetch('https://api.github.com/gists', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'GitBrowser',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        description: 'GitBrowser Telemetry — ' + event,
+        public: false,
+        files: {
+          'telemetry.json': { content: JSON.stringify(payload, null, 2) },
+        },
+      }),
+    });
+    if (!resp.ok) return { ok: false, reason: 'api_error' };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e.message };
+  }
 });
 
 // Extensions

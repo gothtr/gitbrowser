@@ -125,6 +125,16 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   clearCookies: () => ipcRenderer.invoke('clear-cookies'),
 
+  // Telegram Widget
+  telegramToggle: () => ipcRenderer.send('telegram-toggle'),
+  telegramDrag: (dx, dy) => ipcRenderer.send('telegram-drag', { dx, dy }),
+  telegramResizeDelta: (dx, dy) => ipcRenderer.send('telegram-resize-delta', { dx, dy }),
+  onTelegramState: (cb) => ipcRenderer.on('telegram-state', (_e, d) => cb(d)),
+  onTelegramBtnVisible: (cb) => ipcRenderer.on('telegram-btn-visible', (_e, d) => cb(d)),
+
+  // Telemetry (consent-based)
+  sendTelemetry: (event, data) => ipcRenderer.invoke('telemetry-send', { event, data }),
+
   // Sidebar context menu (when collapsed, show via overlay)
   sidebarContextMenu: (x, y) => ipcRenderer.send('sidebar-context-menu', x, y),
 

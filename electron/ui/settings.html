@@ -305,6 +305,8 @@ select:focus, input[type="number"]:focus, input[type="text"]:focus, input[type="
         <div class="row">
           <div class="color-palette" id="accent-palette"></div>
         </div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.show_telegram">Show Telegram Button</div><div class="row-desc" data-i18n="settings.show_telegram_desc">Show Telegram widget button in toolbar</div></div>
+          <div class="toggle on" id="s-show-telegram" data-key="appearance.show_telegram"></div></div>
       </div>
     </div>
 
@@ -325,6 +327,8 @@ select:focus, input[type="number"]:focus, input[type="text"]:focus, input[type="
           <div class="toggle on" id="s-fingerprint" data-key="privacy.anti_fingerprinting"></div></div>
         <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.clear_data_on_exit">Clear Data on Exit</div><div class="row-desc" data-i18n="settings.clear_exit_desc">Remove browsing data when closing</div></div>
           <div class="toggle" id="s-clear-exit" data-key="privacy.clear_data_on_exit"></div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.telemetry_consent">Help Improve GitBrowser</div><div class="row-desc" data-i18n="settings.telemetry_desc">Send anonymous usage data via GitHub (requires GitHub login)</div></div>
+          <div class="toggle" id="s-telemetry" data-key="privacy.telemetry_consent"></div></div>
       </div>
       <div class="settings-card">
         <div class="row link-row" id="open-passwords">
@@ -435,10 +439,13 @@ async function loadSettings() {
       setToggle('s-doh', s.privacy.dns_over_https);
       setToggle('s-fingerprint', s.privacy.anti_fingerprinting);
       setToggle('s-clear-exit', s.privacy.clear_data_on_exit);
+      setToggle('s-telemetry', s.privacy.telemetry_consent);
     }
     if (s.appearance) {
       setVal('s-theme', s.appearance.theme);
       document.getElementById('s-fontsize').value = s.appearance.font_size || 14;
+      if (s.appearance.show_telegram === false) setToggle('s-show-telegram', false);
+      else setToggle('s-show-telegram', true);
       let t = s.appearance.theme;
       if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
       applyTheme(t);
@@ -557,8 +564,10 @@ document.getElementById('btn-reset').onclick = async () => {
   await gb.setSetting('privacy.dns_over_https', true);
   await gb.setSetting('privacy.anti_fingerprinting', true);
   await gb.setSetting('privacy.clear_data_on_exit', false);
+  await gb.setSetting('privacy.telemetry_consent', false);
   await gb.setSetting('appearance.theme', 'System');
   await gb.setSetting('appearance.font_size', 14);
+  await gb.setSetting('appearance.show_telegram', true);
   localStorage.removeItem('newtab_bg');
   localStorage.removeItem('accent_color');
   loadSettings();
