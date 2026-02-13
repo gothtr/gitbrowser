@@ -319,6 +319,8 @@ html.light .donate-custom { background: rgba(0, 0, 0, 0.03); }
         </div>
         <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.show_telegram">Show Telegram Button</div><div class="row-desc" data-i18n="settings.show_telegram_desc">Show Telegram widget button in toolbar</div></div>
           <div class="toggle on" id="s-show-telegram" data-key="appearance.show_telegram"></div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.show_github">Show GitHub Button</div><div class="row-desc" data-i18n="settings.show_github_desc">Show GitHub quick-access button in toolbar</div></div>
+          <div class="toggle on" id="s-show-github" data-key="appearance.show_github"></div></div>
       </div>
     </div>
 
@@ -544,6 +546,8 @@ async function loadSettings() {
       document.getElementById('s-fontsize').value = s.appearance.font_size || 14;
       if (s.appearance.show_telegram === false) setToggle('s-show-telegram', false);
       else setToggle('s-show-telegram', true);
+      if (s.appearance.show_github === false) setToggle('s-show-github', false);
+      else setToggle('s-show-github', true);
       let t = s.appearance.theme;
       if (t === 'System') t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : 'Dark';
       applyTheme(t);
@@ -751,6 +755,7 @@ document.getElementById('btn-reset').onclick = async () => {
   await gb.setSetting('appearance.theme', 'System');
   await gb.setSetting('appearance.font_size', 14);
   await gb.setSetting('appearance.show_telegram', true);
+  await gb.setSetting('appearance.show_github', true);
   localStorage.removeItem('newtab_bg');
   localStorage.removeItem('accent_color');
   loadSettings();

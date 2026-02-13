@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   reopenClosedTab: () => ipcRenderer.send('reopen-closed-tab'),
   getTabs: () => ipcRenderer.send('get-tabs'),
   tabContextMenu: (id, x, y) => ipcRenderer.send('tab-context-menu', id, x, y),
+  toggleMute: (id) => ipcRenderer.send('toggle-mute', id),
 
   // Ctrl+Tab / Ctrl+Shift+Tab navigation
   nextTab: () => ipcRenderer.send('next-tab'),
@@ -149,6 +150,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
 
   // Toolbar more menu
   showMoreMenu: (x, y) => ipcRenderer.send('toolbar-more-menu', x, y),
+  showGithubMenu: (x, y) => ipcRenderer.send('toolbar-github-menu', x, y),
 
   // Navigation from internal pages
   openUrl: (url) => ipcRenderer.send('open-url', url),
@@ -167,4 +169,5 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   onCloseFind: (cb) => ipcRenderer.on('close-find', (_e, d) => cb(d)),
   onSidebarCollapsed: (cb) => ipcRenderer.on('sidebar-collapsed', (_e, d) => cb(d)),
   onGhNotifCount: (cb) => ipcRenderer.on('gh-notif-count', (_e, d) => cb(d)),
+  onGhBtnVisible: (cb) => ipcRenderer.on('gh-btn-visible', (_e, d) => cb(d)),
 });

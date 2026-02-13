@@ -126,6 +126,8 @@
     "accent_color_desc": "Interface accent color",
     "show_telegram": "Show Telegram Button",
     "show_telegram_desc": "Show Telegram widget button in toolbar",
+    "show_github": "Show GitHub Button",
+    "show_github_desc": "Show GitHub quick-access button in toolbar",
     "tracker_blocking": "Block Trackers",
     "tracker_desc": "Prevent tracking scripts",
     "ad_blocking": "Block Ads",

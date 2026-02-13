@@ -293,6 +293,10 @@ function createTab(url, activate = true) {
   });
   view.webContents.on('did-stop-loading', () => sendToToolbar('tab-loading', { id, loading: false }));
 
+  // Audio state tracking
+  view.webContents.on('media-started-playing', () => sendTabsUpdate());
+  view.webContents.on('media-paused', () => sendTabsUpdate());
+
   // Favicon
   view.webContents.on('page-favicon-updated', (_e, favicons) => {
     if (favicons && favicons.length > 0) {
@@ -505,7 +509,7 @@ function sendTabsUpdate() {
     if (url.startsWith('gb://')) {
       title = getInternalTitle(url) || title;
     }
-    return { id, title, url, favicon: t.favicon || null };
+    return { id, title, url, favicon: t.favicon || null, audible: t.view.webContents.isCurrentlyAudible(), muted: t.view.webContents.isAudioMuted() };
   }).filter(Boolean);
   sendToToolbar('tabs-update', { tabs: data, activeId: activeTabId });
 }
@@ -675,6 +679,13 @@ ipcMain.on('go-back', () => { if (activeTabId && tabs.has(activeTabId)) tabs.get
 ipcMain.on('go-forward', () => { if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.goForward(); });
 ipcMain.on('reload', () => { if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.reload(); });
 ipcMain.on('get-tabs', () => sendTabsUpdate());
+ipcMain.on('toggle-mute', (_e, id) => {
+  if (tabs.has(id)) {
+    const wc = tabs.get(id).view.webContents;
+    wc.setAudioMuted(!wc.isAudioMuted());
+    sendTabsUpdate();
+  }
+});
 
 // Zoom
 ipcMain.on('zoom-in', () => {
@@ -876,7 +887,7 @@ ipcMain.on('open-private-window', () => {
     const list = privTabOrder.map(tid => {
       if (!privTabs.has(tid)) return null;
       const t = privTabs.get(tid);
-      return { id: tid, title: t.title, url: t.url, active: tid === privActiveTabId, favicon: t.favicon };
+      return { id: tid, title: t.title, url: t.url, active: tid === privActiveTabId, favicon: t.favicon, audible: t.view.webContents.isCurrentlyAudible(), muted: t.view.webContents.isAudioMuted() };
     }).filter(Boolean);
     privToolbar.webContents.send('tabs-update', list);
   }
@@ -1390,6 +1401,174 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
   setTimeout(() => { try { tabView.webContents.removeListener('console-message', moreHandler); } catch {} if (_prevMoreHandler === moreHandler) { _prevMoreHandler = null; _prevMoreWc = null; } }, 10000);
 });
 
+// ─── Toolbar GitHub quick menu ───
+let _prevGhHandler = null;
+let _prevGhWc = null;
+
+function handleGhAction(action, data) {
+  if (action === 'gh_open' && data) createTab(data);
+  else if (action === 'gh_dashboard') createTab('gb://github');
+  else if (action === 'gh_login') createTab('gb://github');
+  else if (action === 'gh_logout') {
+    githubToken = null;
+    ghNotifCount = 0;
+    clearGhTokenLocal();
+    if (ghNotifInterval) { clearInterval(ghNotifInterval); ghNotifInterval = null; }
+    rustBridge.call('github.logout', {}).catch(() => {});
+    rustBridge.call('secret.delete', { key: 'github_token' }).catch(() => {});
+    sendToToolbar('gh-notif-count', { count: 0 });
+  }
+}
+
+ipcMain.on('toolbar-github-menu', async (_e, clientX, clientY) => {
+  if (!activeTabId || !tabs.has(activeTabId)) return;
+  if (_prevGhHandler && _prevGhWc) {
+    try { _prevGhWc.removeListener('console-message', _prevGhHandler); } catch {}
+    _prevGhHandler = null; _prevGhWc = null;
+  }
+
+  // Try to restore token if not loaded yet
+  if (!githubToken) {
+    try { const r = await rustBridge.call('github.get_token', {}); if (r && r.token) githubToken = r.token; } catch {}
+  }
+  if (!githubToken) {
+    const local = loadGhTokenLocal();
+    if (local) githubToken = local;
+  }
+  if (!githubToken) {
+    try { const sec = await rustBridge.call('secret.get', { key: 'github_token' }); if (sec && sec.value) { githubToken = sec.value; saveGhTokenLocal(sec.value); } } catch {}
+  }
+
+  let ghUser = null;
+  if (githubToken) {
+    try {
+      const res = await net.fetch('https://api.github.com/user', {
+        headers: { 'Authorization': 'Bearer ' + githubToken, 'Accept': 'application/vnd.github+json' },
+      });
+      if (res.ok) ghUser = await res.json();
+      else if (res.status === 401) { githubToken = null; clearGhTokenLocal(); }
+    } catch {}
+  }
+
+  const items = [];
+  if (ghUser) {
+    items.push({ type: 'header', login: ghUser.login, name: ghUser.name || ghUser.login, avatar: ghUser.avatar_url || '' });
+    items.push({ label: 'Profile', action: 'gh_open', data: 'https://github.com/' + ghUser.login, icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M10.561 8.073a6.005 6.005 0 0 1 3.432 5.142.75.75 0 1 1-1.498.07 4.5 4.5 0 0 0-8.99 0 .75.75 0 0 1-1.498-.07 6.004 6.004 0 0 1 3.431-5.142 3.999 3.999 0 1 1 5.123 0ZM10.5 5a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z"/></svg>' });
+    items.push({ label: 'Repositories', action: 'gh_open', data: 'https://github.com/' + ghUser.login + '?tab=repositories', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8Z"/></svg>' });
+    items.push({ label: 'Notifications', action: 'gh_open', data: 'https://github.com/notifications', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16a2 2 0 0 0 1.985-1.75c.017-.137-.097-.25-.235-.25h-3.5c-.138 0-.252.113-.235.25A2 2 0 0 0 8 16ZM3 5a5 5 0 0 1 10 0v2.947c0 .05.015.098.042.139l1.703 2.555A1.519 1.519 0 0 1 13.482 13H2.518a1.516 1.516 0 0 1-1.263-2.36l1.703-2.554A.255.255 0 0 0 3 7.947Z"/></svg>', badge: ghNotifCount || 0 });
+    items.push({ label: 'Pull Requests', action: 'gh_open', data: 'https://github.com/pulls', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354Z"/></svg>' });
+    items.push({ label: 'Gists', action: 'gh_open', data: 'https://gist.github.com/' + ghUser.login, icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 1.5a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM9.22 4.22a.749.749 0 0 1 1.06 0l3.25 3.25a.749.749 0 0 1 0 1.06l-3.25 3.25a.749.749 0 1 1-1.06-1.06L11.94 8 9.22 5.28a.749.749 0 0 1 0-1.06ZM6.78 4.22a.749.749 0 0 1 0 1.06L4.06 8l2.72 2.72a.749.749 0 1 1-1.06 1.06L2.47 8.53a.749.749 0 0 1 0-1.06l3.25-3.25a.749.749 0 0 1 1.06 0Z"/></svg>' });
+    items.push({ type: 'separator' });
+    items.push({ label: 'New Repository', action: 'gh_open', data: 'https://github.com/new', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>' });
+    items.push({ label: 'New Gist', action: 'gh_open', data: 'https://gist.github.com', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>' });
+    items.push({ type: 'separator' });
+    items.push({ label: 'Full Dashboard', action: 'gh_dashboard', icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.122.392a1.75 1.75 0 0 1 1.756 0l5.25 3.045c.54.313.872.89.872 1.514V7.25a.75.75 0 0 1-1.5 0V5.677L7.75 8.432v6.384a1 1 0 0 1-1.502.865L.872 12.563A1.75 1.75 0 0 1 0 11.049V4.951c0-.624.332-1.2.872-1.514Z"/></svg>' });
+    items.push({ type: 'separator' });
+    items.push({ label: 'Sign out', action: 'gh_logout', danger: true, icon: '<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2.75C2 1.784 2.784 1 3.75 1h2.5a.75.75 0 0 1 0 1.5h-2.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h2.5a.75.75 0 0 1 0 1.5h-2.5A1.75 1.75 0 0 1 2 13.25Zm10.44 4.5-1.97-1.97a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l3.25 3.25a.75.75 0 0 1 0 1.06l-3.25 3.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l1.97-1.97H6.75a.75.75 0 0 1 0-1.5Z"/></svg>' });
+  } else {
+    items.push({ type: 'login' });
+  }
+
+  const tabView = tabs.get(activeTabId).view;
+  const tabBounds = tabView.getBounds();
+  const toolbarBounds = toolbarView ? toolbarView.getBounds() : { x: 0, y: 0 };
+  const tabLocalX = (clientX || 0) + toolbarBounds.x - tabBounds.x;
+  const tabLocalY = (clientY || 0) + toolbarBounds.y - tabBounds.y;
+  const menuData = JSON.stringify(items);
+
+  tabView.webContents.executeJavaScript(`(function(){
+    ${CLEAR_ALL_OVERLAYS_JS}
+    var style=document.createElement('style');style.id='__gb-ctx-style';
+    style.textContent=\`
+      #__gb-ctx-ov{position:fixed;inset:0;z-index:2147483646;}
+      #__gb-ctx{position:fixed;z-index:2147483647;
+        background:rgba(18,22,30,0.95);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
+        border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:0;min-width:260px;max-width:300px;
+        box-shadow:0 16px 48px rgba(0,0,0,0.5),0 4px 12px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.06);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#e2e8f0;
+        animation:__gbCtxIn 0.15s cubic-bezier(0.16,1,0.3,1);overflow:hidden;}
+      @keyframes __gbCtxIn{from{opacity:0;transform:translateY(-6px) scale(0.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+      #__gb-ctx .ghm-hd{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.06);}
+      #__gb-ctx .ghm-av{width:32px;height:32px;border-radius:50%;flex-shrink:0;}
+      #__gb-ctx .ghm-name{font-size:13px;font-weight:600;}
+      #__gb-ctx .ghm-login{font-size:11px;color:rgba(255,255,255,0.4);}
+      #__gb-ctx .ghm-i{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;transition:background 0.08s;color:#e2e8f0;}
+      #__gb-ctx .ghm-i:hover{background:rgba(255,255,255,0.07);}
+      #__gb-ctx .ghm-i svg{opacity:0.5;flex-shrink:0;}
+      #__gb-ctx .ghm-i:hover svg{opacity:1;}
+      #__gb-ctx .ghm-i.danger{color:#f85149;}
+      #__gb-ctx .ghm-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#1f6feb;color:#fff;font-size:10px;font-weight:700;line-height:18px;text-align:center;}
+      #__gb-ctx .ghm-sep{height:1px;background:rgba(255,255,255,0.06);margin:2px 8px;}
+      #__gb-ctx .ghm-lp{padding:24px 16px;text-align:center;color:rgba(255,255,255,0.4);}
+      #__gb-ctx .ghm-lp svg{opacity:0.2;margin-bottom:8px;}
+      #__gb-ctx .ghm-lb{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:8px 16px;border-radius:8px;background:#1f6feb;color:#fff;border:none;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+      #__gb-ctx .ghm-lb:hover{filter:brightness(1.1);}
+      @media(prefers-color-scheme:light){
+        #__gb-ctx{background:rgba(255,255,255,0.97);border-color:rgba(0,0,0,0.1);color:#1f2328;box-shadow:0 16px 48px rgba(0,0,0,0.1);}
+        #__gb-ctx .ghm-hd{border-color:rgba(0,0,0,0.06);}
+        #__gb-ctx .ghm-login{color:rgba(0,0,0,0.4);}
+        #__gb-ctx .ghm-i{color:#1f2328;}
+        #__gb-ctx .ghm-i:hover{background:rgba(0,0,0,0.05);}
+        #__gb-ctx .ghm-sep{background:rgba(0,0,0,0.06);}
+        #__gb-ctx .ghm-lp{color:rgba(0,0,0,0.4);}
+      }
+      html.light #__gb-ctx{background:rgba(255,255,255,0.97);border-color:rgba(0,0,0,0.1);color:#1f2328;box-shadow:0 16px 48px rgba(0,0,0,0.1);}
+      html.light #__gb-ctx .ghm-hd{border-color:rgba(0,0,0,0.06);}
+      html.light #__gb-ctx .ghm-login{color:rgba(0,0,0,0.4);}
+      html.light #__gb-ctx .ghm-i{color:#1f2328;}
+      html.light #__gb-ctx .ghm-i:hover{background:rgba(0,0,0,0.05);}
+      html.light #__gb-ctx .ghm-sep{background:rgba(0,0,0,0.06);}
+      html.light #__gb-ctx .ghm-lp{color:rgba(0,0,0,0.4);}
+    \`;
+    document.documentElement.appendChild(style);
+    function closeMenu(){var o=document.getElementById('__gb-ctx-ov');if(o)o.remove();var m=document.getElementById('__gb-ctx');if(m)m.remove();var s=document.getElementById('__gb-ctx-style');if(s)s.remove();}
+    var hasIpc=!!(window.gitbrowser&&window.gitbrowser.ctxAction);
+    function doAction(act,dat){closeMenu();setTimeout(function(){if(hasIpc)window.gitbrowser.ctxAction(act,dat);else console.log('__gb_gh_ctx:'+JSON.stringify({action:act,data:dat}));},50);}
+    var ov=document.createElement('div');ov.id='__gb-ctx-ov';ov.onclick=closeMenu;ov.oncontextmenu=function(e){e.preventDefault();closeMenu();};
+    document.documentElement.appendChild(ov);
+    var menu=document.createElement('div');menu.id='__gb-ctx';
+    var items=${menuData};
+    var html='';
+    items.forEach(function(it){
+      if(it.type==='header'){html+='<div class="ghm-hd"><img class="ghm-av" src="'+it.avatar+'" onerror="this.style.display=\\'none\\'"/><div><div class="ghm-name">'+it.name+'</div><div class="ghm-login">@'+it.login+'</div></div></div>';return;}
+      if(it.type==='login'){html+='<div class="ghm-lp"><svg width="32" height="32" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg><div>Sign in for quick access</div><button class="ghm-lb" data-act="gh_login">Sign in with GitHub</button></div>';return;}
+      if(it.type==='separator'){html+='<div class="ghm-sep"></div>';return;}
+      var badge=it.badge>0?'<span class="ghm-badge">'+it.badge+'</span>':'';
+      var cls='ghm-i'+(it.danger?' danger':'');
+      html+='<div class="'+cls+'" data-action="'+(it.action||'')+'" data-data="'+(it.data||'').replace(/"/g,'&quot;')+'">'+(it.icon||'')+' '+it.label+badge+'</div>';
+    });
+    menu.innerHTML=html;
+    var hd=menu.querySelector('.ghm-hd');
+    if(hd){var body=document.createElement('div');body.style.padding='6px';while(menu.firstChild!==hd&&menu.firstChild)body.appendChild(menu.firstChild);while(hd.nextSibling)body.appendChild(hd.nextSibling);menu.appendChild(body);}
+    else{var body2=document.createElement('div');body2.style.padding='6px';while(menu.firstChild)body2.appendChild(menu.firstChild);menu.appendChild(body2);}
+    document.documentElement.appendChild(menu);
+    var mx=${tabLocalX},my=${tabLocalY};
+    var r=menu.getBoundingClientRect();
+    if(mx+r.width>window.innerWidth)mx=window.innerWidth-r.width-8;
+    if(my+r.height>window.innerHeight)my=window.innerHeight-r.height-8;
+    if(mx<4)mx=4;if(my<4)my=4;
+    menu.style.left=mx+'px';menu.style.top=my+'px';
+    menu.querySelectorAll('.ghm-i').forEach(function(el){el.onclick=function(){doAction(el.dataset.action,el.dataset.data);};});
+    var loginBtn=menu.querySelector('[data-act="gh_login"]');
+    if(loginBtn)loginBtn.onclick=function(){doAction('gh_login','');};
+  })();void 0;`).catch(() => {});
+
+  const ghHandler = (event) => {
+    const message = event.message;
+    if (!message || !message.startsWith('__gb_gh_ctx:')) return;
+    tabView.webContents.removeListener('console-message', ghHandler);
+    _prevGhHandler = null; _prevGhWc = null;
+    try {
+      const { action, data } = JSON.parse(message.replace('__gb_gh_ctx:', ''));
+      handleGhAction(action, data);
+    } catch {}
+  };
+  _prevGhHandler = ghHandler;
+  _prevGhWc = tabView.webContents;
+  tabView.webContents.on('console-message', ghHandler);
+  setTimeout(() => { try { tabView.webContents.removeListener('console-message', ghHandler); } catch {} if (_prevGhHandler === ghHandler) { _prevGhHandler = null; _prevGhWc = null; } }, 10000);
+});
+
 ipcMain.on('navigate', (_e, input) => {
   if (!activeTabId) return;
   navigateTab(activeTabId, normalizeUrl(input));
@@ -1488,6 +1667,10 @@ ipcMain.handle('settings-set', async (_e, { key, value }) => {
     if (key === 'appearance.show_telegram') {
       sendToToolbar('telegram-btn-visible', { visible: !!value });
       if (!value && telegramVisible) hideTelegram();
+    }
+    // Broadcast GitHub button visibility
+    if (key === 'appearance.show_github') {
+      sendToToolbar('gh-btn-visible', { visible: !!value });
     }
     // Reload locale for context menu when language changes
     if (key === 'general.language') {
@@ -2967,7 +3150,17 @@ function clearGhTokenLocal() {
   if (local) {
     githubToken = local;
     startGhNotifPolling();
+    return;
   }
+  // Fallback: load from secret storage (saved by github.html)
+  try {
+    const sec = await rustBridge.call('secret.get', { key: 'github_token' });
+    if (sec && sec.value) {
+      githubToken = sec.value;
+      saveGhTokenLocal(sec.value);
+      startGhNotifPolling();
+    }
+  } catch {}
 })();
 
 ipcMain.handle('github-device-login', async (_e, _data) => {
@@ -2996,6 +3189,7 @@ ipcMain.handle('github-device-login', async (_e, _data) => {
 
 // ─── GitHub notification badge polling ───
 let ghNotifInterval = null;
+let ghNotifCount = 0;
 
 async function pollGhNotifications() {
   if (!githubToken) return;
@@ -3005,8 +3199,8 @@ async function pollGhNotifications() {
     });
     if (res.ok) {
       const data = await res.json();
-      const count = Array.isArray(data) ? data.length : 0;
-      sendToToolbar('gh-notif-count', { count });
+      ghNotifCount = Array.isArray(data) ? data.length : 0;
+      sendToToolbar('gh-notif-count', { count: ghNotifCount });
     }
   } catch { /* ignore */ }
 }
@@ -3044,6 +3238,8 @@ ipcMain.handle('github-device-poll', async (_e, { deviceCode }) => {
       } catch { /* use defaults */ }
       // Store token securely in Rust backend
       rustBridge.call('github.store_token', { token: data.access_token, login, avatar_url: avatarUrl }).catch(() => {});
+      // Also store in secret storage for github.html sync
+      rustBridge.call('secret.store', { key: 'github_token', value: data.access_token }).catch(() => {});
       startGhNotifPolling();
       return { status: 'ok', token: data.access_token };
     }
@@ -3163,9 +3359,12 @@ ipcMain.handle('github-sync-bookmarks-download', async (_e, { token }) => {
 ipcMain.handle('github-logout', async () => {
   try {
     githubToken = null;
+    ghNotifCount = 0;
     clearGhTokenLocal();
     if (ghNotifInterval) { clearInterval(ghNotifInterval); ghNotifInterval = null; }
+    sendToToolbar('gh-notif-count', { count: 0 });
     await rustBridge.call('github.logout', {});
+    rustBridge.call('secret.delete', { key: 'github_token' }).catch(() => {});
     return { ok: true };
   } catch (err) { return { error: err.message }; }
 });
@@ -3238,6 +3437,11 @@ ipcMain.handle('download-and-install-update', async (_e, { downloadUrl }) => {
 
 // ─── Page context menu actions (IPC from injected glass menu) ───
 ipcMain.on('ctx-menu-action', (_e, action, data) => {
+  // GitHub menu actions don't need _pageCtxWc
+  if (action && action.startsWith('gh_')) {
+    handleGhAction(action, data);
+    return;
+  }
   const wc = _pageCtxWc;
   const params = _pageCtxParams;
   if (!wc || wc.isDestroyed()) return;
@@ -3358,7 +3562,7 @@ ipcMain.on('tab-context-menu', (_e, id, clientX, clientY) => {
       if (action === 'new_tab') createTab('gb://newtab');
       else if (action === 'reload') { if (tabs.has(id)) tabs.get(id).view.webContents.reload(); }
       else if (action === 'duplicate') { if (tabs.has(id)) createTab(tabs.get(id).url); }
-      else if (action === 'mute') { if (tabs.has(id)) { const wc2 = tabs.get(id).view.webContents; wc2.setAudioMuted(!wc2.isAudioMuted()); } }
+      else if (action === 'mute') { if (tabs.has(id)) { const wc2 = tabs.get(id).view.webContents; wc2.setAudioMuted(!wc2.isAudioMuted()); sendTabsUpdate(); } }
       else if (action === 'close') closeTab(id);
       else if (action === 'close_others') { tabOrder.filter(tid => tid !== id).forEach(tid => closeTab(tid)); }
       else if (action === 'close_right') { const idx = tabOrder.indexOf(id); if (idx >= 0) tabOrder.slice(idx + 1).forEach(tid => closeTab(tid)); }

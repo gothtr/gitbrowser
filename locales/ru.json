@@ -126,6 +126,8 @@
     "accent_color_desc": "Акцентный цвет интерфейса",
     "show_telegram": "Показывать кнопку Telegram",
     "show_telegram_desc": "Показывать кнопку виджета Telegram в панели инструментов",
+    "show_github": "Показывать кнопку GitHub",
+    "show_github_desc": "Показывать кнопку быстрого доступа GitHub в панели инструментов",
     "tracker_blocking": "Блокировка трекеров",
     "tracker_desc": "Блокировать отслеживающие скрипты",
     "ad_blocking": "Блокировка рекламы",

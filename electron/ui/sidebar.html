@@ -139,6 +139,14 @@ body.collapsed .separator { margin: 4px 6px; }
   width: 14px; height: 2px; border-radius: 1px; background: var(--accent-fg);
   box-shadow: 0 0 6px var(--accent-glow);
 }
+.pinned-tab .pinned-audio {
+  position: absolute; bottom: -1px; right: -1px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent-fg);
+  box-shadow: 0 0 6px var(--accent-glow);
+  animation: __gbAudioPulse 1.5s ease-in-out infinite;
+}
+.pinned-tab .pinned-audio.muted { background: var(--fg-subtle); box-shadow: none; animation: none; opacity: 0.5; }
 
 /* ─── Tab list ─── */
 .tabs-section {
@@ -217,6 +225,35 @@ html.light .tab-item.active {
 }
 .tab-item:hover .tab-close { opacity: 0.7; }
 .tab-close:hover { opacity: 1 !important; background: rgba(248,81,73,0.2); color: var(--danger-fg); }
+
+/* ─── Audio indicator ─── */
+.tab-audio {
+  width: 18px; height: 18px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent-fg); cursor: pointer; border-radius: 4px;
+  transition: all var(--duration-fast) var(--ease-out);
+  opacity: 0.7;
+}
+.tab-audio:hover { opacity: 1; background: var(--glass-bg-active); }
+.tab-audio.muted { color: var(--fg-subtle); opacity: 0.5; }
+body.collapsed .tab-audio { display: none; }
+body.collapsed .tab-item .tab-audio-dot {
+  display: flex;
+}
+.tab-audio-dot {
+  display: none;
+  position: absolute; bottom: 0px; right: 0px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent-fg);
+  box-shadow: 0 0 6px var(--accent-glow);
+  pointer-events: none;
+  animation: __gbAudioPulse 1.5s ease-in-out infinite;
+}
+@keyframes __gbAudioPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.75); }
+}
+.tab-audio-dot.muted { background: var(--fg-subtle); box-shadow: none; animation: none; opacity: 0.5; }
 
 /* ─── New tab ─── */
 .new-tab-area {
@@ -487,6 +524,13 @@ gb.onTabsUpdate((data) => {
         div.textContent = (t.title || 'N')[0].toUpperCase();
       }
       div.onclick = () => gb.switchTab(t.id);
+      if (t.audible || t.muted) {
+        const badge = document.createElement('span');
+        badge.className = 'pinned-audio' + (t.muted ? ' muted' : '');
+        badge.title = t.muted ? 'Unmute' : 'Mute';
+        badge.onclick = (e) => { e.stopPropagation(); gb.toggleMute(t.id); };
+        div.appendChild(badge);
+      }
       div.oncontextmenu = (e) => { e.preventDefault(); gb.tabContextMenu(t.id, e.clientX, e.clientY); };
       pinnedTabs.appendChild(div);
     });
@@ -688,8 +732,28 @@ function createTabElement(t, activeId) {
   } else if (t.url && INTERNAL_ICONS[t.url]) {
     faviconHtml = `<span class="tab-favicon tab-favicon-svg">${INTERNAL_ICONS[t.url]}</span>`;
   }
-  div.innerHTML = `${faviconHtml}<span class="tab-title">${esc(t.title || 'New Tab')}</span><button class="tab-close" title="Close">&times;</button>`;
-  div.addEventListener('click', (e) => { if (!e.target.closest('.tab-close')) gb.switchTab(t.id); });
+
+  let audioHtml = '';
+  if (t.audible || t.muted) {
+    const muteIcon = t.muted
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+    audioHtml = `<span class="tab-audio${t.muted ? ' muted' : ''}" data-tab-id="${t.id}" title="${t.muted ? 'Unmute' : 'Mute'}">${muteIcon}</span>`;
+    // Small dot for collapsed mode
+    audioHtml += `<span class="tab-audio-dot${t.muted ? ' muted' : ''}"></span>`;
+  }
+
+  div.innerHTML = `${faviconHtml}<span class="tab-title">${esc(t.title || 'New Tab')}</span>${audioHtml}<button class="tab-close" title="Close">&times;</button>`;
+  div.addEventListener('click', (e) => { if (!e.target.closest('.tab-close') && !e.target.closest('.tab-audio')) gb.switchTab(t.id); });
+
+  // Audio icon click — toggle mute
+  const audioEl = div.querySelector('.tab-audio');
+  if (audioEl) {
+    audioEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      gb.toggleMute(t.id);
+    });
+  }
   // Right-click always shows group menu (with "Add to group" option)
   div.addEventListener('contextmenu', (e) => {
     e.preventDefault();
