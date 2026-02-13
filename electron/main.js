@@ -1547,7 +1547,8 @@ function cmL(key, fallback) {
 const CLEAR_ALL_OVERLAYS_JS = `
   ['__gb-sb-ctx','__gb-sb-ctx-style','__gb-sb-ctx-ov',
    '__gb-ctx','__gb-ctx-style','__gb-ctx-ov',
-   '__gb-page-ctx','__gb-page-ctx-style','__gb-page-ctx-ov','__gb-page-ctx-sub']
+   '__gb-page-ctx','__gb-page-ctx-style','__gb-page-ctx-ov','__gb-page-ctx-sub','__gb-page-ctx-tr-sub',
+   '__gb-translate-pop','__gb-translate-pop-style']
   .forEach(function(id){var e=document.getElementById(id);if(e)e.remove();});
 `;
 
@@ -1742,19 +1743,34 @@ function buildPageContextMenu(wc, params) {
     items.push({ label: cmL('context_menu.open_image_new_tab', 'Открыть изображение в новой вкладке'), action: 'openImageTab', data: params.srcURL });
   }
 
-  // AI submenu items
+  // AI submenu items (without translate — moved to dedicated translator)
   let aiSub = [];
   if (hasSelection && selText.length >= 2) {
     aiSub = [
       { label: cmL('context_menu.fix_errors', 'Исправить ошибки'), action: 'ai', data: JSON.stringify({ type: 'fix', text: selText }) },
       { label: cmL('context_menu.rephrase', 'Перефразировать'), action: 'ai', data: JSON.stringify({ type: 'rephrase', text: selText }) },
       { type: 'separator' },
-      { label: cmL('context_menu.translate_en', 'Перевести на English'), action: 'ai', data: JSON.stringify({ type: 'translate_en', text: selText }) },
-      { label: cmL('context_menu.translate_ru', 'Перевести на Русский'), action: 'ai', data: JSON.stringify({ type: 'translate_ru', text: selText }) },
-      { type: 'separator' },
       { label: cmL('context_menu.summarize', 'Резюмировать'), action: 'ai', data: JSON.stringify({ type: 'summarize', text: selText }) },
       { label: cmL('context_menu.explain', 'Объяснить'), action: 'ai', data: JSON.stringify({ type: 'explain', text: selText }) },
     ];
+  }
+
+  // Translate submenu languages
+  const translateLangs = [
+    { code: 'en', label: 'English' }, { code: 'ru', label: 'Русский' },
+    { code: 'de', label: 'Deutsch' }, { code: 'fr', label: 'Français' },
+    { code: 'es', label: 'Español' }, { code: 'it', label: 'Italiano' },
+    { code: 'pt', label: 'Português' }, { code: 'zh', label: '中文' },
+    { code: 'ja', label: '日本語' }, { code: 'ko', label: '한국어' },
+    { code: 'ar', label: 'العربية' }, { code: 'hi', label: 'हिन्दी' },
+    { code: 'tr', label: 'Türkçe' }, { code: 'pl', label: 'Polski' },
+    { code: 'uk', label: 'Українська' }, { code: 'nl', label: 'Nederlands' },
+  ];
+  let translateSub = [];
+  if (hasSelection && selText.length >= 1) {
+    translateSub = translateLangs.map(l => ({
+      label: l.label, action: 'translate', data: JSON.stringify({ lang: l.code, text: selText }),
+    }));
   }
 
   if (process.argv.includes('--dev')) {
@@ -1765,6 +1781,8 @@ function buildPageContextMenu(wc, params) {
   const menuData = JSON.stringify(items);
   const aiSubData = JSON.stringify(aiSub);
   const aiLabel = JSON.stringify(cmL('context_menu.ai', 'AI'));
+  const translateSubData = JSON.stringify(translateSub);
+  const translateLabel = JSON.stringify(cmL('context_menu.translate', 'Перевести'));
   const mx = params.x;
   const my = params.y;
 
@@ -1820,6 +1838,7 @@ function buildPageContextMenu(wc, params) {
       var m2=document.getElementById('__gb-page-ctx');if(m2)m2.remove();
       var s2=document.getElementById('__gb-page-ctx-style');if(s2)s2.remove();
       var sb=document.getElementById('__gb-page-ctx-sub');if(sb)sb.remove();
+      var tr=document.getElementById('__gb-page-ctx-tr-sub');if(tr)tr.remove();
     }
 
     var _prevFocus=document.activeElement;
@@ -1854,6 +1873,8 @@ function buildPageContextMenu(wc, params) {
     var items=${menuData};
     var aiSub=${aiSubData};
     var aiLabel=${aiLabel};
+    var translateSub=${translateSubData};
+    var translateLabel=${translateLabel};
 
     items.forEach(function(it){
       if(it.type==='separator'){var s=document.createElement('div');s.className='pci-sep';menu.appendChild(s);return;}
@@ -1863,16 +1884,15 @@ function buildPageContextMenu(wc, params) {
       menu.appendChild(d);
     });
 
-    if(aiSub.length>0){
-      var sep=document.createElement('div');sep.className='pci-sep';menu.appendChild(sep);
-      var aiRow=document.createElement('div');aiRow.className='pci';
-      aiRow.innerHTML='<span class="pci-label">'+aiLabel+'</span><span class="pci-arrow">&#9656;</span>';
-      var subTimer=null;
-      function showAiSub(){
-        clearTimeout(subTimer);
-        var oldSub=document.getElementById('__gb-page-ctx-sub');if(oldSub)oldSub.remove();
-        var sub=document.createElement('div');sub.id='__gb-page-ctx-sub';sub.className='__gbp';
-        aiSub.forEach(function(si){
+    // ─── Translate submenu ───
+    function showSubAt(parentRow, subItems, subId){
+      var subTimer2=null;
+      function show(){
+        clearTimeout(subTimer2);
+        var old=document.getElementById(subId);if(old)old.remove();
+        var sub=document.createElement('div');sub.id=subId;sub.className='__gbp';
+        sub.style.maxHeight='320px';sub.style.overflowY='auto';
+        subItems.forEach(function(si){
           if(si.type==='separator'){var ss=document.createElement('div');ss.className='pci-sep';sub.appendChild(ss);return;}
           var sd=document.createElement('div');sd.className='pci';
           sd.innerHTML='<span class="pci-label">'+si.label+'</span>';
@@ -1881,17 +1901,38 @@ function buildPageContextMenu(wc, params) {
         });
         document.documentElement.appendChild(sub);
         var mr=menu.getBoundingClientRect();var sr=sub.getBoundingClientRect();
-        var sx=mr.right+4,sy=aiRow.getBoundingClientRect().top;
+        var sx=mr.right+4,sy=parentRow.getBoundingClientRect().top;
         if(sx+sr.width>window.innerWidth)sx=mr.left-sr.width-4;
         if(sy+sr.height>window.innerHeight)sy=window.innerHeight-sr.height-8;
         if(sy<4)sy=4;
         sub.style.left=sx+'px';sub.style.top=sy+'px';
-        sub.onmouseenter=function(){clearTimeout(subTimer);};
-        sub.onmouseleave=function(){subTimer=setTimeout(function(){sub.remove();},200);};
+        sub.onmouseenter=function(){clearTimeout(subTimer2);};
+        sub.onmouseleave=function(){subTimer2=setTimeout(function(){sub.remove();},200);};
       }
-      aiRow.onmouseenter=function(){showAiSub();};
-      aiRow.onmouseleave=function(){subTimer=setTimeout(function(){var s=document.getElementById('__gb-page-ctx-sub');if(s)s.remove();},200);};
-      aiRow.onclick=function(){showAiSub();};
+      parentRow.onmouseenter=function(){
+        // Close other submenus
+        var ids=['__gb-page-ctx-sub','__gb-page-ctx-tr-sub'];
+        ids.forEach(function(i){if(i!==subId){var e=document.getElementById(i);if(e)e.remove();}});
+        show();
+      };
+      parentRow.onmouseleave=function(){subTimer2=setTimeout(function(){var s=document.getElementById(subId);if(s)s.remove();},200);};
+      parentRow.onclick=function(){show();};
+    }
+
+    if(translateSub.length>0){
+      var tsep=document.createElement('div');tsep.className='pci-sep';menu.appendChild(tsep);
+      var trRow=document.createElement('div');trRow.className='pci';
+      trRow.innerHTML='<span class="pci-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;opacity:0.7"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>'+translateLabel+'</span><span class="pci-arrow">&#9656;</span>';
+      showSubAt(trRow, translateSub, '__gb-page-ctx-tr-sub');
+      menu.appendChild(trRow);
+    }
+
+    // ─── AI submenu ───
+    if(aiSub.length>0){
+      var sep=document.createElement('div');sep.className='pci-sep';menu.appendChild(sep);
+      var aiRow=document.createElement('div');aiRow.className='pci';
+      aiRow.innerHTML='<span class="pci-label">'+aiLabel+'</span><span class="pci-arrow">&#9656;</span>';
+      showSubAt(aiRow, aiSub, '__gb-page-ctx-sub');
       menu.appendChild(aiRow);
     }
 
@@ -1929,11 +1970,324 @@ function buildPageContextMenu(wc, params) {
           runAiAction(wc, aiData.type, aiData.text);
         } catch {}
       }
+      else if (action === 'translate' && data) {
+        try {
+          const trData = JSON.parse(data);
+          runGoogleTranslate(wc, trData.text, trData.lang);
+        } catch {}
+      }
     } catch {}
   };
   _pageCtxConsoleHandler = consoleHandler;
   if (!wc.isDestroyed()) wc.on('console-message', consoleHandler);
   setTimeout(() => { try { if (!wc.isDestroyed()) wc.removeListener('console-message', consoleHandler); } catch {} if (_pageCtxConsoleHandler === consoleHandler) _pageCtxConsoleHandler = null; }, 10000);
+}
+
+// ─── Google Translate (free API, no key required) ───
+
+const TRANSLATE_LANG_NAMES = {
+  af:'Afrikaans',am:'Amharic',ar:'العربية',az:'Azərbaycan',be:'Беларуская',bg:'Български',bn:'বাংলা',
+  bs:'Bosanski',ca:'Català',ceb:'Cebuano',co:'Corsu',cs:'Čeština',cy:'Cymraeg',da:'Dansk',
+  de:'Deutsch',el:'Ελληνικά',en:'English',eo:'Esperanto',es:'Español',et:'Eesti',eu:'Euskara',
+  fa:'فارسی',fi:'Suomi',fr:'Français',fy:'Frysk',ga:'Gaeilge',gd:'Gàidhlig',gl:'Galego',
+  gu:'ગુજરાતી',ha:'Hausa',haw:'ʻŌlelo Hawaiʻi',he:'עברית',hi:'हिन्दी',hmn:'Hmong',hr:'Hrvatski',
+  ht:'Kreyòl ayisyen',hu:'Magyar',hy:'Հայերեն',id:'Bahasa Indonesia',ig:'Igbo',is:'Íslenska',
+  it:'Italiano',ja:'日本語',jw:'Jawa',ka:'ქართული',kk:'Қазақ',km:'ខ្មែរ',kn:'ಕನ್ನಡ',
+  ko:'한국어',ku:'Kurdî',ky:'Кыргызча',la:'Latina',lb:'Lëtzebuergesch',lo:'ລາວ',lt:'Lietuvių',
+  lv:'Latviešu',mg:'Malagasy',mi:'Māori',mk:'Македонски',ml:'മലയാളം',mn:'Монгол',mr:'मराठी',
+  ms:'Bahasa Melayu',mt:'Malti',my:'မြန်မာ',ne:'नेपाली',nl:'Nederlands',no:'Norsk',ny:'Chichewa',
+  or:'ଓଡ଼ିଆ',pa:'ਪੰਜਾਬੀ',pl:'Polski',ps:'پښتو',pt:'Português',ro:'Română',ru:'Русский',
+  rw:'Kinyarwanda',sd:'سنڌي',si:'සිංහල',sk:'Slovenčina',sl:'Slovenščina',sm:'Samoan',sn:'Shona',
+  so:'Soomaali',sq:'Shqip',sr:'Српски',st:'Sesotho',su:'Basa Sunda',sv:'Svenska',sw:'Kiswahili',
+  ta:'தமிழ்',te:'తెలుగు',tg:'Тоҷикӣ',th:'ไทย',tk:'Türkmen',tl:'Filipino',tr:'Türkçe',
+  tt:'Татар',ug:'ئۇيغۇرچە',uk:'Українська',ur:'اردو',uz:'Oʻzbek',vi:'Tiếng Việt',
+  xh:'isiXhosa',yi:'ייִדיש',yo:'Yorùbá',zh:'中文','zh-TW':'中文(繁體)',zu:'isiZulu',
+};
+
+async function googleTranslateText(text, targetLang, sourceLang = 'auto') {
+  const encoded = encodeURIComponent(text.substring(0, 5000));
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&dt=bd&dj=1&q=${encoded}`;
+  const resp = await net.fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+  });
+  if (!resp.ok) throw new Error('Google Translate HTTP ' + resp.status);
+  const data = await resp.json();
+  // Extract translated text from sentences
+  let translated = '';
+  if (data.sentences) {
+    for (const s of data.sentences) {
+      if (s.trans) translated += s.trans;
+    }
+  }
+  const detectedLang = data.src || sourceLang;
+  // Extract dictionary/alternative translations if available
+  let alternatives = [];
+  if (data.dict) {
+    for (const d of data.dict) {
+      if (d.terms && d.pos) {
+        alternatives.push({ pos: d.pos, terms: d.terms.slice(0, 4) });
+      }
+    }
+  }
+  return { translated, detectedLang, alternatives };
+}
+
+async function runGoogleTranslate(wc, text, targetLang) {
+  if (wc.isDestroyed()) return;
+  injectTranslatePopup(wc, { loading: true, targetLang, originalText: text });
+  try {
+    const result = await googleTranslateText(text, targetLang);
+    injectTranslatePopup(wc, {
+      loading: false, targetLang, originalText: text,
+      translated: result.translated,
+      detectedLang: result.detectedLang,
+      alternatives: result.alternatives,
+    });
+  } catch (err) {
+    injectTranslatePopup(wc, {
+      loading: false, targetLang, originalText: text,
+      error: err.message || 'Translation failed',
+    });
+  }
+}
+
+function injectTranslatePopup(wc, opts) {
+  if (wc.isDestroyed()) return;
+  const langNames = JSON.stringify(TRANSLATE_LANG_NAMES);
+  const data = JSON.stringify(opts);
+  const copyLabel = cmL('ai.copy', 'Copy');
+  const replaceLabel = cmL('ai.replace', 'Replace');
+  const closeLabel = cmL('common.close', 'Close');
+  const retranslateLabel = cmL('context_menu.translate', 'Перевести');
+
+  const js = `(function(){
+    var LANGS=${langNames};
+    var opts=${data};
+    var copyL=${JSON.stringify(copyLabel)};
+    var replL=${JSON.stringify(replaceLabel)};
+    var retranL=${JSON.stringify(retranslateLabel)};
+
+    // Save selection info BEFORE we touch the DOM (only on first/loading call)
+    if(opts.loading && !window.__gbTrSel){
+      var _s=window.getSelection();
+      var _ae=document.activeElement;
+      var info={type:'none'};
+      if(_ae&&(_ae.tagName==='TEXTAREA'||(_ae.tagName==='INPUT'&&_ae.type==='text'))){
+        info={type:'input',el:_ae,start:_ae.selectionStart,end:_ae.selectionEnd};
+      } else if(_ae&&_ae.isContentEditable){
+        if(_s&&_s.rangeCount>0){try{info={type:'editable',el:_ae,range:_s.getRangeAt(0).cloneRange()};}catch(e){}}
+      } else if(_s&&_s.rangeCount>0&&!_s.isCollapsed){
+        try{info={type:'range',range:_s.getRangeAt(0).cloneRange()};}catch(e){}
+      }
+      window.__gbTrSel=info;
+    }
+
+    // Remove old popup
+    var old=document.getElementById('__gb-translate-pop');if(old)old.remove();
+    var oldS=document.getElementById('__gb-translate-pop-style');if(oldS)oldS.remove();
+
+    var style=document.createElement('style');style.id='__gb-translate-pop-style';
+    style.textContent=\`
+      #__gb-translate-pop{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2147483647;
+        background:rgba(22,27,34,0.97);border:1px solid rgba(255,255,255,0.08);border-radius:14px;
+        padding:0;box-shadow:0 16px 48px rgba(0,0,0,.6),0 4px 12px rgba(0,0,0,.3);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+        max-width:520px;min-width:320px;max-height:80vh;display:flex;flex-direction:column;color:#e6edf3;
+        animation:__gbTrIn 0.2s cubic-bezier(0.16,1,0.3,1);overflow:hidden;}
+      @keyframes __gbTrIn{from{opacity:0;transform:translate(-50%,-50%) scale(0.95)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+      #__gb-translate-pop .tr-hd{display:flex;align-items:center;padding:14px 16px 10px;gap:8px;border-bottom:1px solid rgba(255,255,255,0.06);}
+      #__gb-translate-pop .tr-hd svg{flex-shrink:0;opacity:0.6;}
+      #__gb-translate-pop .tr-hd-title{flex:1;font-size:13px;font-weight:600;color:#7d8590;}
+      #__gb-translate-pop .tr-hd-close{background:none;border:none;color:#7d8590;cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;}
+      #__gb-translate-pop .tr-hd-close:hover{color:#e6edf3;background:rgba(255,255,255,0.06);}
+      #__gb-translate-pop .tr-langs{display:flex;align-items:center;padding:10px 16px;gap:8px;font-size:12px;color:#7d8590;}
+      #__gb-translate-pop .tr-lang-badge{padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.06);font-size:11px;font-weight:500;}
+      #__gb-translate-pop .tr-arrow{opacity:0.4;}
+      #__gb-translate-pop .tr-lang-sel{padding:3px 8px;border-radius:6px;background:rgba(88,166,255,0.12);color:#58a6ff;
+        border:1px solid rgba(88,166,255,0.2);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;appearance:none;-webkit-appearance:none;}
+      #__gb-translate-pop .tr-lang-sel:hover{background:rgba(88,166,255,0.2);}
+      #__gb-translate-pop .tr-body{padding:12px 16px;overflow-y:auto;flex:1;max-height:50vh;}
+      #__gb-translate-pop .tr-text{font-size:15px;line-height:1.65;white-space:pre-wrap;word-break:break-word;}
+      #__gb-translate-pop .tr-alt{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);}
+      #__gb-translate-pop .tr-alt-pos{font-size:11px;color:#58a6ff;font-weight:600;text-transform:lowercase;margin-bottom:4px;}
+      #__gb-translate-pop .tr-alt-terms{font-size:12px;color:#7d8590;line-height:1.5;}
+      #__gb-translate-pop .tr-ld{color:#7d8590;font-size:13px;display:flex;align-items:center;gap:8px;padding:20px 16px;}
+      #__gb-translate-pop .tr-ld::before{content:"";width:14px;height:14px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:__gbTrSp .6s linear infinite;}
+      @keyframes __gbTrSp{to{transform:rotate(360deg)}}
+      #__gb-translate-pop .tr-err{color:#f85149;padding:16px;font-size:13px;}
+      #__gb-translate-pop .tr-ft{display:flex;gap:8px;padding:10px 16px 14px;border-top:1px solid rgba(255,255,255,0.06);justify-content:flex-end;align-items:center;}
+      #__gb-translate-pop .tr-ft .tr-powered{flex:1;font-size:10px;color:rgba(255,255,255,0.2);}
+      #__gb-translate-pop .tr-btn{padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-family:inherit;
+        border:1px solid #30363d;background:#21262d;color:#e6edf3;transition:all 0.15s;}
+      #__gb-translate-pop .tr-btn:hover{border-color:#58a6ff;background:#30363d;}
+      #__gb-translate-pop .tr-btn.pr{background:#1f6feb;border-color:#1f6feb;color:#fff;}
+      #__gb-translate-pop .tr-btn.pr:hover{background:#388bfd;}
+      html.light #__gb-translate-pop{background:rgba(255,255,255,0.97);border-color:rgba(0,0,0,0.1);color:#1f2328;
+        box-shadow:0 16px 48px rgba(0,0,0,.12),0 4px 12px rgba(0,0,0,.06);}
+      html.light #__gb-translate-pop .tr-hd{border-color:rgba(0,0,0,0.06);}
+      html.light #__gb-translate-pop .tr-hd-title{color:#656d76;}
+      html.light #__gb-translate-pop .tr-hd-close{color:#656d76;}
+      html.light #__gb-translate-pop .tr-hd-close:hover{color:#1f2328;background:rgba(0,0,0,0.06);}
+      html.light #__gb-translate-pop .tr-langs{color:#656d76;}
+      html.light #__gb-translate-pop .tr-lang-badge{background:rgba(0,0,0,0.05);}
+      html.light #__gb-translate-pop .tr-lang-sel{background:rgba(9,105,218,0.08);color:#0969da;border-color:rgba(9,105,218,0.2);}
+      html.light #__gb-translate-pop .tr-lang-sel:hover{background:rgba(9,105,218,0.15);}
+      html.light #__gb-translate-pop .tr-text{color:#1f2328;}
+      html.light #__gb-translate-pop .tr-alt{border-color:rgba(0,0,0,0.06);}
+      html.light #__gb-translate-pop .tr-alt-pos{color:#0969da;}
+      html.light #__gb-translate-pop .tr-alt-terms{color:#656d76;}
+      html.light #__gb-translate-pop .tr-ld{color:#656d76;}
+      html.light #__gb-translate-pop .tr-ld::before{border-color:rgba(0,0,0,0.1);border-top-color:#0969da;}
+      html.light #__gb-translate-pop .tr-err{color:#cf222e;}
+      html.light #__gb-translate-pop .tr-ft{border-color:rgba(0,0,0,0.06);}
+      html.light #__gb-translate-pop .tr-ft .tr-powered{color:rgba(0,0,0,0.2);}
+      html.light #__gb-translate-pop .tr-btn{border-color:rgba(0,0,0,0.15);background:rgba(0,0,0,0.03);color:#1f2328;}
+      html.light #__gb-translate-pop .tr-btn:hover{border-color:#0969da;background:rgba(0,0,0,0.06);}
+      html.light #__gb-translate-pop .tr-btn.pr{background:#0969da;border-color:#0969da;color:#fff;}
+      html.light #__gb-translate-pop .tr-btn.pr:hover{background:#0860ca;}
+    \`;
+    document.documentElement.appendChild(style);
+
+    var pop=document.createElement('div');pop.id='__gb-translate-pop';
+
+    if(opts.loading){
+      pop.innerHTML='<div class="tr-hd"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg><span class="tr-hd-title">Google Translate</span><button class="tr-hd-close" id="__gbTrX">&times;</button></div><div class="tr-body"><div class="tr-ld">Translating...</div></div>';
+      document.documentElement.appendChild(pop);
+      document.getElementById('__gbTrX').onclick=function(){pop.remove();style.remove();};
+      return;
+    }
+
+    if(opts.error){
+      pop.innerHTML='<div class="tr-hd"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg><span class="tr-hd-title">Google Translate</span><button class="tr-hd-close" id="__gbTrX">&times;</button></div><div class="tr-body"><div class="tr-err">'+opts.error.replace(/</g,'&lt;')+'</div></div>';
+      document.documentElement.appendChild(pop);
+      document.getElementById('__gbTrX').onclick=function(){pop.remove();style.remove();};
+      return;
+    }
+
+    // Success — build full popup
+    var srcName=LANGS[opts.detectedLang]||opts.detectedLang||'auto';
+    var tgtName=LANGS[opts.targetLang]||opts.targetLang;
+
+    // Language selector options
+    var langOpts='';
+    var popularLangs=['en','ru','de','fr','es','it','pt','zh','ja','ko','ar','hi','tr','pl','uk','nl','sv','cs','ro','hu','th','vi','id','el','he','da','fi','no','bg','hr','sk','sl','sr','lt','lv','et','ka','az','be','kk','uz','tg','ky','mn','ms','tl','sw','am','bn','ta','te','ml','kn','gu','mr','pa','ur','fa','ps','sd','ne','si','my','km','lo','ka'];
+    popularLangs.forEach(function(c){
+      var n=LANGS[c]||c;
+      langOpts+='<option value="'+c+'"'+(c===opts.targetLang?' selected':'')+'>'+n+'</option>';
+    });
+
+    var altHtml='';
+    if(opts.alternatives&&opts.alternatives.length>0){
+      altHtml='<div class="tr-alt">';
+      opts.alternatives.forEach(function(a){
+        altHtml+='<div class="tr-alt-pos">'+a.pos+'</div>';
+        altHtml+='<div class="tr-alt-terms">'+a.terms.join(', ')+'</div>';
+      });
+      altHtml+='</div>';
+    }
+
+    pop.innerHTML=
+      '<div class="tr-hd"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg><span class="tr-hd-title">Google Translate</span><button class="tr-hd-close" id="__gbTrX">&times;</button></div>'+
+      '<div class="tr-langs"><span class="tr-lang-badge">'+srcName+'</span><span class="tr-arrow">&rarr;</span><select class="tr-lang-sel" id="__gbTrLang">'+langOpts+'</select></div>'+
+      '<div class="tr-body"><div class="tr-text" id="__gbTrText">'+opts.translated.replace(/</g,'&lt;')+'</div>'+altHtml+'</div>'+
+      '<div class="tr-ft"><span class="tr-powered">Google Translate</span><button class="tr-btn" id="__gbTrCopy">'+copyL+'</button><button class="tr-btn pr" id="__gbTrReplace">'+replL+'</button></div>';
+
+    document.documentElement.appendChild(pop);
+
+    document.getElementById('__gbTrX').onclick=function(){window.__gbTrSel=null;pop.remove();style.remove();};
+
+    // Copy button
+    document.getElementById('__gbTrCopy').onclick=function(){
+      var btn=this;
+      navigator.clipboard.writeText(opts.translated).then(function(){
+        btn.textContent='✓ Copied';
+        setTimeout(function(){btn.textContent=copyL;},1500);
+      }).catch(function(){});
+    };
+
+    // Replace button — replace selected text on page using saved selection
+    document.getElementById('__gbTrReplace').onclick=function(){
+      var newText=opts.translated;
+      var orig=opts.originalText;
+      var done=false;
+      var sel=window.__gbTrSel||{type:'none'};
+
+      try{
+        // Case 1: input/textarea — find original text and replace
+        if(sel.type==='input'&&sel.el&&document.contains(sel.el)){
+          var el=sel.el;
+          var v=el.value;
+          var idx=v.indexOf(orig);
+          if(idx>=0){
+            el.focus();
+            el.setSelectionRange(idx,idx+orig.length);
+            document.execCommand('insertText',false,newText);
+            done=true;
+          }
+        }
+        // Case 2: contentEditable — restore saved range and insert
+        if(!done&&sel.type==='editable'&&sel.el&&document.contains(sel.el)&&sel.range){
+          try{
+            sel.el.focus();
+            var s2=window.getSelection();s2.removeAllRanges();s2.addRange(sel.range);
+            document.execCommand('insertText',false,newText);
+            done=true;
+          }catch(e){}
+        }
+        // Case 3: regular page selection — restore saved range and replace node content
+        if(!done&&sel.type==='range'&&sel.range){
+          try{
+            pop.style.visibility='hidden';
+            var rng=sel.range;
+            var s3=window.getSelection();s3.removeAllRanges();s3.addRange(rng);
+            rng.deleteContents();
+            rng.insertNode(document.createTextNode(newText));
+            s3.removeAllRanges();
+            done=true;
+            pop.style.visibility='visible';
+          }catch(e){pop.style.visibility='visible';}
+        }
+      }catch(e){}
+
+      // Fallback: walk the DOM and find the original text
+      if(!done){
+        try{
+          pop.style.visibility='hidden';
+          if(window.find&&window.find(orig,false,false,false,false,false,false)){
+            var fs=window.getSelection();
+            if(fs&&!fs.isCollapsed){
+              var fr=fs.getRangeAt(0);fr.deleteContents();fr.insertNode(document.createTextNode(newText));
+              fs.removeAllRanges();done=true;
+            }
+          }
+          pop.style.visibility='visible';
+        }catch(e){pop.style.visibility='visible';}
+      }
+      if(!done){
+        try{
+          var tw=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);var nd;
+          while(nd=tw.nextNode()){var idx=nd.textContent.indexOf(orig);if(idx>=0){nd.textContent=nd.textContent.substring(0,idx)+newText+nd.textContent.substring(idx+orig.length);done=true;break;}}
+        }catch(e){}
+      }
+
+      window.__gbTrSel=null;
+      if(done){pop.remove();style.remove();}
+      else{this.textContent='Not found';this.disabled=true;}
+    };
+
+    // Language selector — re-translate on change
+    document.getElementById('__gbTrLang').onchange=function(){
+      var newLang=this.value;
+      pop.remove();style.remove();
+      // Trigger re-translation via IPC or console
+      if(window.gitbrowser&&window.gitbrowser.ctxAction){
+        window.gitbrowser.ctxAction('translate',JSON.stringify({lang:newLang,text:opts.originalText}));
+      }else{
+        console.log('__gb_page_ctx:'+JSON.stringify({action:'translate',data:JSON.stringify({lang:newLang,text:opts.originalText})}));
+      }
+    };
+  })();void 0;`;
+  wc.executeJavaScript(js).catch(() => {});
 }
 
 // Run AI action and show result in an injected popup
@@ -1951,8 +2305,6 @@ async function runAiAction(wc, action, text) {
     const prompts = {
       fix: 'Fix all grammar, spelling, and punctuation errors in the following text. Return ONLY the corrected text, nothing else:\n\n',
       rephrase: 'Rephrase the following text to sound more natural and clear. Return ONLY the rephrased text, nothing else:\n\n',
-      translate_en: 'Translate the following text to English. Return ONLY the translation, nothing else:\n\n',
-      translate_ru: 'Translate the following text to Russian. Return ONLY the translation, nothing else:\n\n',
       summarize: 'Summarize the following text in 2-3 sentences. Return ONLY the summary:\n\n',
       explain: 'Explain the following text in simple terms. Be concise:\n\n',
     };
@@ -2904,6 +3256,12 @@ ipcMain.on('ctx-menu-action', (_e, action, data) => {
       try {
         const aiData = JSON.parse(data);
         runAiAction(wc, aiData.type, aiData.text);
+      } catch {}
+    }
+    else if (action === 'translate' && data) {
+      try {
+        const trData = JSON.parse(data);
+        runGoogleTranslate(wc, trData.text, trData.lang);
       } catch {}
     }
   } catch {}
