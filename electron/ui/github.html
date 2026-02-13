@@ -163,7 +163,7 @@
 </div>
 <script>
 const gb = window.gitbrowser;
-let ghToken = localStorage.getItem('gh_token'), ghClientId = 'Ov23licJwKwUSbHm9XF2';
+let ghToken = localStorage.getItem('gh_token');
 let currentUser = null, activeTab = 'repos', cachedData = {}, issueFilter = 'assigned', prFilter = 'assigned';
 
 (async () => {
@@ -178,21 +178,20 @@ function showView(id) { ['login-view','device-view','profile-view'].forEach(v =>
 function openGh(path) { const url = path.startsWith('http') ? path : 'https://github.com' + path; if (gb) gb.openUrlNewTab(url); }
 
 document.getElementById('btn-login').onclick = async () => {
-  const clientId = ghClientId;
-  const res = await gb.githubDeviceLogin({ clientId });
+  const res = await gb.githubDeviceLogin();
   if (res.error) { alert('Error: ' + res.error); return; }
   document.getElementById('user-code').textContent = res.userCode;
   const link = document.getElementById('verify-link');
   link.textContent = res.verificationUri; link.href = res.verificationUri;
   link.onclick = (e) => { e.preventDefault(); gb.openUrl(res.verificationUri); };
   showView('device-view');
-  pollForToken(clientId, res.deviceCode, (res.interval || 5) * 1000);
+  pollForToken(res.deviceCode, (res.interval || 5) * 1000);
 };
 
-async function pollForToken(clientId, deviceCode, interval) {
+async function pollForToken(deviceCode, interval) {
   const statusEl = document.getElementById('poll-status');
   const poll = async () => {
-    const res = await gb.githubDevicePoll({ clientId, deviceCode });
+    const res = await gb.githubDevicePoll({ deviceCode });
     if (res.status === 'ok') { ghToken = res.token; localStorage.setItem('gh_token', ghToken); if (gb && gb.secretStore) gb.secretStore('github_token', ghToken).catch(() => {}); loadProfile(ghToken); return; }
     if (res.status === 'expired') { statusEl.innerHTML = 'Code expired. Please try again.'; setTimeout(() => showView('login-view'), 2000); return; }
     if (res.status === 'error') { statusEl.innerHTML = 'Error: ' + esc(res.error); return; }
@@ -287,7 +286,6 @@ async function loadActivity(el) {
 
 function applyTheme(t) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', t === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb) { gb.onThemeChanged((d) => applyTheme(d.theme)); gb.getSettings().then(s => { if(s&&s.appearance){let t=s.appearance.theme;if(t==='System')t=window.matchMedia('(prefers-color-scheme:light)').matches?'Light':'Dark';applyTheme(t)} }).catch(()=>{}); }
-document.getElementById('client-id').value = ghClientId;
 function init() { if (ghToken) loadProfile(ghToken); }
 </script>
 </body>

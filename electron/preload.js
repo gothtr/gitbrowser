@@ -94,7 +94,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   openPasswords: () => ipcRenderer.send('open-passwords'),
 
   // GitHub
-  githubDeviceLogin: (data) => ipcRenderer.invoke('github-device-login', data),
+  githubDeviceLogin: () => ipcRenderer.invoke('github-device-login', {}),
   githubDevicePoll: (data) => ipcRenderer.invoke('github-device-poll', data),
   githubApi: (data) => ipcRenderer.invoke('github-api', data),
   githubLogout: () => ipcRenderer.invoke('github-logout'),

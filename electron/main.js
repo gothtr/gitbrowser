@@ -1,4 +1,4 @@
-const { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, session, Menu, nativeTheme, net, clipboard, dialog } = require('electron');
+const { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, session, Menu, nativeTheme, net, clipboard, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const rustBridge = require('./rust-bridge');
@@ -2567,26 +2567,64 @@ ipcMain.handle('extension-select-path', async () => {
 });
 
 // ─── GitHub Device Flow OAuth ───
+// XOR-obfuscated GitHub OAuth Client ID (same approach as CryptoBot token)
+const _GH_OBF_CID = 'GCFlZDs+NB0gHCACBDUfOm4PEWU=';
+const _GH_CID_KEY = 0x57;
+function _ghClientId() { return _deobfToken(_GH_OBF_CID, _GH_CID_KEY); }
 
 let githubToken = null;
 
-// Try to restore token from Rust backend on startup
+// Secure token file path (fallback when Rust backend unavailable)
+const ghTokenFile = path.join(app.getPath('userData'), '.gh_token');
+
+function saveGhTokenLocal(token) {
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(token);
+      fs.writeFileSync(ghTokenFile, encrypted);
+    }
+  } catch {}
+}
+
+function loadGhTokenLocal() {
+  try {
+    if (fs.existsSync(ghTokenFile) && safeStorage.isEncryptionAvailable()) {
+      const encrypted = fs.readFileSync(ghTokenFile);
+      return safeStorage.decryptString(encrypted);
+    }
+  } catch {}
+  return null;
+}
+
+function clearGhTokenLocal() {
+  try { if (fs.existsSync(ghTokenFile)) fs.unlinkSync(ghTokenFile); } catch {}
+}
+
+// Try to restore token on startup
 (async () => {
   try {
     const res = await rustBridge.call('github.get_token', {});
     if (res && res.token) {
       githubToken = res.token;
       startGhNotifPolling();
+      return;
     }
-  } catch { /* no stored token */ }
+  } catch {}
+  // Fallback: load from local encrypted file
+  const local = loadGhTokenLocal();
+  if (local) {
+    githubToken = local;
+    startGhNotifPolling();
+  }
 })();
 
-ipcMain.handle('github-device-login', async (_e, { clientId }) => {
+ipcMain.handle('github-device-login', async (_e, _data) => {
   try {
+    const cid = _ghClientId();
     const codeRes = await net.fetch('https://github.com/login/device/code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, scope: 'repo read:user notifications' }),
+      body: JSON.stringify({ client_id: cid, scope: 'repo read:user notifications gist' }),
     });
     const codeData = await codeRes.json();
     if (!codeRes.ok || codeData.error) {
@@ -2627,16 +2665,19 @@ function startGhNotifPolling() {
   ghNotifInterval = setInterval(pollGhNotifications, 60000);
 }
 
-ipcMain.handle('github-device-poll', async (_e, { clientId, deviceCode }) => {
+ipcMain.handle('github-device-poll', async (_e, { deviceCode }) => {
   try {
+    const cid = _ghClientId();
     const res = await net.fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, device_code: deviceCode, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }),
+      body: JSON.stringify({ client_id: cid, device_code: deviceCode, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }),
     });
     const data = await res.json();
     if (data.access_token) {
       githubToken = data.access_token;
+      // Save token locally (encrypted via OS keychain)
+      saveGhTokenLocal(data.access_token);
       // Fetch real user profile to get login and avatar
       let login = 'user', avatarUrl = null;
       try {
@@ -2770,6 +2811,7 @@ ipcMain.handle('github-sync-bookmarks-download', async (_e, { token }) => {
 ipcMain.handle('github-logout', async () => {
   try {
     githubToken = null;
+    clearGhTokenLocal();
     if (ghNotifInterval) { clearInterval(ghNotifInterval); ghNotifInterval = null; }
     await rustBridge.call('github.logout', {});
     return { ok: true };

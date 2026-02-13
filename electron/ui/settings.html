@@ -718,8 +718,6 @@ document.getElementById('btn-donate').onclick = async () => {
 loadSettings();
 
 // GitHub Account section logic
-const GH_CLIENT_ID = 'Ov23licJwKwUSbHm9XF2';
-
 function ghShowState(state) {
   document.getElementById('gh-login-card').style.display = state === 'login' ? '' : 'none';
   document.getElementById('gh-device-card').style.display = state === 'device' ? '' : 'none';
@@ -751,7 +749,7 @@ document.getElementById('gh-login-btn').onclick = async () => {
   btn.disabled = true;
   btn.textContent = '...';
   try {
-    const res = await gb.githubDeviceLogin({ clientId: GH_CLIENT_ID });
+    const res = await gb.githubDeviceLogin();
     if (res.error) {
       btn.textContent = 'Error: ' + res.error;
       btn.disabled = false;
@@ -782,7 +780,7 @@ async function ghPollForToken(deviceCode, interval) {
   const statusEl = document.getElementById('gh-poll-status');
   const poll = async () => {
     try {
-      const res = await gb.githubDevicePoll({ clientId: GH_CLIENT_ID, deviceCode });
+      const res = await gb.githubDevicePoll({ deviceCode });
       if (res.status === 'ok') {
         statusEl.innerHTML = '<span style="color:var(--success-fg)">✓</span> Authorized!';
         setTimeout(() => loadGitHubAccount(), 500);
