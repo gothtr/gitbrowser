@@ -494,7 +494,12 @@ gb.onTabsUpdate((data) => {
   renderTabsWithGroups(tabList, activeId);
 });
 
-gb.onTabLoading((data) => { if (data.loading) loadingTabs.add(data.id); else loadingTabs.delete(data.id); });
+gb.onTabLoading((data) => {
+  if (data.loading) loadingTabs.add(data.id); else loadingTabs.delete(data.id);
+  // Update loading class on the tab element immediately
+  const el = document.querySelector(`.tab-item[data-tab-id="${data.id}"]`);
+  if (el) { if (data.loading) el.classList.add('loading'); else el.classList.remove('loading'); }
+});
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
@@ -514,6 +519,9 @@ const INTERNAL_ICONS = {
 function applyTheme(t) { document.documentElement.classList.add('theme-transition'); document.documentElement.classList.toggle('light', t === 'Light'); setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300); }
 if (gb) {
   gb.onThemeChanged((d) => applyTheme(d.theme));
+  if (gb.onAccentChanged) gb.onAccentChanged((d) => {
+    if (d.css) { const s = document.createElement('style'); s.textContent = d.css; document.head.appendChild(s); }
+  });
   gb.getSettings().then(s => { if (s&&s.appearance) { let t=s.appearance.theme; if(t==='System') t=window.matchMedia('(prefers-color-scheme:light)').matches?'Light':'Dark'; applyTheme(t); } }).catch(()=>{});
 }
 

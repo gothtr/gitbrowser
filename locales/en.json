@@ -150,7 +150,14 @@
     "license": "License",
     "donate_title": "💜 Support the Project",
     "donate_desc": "Help us keep GitBrowser free and open-source",
-    "donate_btn": "Donate via CryptoBot"
+    "donate_btn": "Donate via CryptoBot",
+    "account": "Account",
+    "account_desc": "GitHub integration and sync",
+    "account_not_logged": "Not signed in",
+    "account_login_hint": "Sign in to sync bookmarks, access repos, and more",
+    "account_sync": "Sync Bookmarks",
+    "account_sync_desc": "Upload or download bookmarks via GitHub Gist",
+    "account_logout_desc": "Disconnect your GitHub account"
   },
   "ai": {
     "title": "AI Assistant",
@@ -277,6 +284,7 @@
     "disable": "Disable",
     "no_extensions": "No extensions installed",
     "details": "Details",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "chrome_hint": "Supports unpacked Chrome extensions (Manifest V2/V3). Download and unpack a Chrome extension, then select its folder."
   }
 }

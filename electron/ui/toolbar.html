@@ -393,6 +393,9 @@ function applyTheme(theme) {
   setTimeout(() => document.documentElement.classList.remove('theme-transition'), 300);
 }
 gb.onThemeChanged((data) => applyTheme(data.theme));
+if (gb.onAccentChanged) gb.onAccentChanged((d) => {
+  if (d.css) { const s = document.createElement('style'); s.textContent = d.css; document.head.appendChild(s); }
+});
 gb.getSettings().then(s => {
   if (s && s.appearance && s.appearance.theme) {
     let t = s.appearance.theme;

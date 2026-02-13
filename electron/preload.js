@@ -131,6 +131,8 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   telegramResizeDelta: (dx, dy) => ipcRenderer.send('telegram-resize-delta', { dx, dy }),
   onTelegramState: (cb) => ipcRenderer.on('telegram-state', (_e, d) => cb(d)),
   onTelegramBtnVisible: (cb) => ipcRenderer.on('telegram-btn-visible', (_e, d) => cb(d)),
+  telegramBtnVisible: (visible) => ipcRenderer.send('telegram-btn-set-visible', visible),
+  onAccentChanged: (cb) => ipcRenderer.on('accent-changed', (_e, d) => cb(d)),
 
   // Telemetry (consent-based)
   sendTelemetry: (event, data) => ipcRenderer.invoke('telemetry-send', { event, data }),

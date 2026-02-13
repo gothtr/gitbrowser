@@ -39,6 +39,10 @@
       Install Extension
     </button>
   </div>
+  <div style="font-size:var(--text-sm);color:var(--fg-muted);margin-bottom:var(--space-lg);padding:var(--space-md);background:var(--glass-bg-hover);border-radius:var(--radius-sm);border:1px solid var(--glass-border)">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="var(--accent-fg)" style="vertical-align:-1px;margin-right:4px"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>
+    Supports unpacked Chrome extensions (Manifest V2/V3). Download and unpack a Chrome extension, then select its folder.
+  </div>
   <div class="ext-list" id="list"></div>
 </div>
 <script>
@@ -58,20 +62,17 @@ async function load() {
     const div = document.createElement('div');
     div.className = 'ext-card';
     div.style.animationDelay = i * 40 + 'ms';
+    const isChrome = ext.type === 'chrome';
+    const badge = isChrome ? '<span class="badge badge-accent" style="font-size:10px">Chrome</span>' : '';
     div.innerHTML = `
-      <div class="ext-icon"><svg width="22" height="22" viewBox="0 0 16 16" fill="var(--accent-fg)"><path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm4.879-2.773 4.264 2.559a.25.25 0 0 1 0 .428l-4.264 2.559A.25.25 0 0 1 6 10.559V5.442a.25.25 0 0 1 .379-.215Z"/></svg></div>
+      <div class="ext-icon"><svg width="22" height="22" viewBox="0 0 16 16" fill="var(--accent-fg)"><path d="M5.5 4.25a2.25 2.25 0 0 1 4.5 0 .75.75 0 0 0 .75.75h2.5c.14 0 .25.11.25.25v2.5a.75.75 0 0 0 .75.75 2.25 2.25 0 0 1 0 4.5.75.75 0 0 0-.75.75v2.5a.25.25 0 0 1-.25.25h-2.5a.75.75 0 0 1-.75-.75 2.25 2.25 0 0 0-4.5 0 .75.75 0 0 1-.75.75H2.25a.25.25 0 0 1-.25-.25v-2.5a.75.75 0 0 0-.75-.75 2.25 2.25 0 0 1 0-4.5.75.75 0 0 0 .75-.75v-2.5c0-.14.11-.25.25-.25h2.5a.75.75 0 0 0 .75-.75z"/></svg></div>
       <div class="ext-info">
         <div class="ext-name">${esc(ext.name)}</div>
-        <div class="ext-meta">v${esc(ext.version)} <span class="badge ${ext.enabled ? 'badge-success' : ''}" style="${ext.enabled ? '' : 'background:var(--bg-subtle);color:var(--fg-subtle)'}">${ext.enabled ? 'Enabled' : 'Disabled'}</span></div>
+        <div class="ext-meta">${ext.version ? 'v' + esc(ext.version) : ''} ${badge} <span class="badge ${ext.enabled !== false ? 'badge-success' : ''}" style="${ext.enabled !== false ? '' : 'background:var(--bg-subtle);color:var(--fg-subtle)'}">${ext.enabled !== false ? 'Enabled' : 'Disabled'}</span></div>
       </div>
       <div class="ext-actions">
-        <div class="toggle ${ext.enabled ? 'on' : ''}" data-toggle="${ext.id}"></div>
         <button class="btn btn-ghost btn-danger" data-remove="${ext.id}" style="font-size:var(--text-sm)">Remove</button>
       </div>`;
-    div.querySelector('[data-toggle]').onclick = async function() {
-      this.classList.toggle('on');
-      try { if (ext.enabled) await gb.extensionDisable(ext.id); else await gb.extensionEnable(ext.id); load(); } catch {}
-    };
     div.querySelector('[data-remove]').onclick = async () => { try { await gb.extensionUninstall(ext.id); load(); } catch {} };
     listEl.appendChild(div);
   });

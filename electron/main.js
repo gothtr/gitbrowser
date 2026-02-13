@@ -1460,6 +1460,26 @@ ipcMain.handle('settings-set', async (_e, { key, value }) => {
     if (key === 'appearance.theme') {
       broadcastTheme(value);
     }
+    // Broadcast font size change to all views
+    if (key === 'appearance.font_size') {
+      const size = parseInt(value) || 14;
+      for (const [, tabData] of tabs) {
+        if (!tabData.view.webContents.isDestroyed()) {
+          tabData.view.webContents.setZoomFactor(size / 14);
+        }
+      }
+    }
+    // Broadcast accent color change to all views
+    if (key === 'appearance.accent_color') {
+      const color = value || '#3b82f6';
+      const css = `:root{--accent-fg:${color};--accent-emphasis:${color};--accent-glow:${color}55}`;
+      sendToToolbar('accent-changed', { color, css });
+      for (const [, tabData] of tabs) {
+        if (!tabData.view.webContents.isDestroyed() && isInternalUrl(tabData.url)) {
+          tabData.view.webContents.insertCSS(css).catch(() => {});
+        }
+      }
+    }
     // Cache search engine
     if (key === 'general.default_search_engine') {
       currentSearchEngine = value || 'google';
@@ -2417,6 +2437,11 @@ ipcMain.on('telegram-toggle', () => {
   else showTelegram();
 });
 
+ipcMain.on('telegram-btn-set-visible', (_e, visible) => {
+  sendToToolbar('telegram-btn-visible', { visible: !!visible });
+  if (!visible && telegramVisible) hideTelegram();
+});
+
 ipcMain.on('telegram-drag', (_e, { dx, dy }) => {
   // Drag handled natively by -webkit-app-region: drag
 });
@@ -2474,16 +2499,52 @@ ipcMain.handle('telemetry-send', async (_e, { event, data }) => {
 
 // Extensions
 ipcMain.handle('extension-list', async () => {
-  try { return await rustBridge.call('extension.list', {}); }
-  catch (err) { return []; }
+  try {
+    // Get Chrome extensions loaded in session
+    const chromeExts = session.defaultSession.getAllExtensions().map(ext => ({
+      id: ext.id, name: ext.name, version: ext.version, path: ext.path, type: 'chrome',
+    }));
+    // Get Rust-managed extensions
+    let rustExts = [];
+    try { rustExts = await rustBridge.call('extension.list', {}); } catch {}
+    return [...chromeExts, ...(Array.isArray(rustExts) ? rustExts : [])];
+  } catch (err) { return []; }
 });
 ipcMain.handle('extension-install', async (_e, { path: extPath }) => {
-  try { return await rustBridge.call('extension.install', { path: extPath }); }
-  catch (err) { return { error: err.message }; }
+  try {
+    // Try loading as Chrome extension first
+    const ext = await session.defaultSession.loadExtension(extPath, { allowFileAccess: true });
+    // Save extension path for auto-load on next startup
+    try {
+      let saved = [];
+      try { saved = JSON.parse(fs.readFileSync(userDataPath('chrome_extensions.json'), 'utf-8')); } catch {}
+      if (!saved.includes(extPath)) { saved.push(extPath); fs.writeFileSync(userDataPath('chrome_extensions.json'), JSON.stringify(saved)); }
+    } catch {}
+    return { ok: true, id: ext.id, name: ext.name, version: ext.version };
+  } catch (chromeErr) {
+    // Fallback to Rust extension system
+    try { return await rustBridge.call('extension.install', { path: extPath }); }
+    catch (err) { return { error: err.message }; }
+  }
 });
 ipcMain.handle('extension-uninstall', async (_e, { id }) => {
-  try { return await rustBridge.call('extension.uninstall', { id }); }
-  catch (err) { return { error: err.message }; }
+  try {
+    // Try removing Chrome extension first
+    const chromeExts = session.defaultSession.getAllExtensions();
+    const found = chromeExts.find(e => e.id === id);
+    if (found) {
+      await session.defaultSession.removeExtension(id);
+      // Remove from saved paths
+      try {
+        let saved = [];
+        try { saved = JSON.parse(fs.readFileSync(userDataPath('chrome_extensions.json'), 'utf-8')); } catch {}
+        saved = saved.filter(p => p !== found.path);
+        fs.writeFileSync(userDataPath('chrome_extensions.json'), JSON.stringify(saved));
+      } catch {}
+      return { ok: true };
+    }
+    return await rustBridge.call('extension.uninstall', { id });
+  } catch (err) { return { error: err.message }; }
 });
 ipcMain.handle('extension-enable', async (_e, { id }) => {
   try { return await rustBridge.call('extension.enable', { id }); }
@@ -2989,6 +3050,17 @@ async function loadInitialTheme() {
     if (settings && settings.general && settings.general.default_search_engine) {
       currentSearchEngine = settings.general.default_search_engine;
     }
+    // Apply font size to existing tabs
+    if (settings && settings.appearance && settings.appearance.font_size) {
+      const size = parseInt(settings.appearance.font_size) || 14;
+      if (size !== 14) {
+        for (const [, tabData] of tabs) {
+          if (!tabData.view.webContents.isDestroyed()) {
+            tabData.view.webContents.setZoomFactor(size / 14);
+          }
+        }
+      }
+    }
   } catch {}
   broadcastTheme(currentTheme);
 }
@@ -3000,6 +3072,17 @@ app.whenReady().then(async () => {
   createWindow();
   // Load theme after window is ready
   setTimeout(() => { loadInitialTheme(); }, 500);
+
+  // Load saved Chrome extensions
+  try {
+    const extPaths = JSON.parse(fs.readFileSync(userDataPath('chrome_extensions.json'), 'utf-8'));
+    if (Array.isArray(extPaths)) {
+      for (const p of extPaths) {
+        try { await session.defaultSession.loadExtension(p, { allowFileAccess: true }); }
+        catch { /* extension folder may have been removed */ }
+      }
+    }
+  } catch { /* no saved extensions */ }
 
   // Listen for OS theme changes (for System mode)
   nativeTheme.on('updated', () => {
