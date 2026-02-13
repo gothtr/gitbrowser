@@ -2818,6 +2818,72 @@ ipcMain.handle('github-logout', async () => {
   } catch (err) { return { error: err.message }; }
 });
 
+// ─── Auto-update via GitHub Releases ───
+const CURRENT_VERSION = require('./package.json').version;
+const UPDATE_REPO = 'gothtr/gitbrowser';
+
+ipcMain.handle('check-for-update', async () => {
+  try {
+    const res = await net.fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+      headers: { 'Accept': 'application/vnd.github+json' },
+    });
+    if (!res.ok) return { error: 'HTTP ' + res.status };
+    const release = await res.json();
+    const latestTag = (release.tag_name || '').replace(/^v/, '');
+    if (!latestTag) return { upToDate: true, version: CURRENT_VERSION };
+    if (compareVersions(latestTag, CURRENT_VERSION) > 0) {
+      // Find .exe installer asset
+      const asset = (release.assets || []).find(a => a.name && a.name.endsWith('.exe'));
+      return {
+        updateAvailable: true,
+        currentVersion: CURRENT_VERSION,
+        latestVersion: latestTag,
+        downloadUrl: asset ? asset.browser_download_url : null,
+        releaseNotes: release.body || '',
+        releaseName: release.name || latestTag,
+      };
+    }
+    return { upToDate: true, version: CURRENT_VERSION };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
+
+ipcMain.handle('download-and-install-update', async (_e, { downloadUrl }) => {
+  try {
+    if (!downloadUrl) return { error: 'No download URL' };
+    const tmpDir = path.join(app.getPath('temp'), 'gitbrowser-update');
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+    const fileName = path.basename(new URL(downloadUrl).pathname);
+    const filePath = path.join(tmpDir, fileName);
+
+    // Download the installer
+    const res = await net.fetch(downloadUrl);
+    if (!res.ok) return { error: 'Download failed: HTTP ' + res.status };
+    const buffer = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(filePath, buffer);
+
+    // Launch installer silently and quit
+    const { spawn: spawnProc } = require('child_process');
+    spawnProc(filePath, ['/S'], { detached: true, stdio: 'ignore' }).unref();
+    setTimeout(() => app.quit(), 1500);
+    return { ok: true };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
 // ─── Page context menu actions (IPC from injected glass menu) ───
 ipcMain.on('ctx-menu-action', (_e, action, data) => {
   const wc = _pageCtxWc;

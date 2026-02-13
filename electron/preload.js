@@ -125,6 +125,10 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   clearCookies: () => ipcRenderer.invoke('clear-cookies'),
 
+  // Auto-update
+  checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  downloadAndInstallUpdate: (data) => ipcRenderer.invoke('download-and-install-update', data),
+
   // Telegram Widget
   telegramToggle: () => ipcRenderer.send('telegram-toggle'),
   telegramDrag: (dx, dy) => ipcRenderer.send('telegram-drag', { dx, dy }),
