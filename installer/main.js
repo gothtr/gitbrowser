@@ -4,7 +4,7 @@ const fs = require('fs');
 const { spawn, execFile } = require('child_process');
 
 const GITHUB_REPO = 'gothtr/gitbrowser';
-const CURRENT_VERSION = app.isPackaged ? require('./package.json').version : '0.2.0';
+const CURRENT_VERSION = app.isPackaged ? require('./package.json').version : '0.3.0';
 const INSTALL_DIR = path.join(process.env.LOCALAPPDATA || '', 'GitBrowser');
 
 let win = null;
@@ -24,8 +24,8 @@ if (!gotLock) {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 520,
-    height: 580,
+    width: 480,
+    height: 480,
     resizable: false,
     maximizable: false,
     fullscreenable: false,

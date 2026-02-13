@@ -53,7 +53,7 @@ body { display: flex; height: 100vh; overflow: hidden; }
   color: #fff;
   box-shadow: 0 2px 12px var(--accent-glow);
 }
-.nav-item .nav-icon { width: 20px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.nav-item .nav-icon { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 
 /* Content area */
 .settings-content {
@@ -260,12 +260,12 @@ html.light .donate-custom { background: rgba(0, 0, 0, 0.03); }
 
 <nav class="settings-nav">
   <div class="nav-title">Settings</div>
-  <button class="nav-item active" data-section="general"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M6.955.904A.5.5 0 0 1 7.452.5h1.096a.5.5 0 0 1 .497.404l.17 1.106a5.285 5.285 0 0 1 .862.415l1.02-.424a.5.5 0 0 1 .606.166l.548.822a.5.5 0 0 1-.109.57l-.848.682c.04.168.068.34.083.516l.952.59a.5.5 0 0 1 .218.569l-.274 1.048a.5.5 0 0 1-.52.363l-1.11-.09a5.3 5.3 0 0 1-.55.7l.262 1.075a.5.5 0 0 1-.254.58l-.956.507a.5.5 0 0 1-.608-.103l-.752-.834a5.3 5.3 0 0 1-.467.04l-.67.88a.5.5 0 0 1-.594.17l-1.012-.424a.5.5 0 0 1-.29-.546l.18-1.093a5.3 5.3 0 0 1-.59-.592l-1.083.2a.5.5 0 0 1-.559-.298l-.427-1.003a.5.5 0 0 1 .147-.59l.858-.7a5.3 5.3 0 0 1-.02-.52L1.5 5.59a.5.5 0 0 1-.26-.553l.252-1.054a.5.5 0 0 1 .507-.378l1.117.065c.164-.177.343-.34.535-.487L3.38 2.116a.5.5 0 0 1 .22-.59l.937-.54a.5.5 0 0 1 .612.075l.8.794c.157-.046.32-.08.486-.103l.52-1.048ZM8 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg></span> General</button>
-  <button class="nav-item" data-section="appearance"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M14.063 0a1 1 0 0 1 .97 1.243l-3.34 13.686a1 1 0 0 1-.97.757H1.937a1 1 0 0 1-.97-1.243L4.307.757A1 1 0 0 1 5.277 0h8.786ZM5.89 1.5 3.2 12.5h7.71l2.69-11H5.89Z"/><circle cx="8" cy="7" r="1.5"/></svg></span> Appearance</button>
-  <button class="nav-item" data-section="privacy"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8.533.133a1.75 1.75 0 0 0-1.066 0l-5.25 1.68A1.75 1.75 0 0 0 1 3.48V7c0 1.566.32 3.182 1.303 4.682.983 1.498 2.585 2.813 5.032 3.855a1.7 1.7 0 0 0 1.33 0c2.447-1.042 4.049-2.357 5.032-3.855C14.68 10.182 15 8.566 15 7V3.48a1.75 1.75 0 0 0-1.217-1.667L8.533.133Zm-.61 1.429.077-.012.077.012 5.25 1.68a.25.25 0 0 1 .173.237V7c0 1.358-.275 2.666-1.057 3.86-.784 1.194-2.121 2.34-4.366 3.297a.2.2 0 0 1-.154 0c-2.245-.956-3.582-2.104-4.366-3.298C2.775 9.666 2.5 8.36 2.5 7V3.48a.25.25 0 0 1 .174-.237l5.25-1.68ZM9.5 6.5a1.5 1.5 0 0 1-3 0 1.5 1.5 0 0 1 3 0Z"/></svg></span> Privacy</button>
-  <button class="nav-item" data-section="account"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg></span> Account</button>
-  <button class="nav-item" data-section="advanced"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M5.433 2.304A4.49 4.49 0 0 0 3.5 6c0 1.598.832 3.002 2.09 3.802.518.328.929.923.902 1.64v.008l-.164 3.337a.75.75 0 1 1-1.498-.073l.163-3.33c.002-.085-.05-.216-.25-.348A5.99 5.99 0 0 1 2 6a5.99 5.99 0 0 1 2.567-4.92.598.598 0 0 1 .866.224Zm5.134 0A.598.598 0 0 1 11.433 2.08 5.99 5.99 0 0 1 14 6a5.99 5.99 0 0 1-2.743 5.036c-.2.132-.252.263-.25.348l.164 3.33a.75.75 0 0 1-1.499.074l-.163-3.337v-.008c-.027-.717.384-1.312.902-1.64A4.49 4.49 0 0 0 12.5 6a4.49 4.49 0 0 0-1.933-3.696Z"/></svg></span> Advanced</button>
-  <button class="nav-item" data-section="about"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 16A8 8 0 1 1 8 0a8 8 0 0 1 0 16Zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.399l-.451.003.082-.381 2.29-.287ZM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/></svg></span> About</button>
+  <button class="nav-item active" data-section="general"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span> General</button>
+  <button class="nav-item" data-section="appearance"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="8.5" cy="11.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="10" cy="15.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="15.5" cy="11.5" r="1.5" fill="currentColor" stroke="none"/></svg></span> Appearance</button>
+  <button class="nav-item" data-section="privacy"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span> Privacy</button>
+  <button class="nav-item" data-section="account"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg></span> Account</button>
+  <button class="nav-item" data-section="advanced"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span> Advanced</button>
+  <button class="nav-item" data-section="about"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span> About</button>
 </nav>
 
 <div class="settings-content">
@@ -341,7 +341,7 @@ html.light .donate-custom { background: rgba(0, 0, 0, 0.03); }
           <div class="toggle on" id="s-fingerprint" data-key="privacy.anti_fingerprinting"></div></div>
         <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.clear_data_on_exit">Clear Data on Exit</div><div class="row-desc" data-i18n="settings.clear_exit_desc">Remove browsing data when closing</div></div>
           <div class="toggle" id="s-clear-exit" data-key="privacy.clear_data_on_exit"></div></div>
-        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.telemetry_consent">Help Improve GitBrowser</div><div class="row-desc" data-i18n="settings.telemetry_desc">Send anonymous usage data via GitHub (requires GitHub login)</div></div>
+        <div class="row"><div class="row-info"><div class="row-label" data-i18n="settings.telemetry_consent">Help Improve GitBrowser</div><div class="row-desc" data-i18n="settings.telemetry_desc">Send usage data via your GitHub account (requires login)</div></div>
           <div class="toggle" id="s-telemetry" data-key="privacy.telemetry_consent"></div></div>
       </div>
       <div class="settings-card">
@@ -450,7 +450,7 @@ html.light .donate-custom { background: rgba(0, 0, 0, 0.03); }
         <div class="about-logo">
           <img src="../../resources/icons/logo-icon.png" alt="GitBrowser" />
           <div class="about-name">GitBrowser</div>
-          <div class="about-version" id="about-version">v0.2.0</div>
+          <div class="about-version" id="about-version">v0.3.0</div>
         </div>
       </div>
       <div class="settings-card">
@@ -471,6 +471,32 @@ html.light .donate-custom { background: rgba(0, 0, 0, 0.03); }
               <div id="update-progress-bar" style="height:100%;background:var(--accent-emphasis);border-radius:2px;width:0%;transition:width 0.3s;"></div>
             </div>
           </div>
+        </div>
+      </div>
+      <div class="settings-card">
+        <div class="row">
+          <div class="row-info">
+            <div class="row-label" data-i18n="settings.report_bug">Report a Problem</div>
+            <div class="row-desc" data-i18n="settings.report_bug_desc">Describe the issue and send it to developers</div>
+          </div>
+          <button class="btn btn-pill" id="btn-report-bug" style="background:var(--accent-emphasis);color:#fff;border:none;" data-i18n="settings.report_bug_btn">Report</button>
+        </div>
+        <div class="row" id="bug-report-form" style="display:none;flex-direction:column;gap:var(--space-sm);">
+          <textarea id="bug-report-text" rows="4" placeholder="Опишите проблему..." style="width:100%;resize:vertical;background:rgba(255,255,255,0.04);border:1px solid var(--glass-border);color:var(--fg-default);padding:10px;border-radius:var(--radius-md);font-family:var(--font-sans);font-size:var(--text-base);outline:none;"></textarea>
+          <div style="display:flex;gap:var(--space-sm);justify-content:flex-end;">
+            <button class="btn btn-pill" id="bug-report-cancel" data-i18n="settings.cancel">Cancel</button>
+            <button class="btn btn-pill" id="bug-report-send" style="background:var(--accent-emphasis);color:#fff;border:none;" data-i18n="settings.send">Send</button>
+          </div>
+          <div class="row-desc" id="bug-report-status"></div>
+        </div>
+      </div>
+      <div class="settings-card" id="test-telemetry-card" style="display:none;">
+        <div class="row">
+          <div class="row-info">
+            <div class="row-label">Test Telemetry</div>
+            <div class="row-desc" id="telemetry-test-status">Send a test event to GitHub Issues</div>
+          </div>
+          <button class="btn btn-pill" id="btn-test-telemetry" style="background:var(--accent-emphasis);color:#fff;border:none;">Send Test</button>
         </div>
       </div>
       <div class="settings-card">
@@ -604,6 +630,69 @@ document.querySelectorAll('.toggle').forEach(t => {
 
 document.getElementById('open-passwords').onclick = () => { if (gb) gb.openPasswords(); };
 document.getElementById('open-github').onclick = () => { if (gb) gb.openUrlNewTab('https://github.com/gothtr/gitbrowser'); };
+
+// Report bug
+document.getElementById('btn-report-bug').onclick = () => {
+  const form = document.getElementById('bug-report-form');
+  form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+  document.getElementById('bug-report-text').value = '';
+  document.getElementById('bug-report-status').textContent = '';
+};
+document.getElementById('bug-report-cancel').onclick = () => {
+  document.getElementById('bug-report-form').style.display = 'none';
+};
+document.getElementById('bug-report-send').onclick = async () => {
+  const text = document.getElementById('bug-report-text').value.trim();
+  const status = document.getElementById('bug-report-status');
+  if (!text) { status.textContent = 'Please describe the problem'; status.style.color = 'var(--warning-fg)'; return; }
+  const sendBtn = document.getElementById('bug-report-send');
+  sendBtn.disabled = true;
+  sendBtn.textContent = 'Sending...';
+  try {
+    const result = await gb.sendBugReport(text);
+    if (result && result.ok) {
+      status.textContent = 'Report sent! Thank you.';
+      status.style.color = 'var(--success-fg)';
+      setTimeout(() => { document.getElementById('bug-report-form').style.display = 'none'; }, 2000);
+    } else {
+      status.textContent = 'Failed: ' + (result.reason || 'unknown') + (result.status ? ' (' + result.status + ')' : '');
+      status.style.color = 'var(--danger-fg)';
+    }
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--danger-fg)';
+  }
+  sendBtn.disabled = false;
+  sendBtn.textContent = 'Send';
+};
+
+// Test telemetry (dev mode only)
+if (location.protocol === 'file:' || location.hostname === 'localhost') {
+  const ttCard = document.getElementById('test-telemetry-card');
+  if (ttCard) ttCard.style.display = '';
+}
+const ttBtn = document.getElementById('btn-test-telemetry');
+if (ttBtn) ttBtn.onclick = async () => {
+  const btn = document.getElementById('btn-test-telemetry');
+  const status = document.getElementById('telemetry-test-status');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    const result = await gb.sendTelemetry('test_event', { source: 'settings_page', test: true });
+    if (result && result.ok) {
+      status.textContent = 'Sent! Check Issues on GitHub.';
+      status.style.color = 'var(--success-fg)';
+    } else {
+      status.textContent = 'Failed: ' + (result.reason || 'unknown') + (result.status ? ' (' + result.status + ')' : '') + (result.detail ? ' — ' + result.detail.slice(0, 120) : '');
+      status.style.color = 'var(--danger-fg)';
+    }
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--danger-fg)';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Send Test';
+};
 
 // Check for updates
 document.getElementById('btn-check-update').onclick = async () => {

@@ -1,6 +1,6 @@
 {
   "name": "gitbrowser",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A privacy-focused minimal web browser with GitHub-style UI",
   "author": "gothtr",
   "repository": "github:gothtr/gitbrowser",

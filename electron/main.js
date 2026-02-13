@@ -4,6 +4,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const rustBridge = require('./rust-bridge');
 
+const APP_VERSION = require('./package.json').version;
+
 // SEC-06: Generate a unique token per context menu invocation to prevent spoofing via console.log
 function generateCtxToken() {
   return crypto.randomBytes(16).toString('hex');
@@ -327,6 +329,15 @@ function createTab(ctx, url, activate = true) {
   if (ctx.partition) webPrefs.partition = ctx.partition;
 
   const view = new WebContentsView({ webPreferences: webPrefs });
+  // Prevent white flash on navigation/reload
+  view.setBackgroundColor(currentTheme === 'Light' ? '#f5f5f5' : '#0a0e14');
+
+  // Pre-set bounds before adding to view tree to prevent layout jump
+  if (ctx.baseWindow && !ctx.baseWindow.isDestroyed()) {
+    const { width: w, height: h } = ctx.baseWindow.getContentBounds();
+    const sw = ctx.sidebarView ? (ctx.sidebarCollapsed ? 48 : SIDEBAR_WIDTH) : 0;
+    view.setBounds({ x: sw, y: TOOLBAR_HEIGHT, width: w - sw, height: h - TOOLBAR_HEIGHT });
+  }
 
   const tabData = { view, url: url || 'gb://newtab', title: getInternalTitle(url) || 'New Tab' };
   ctx.tabs.set(id, tabData);
@@ -425,6 +436,13 @@ function createTab(ctx, url, activate = true) {
       tabData.favicon = favicons[0];
       sendTabsUpdate(ctx);
     }
+  });
+
+  // Crash detection — show dialog to send report
+  view.webContents.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit') return;
+    const errorInfo = `Tab: ${tabData.url}\nReason: ${details.reason}\nExit code: ${details.exitCode}`;
+    showCrashReportDialog(ctx.baseWindow, errorInfo);
   });
 
   // Middle-click to open link in new tab
@@ -540,9 +558,10 @@ function loadUrlInView(view, url) {
 
 function switchTab(ctx, id) {
   if (!ctx || !ctx.tabs.has(id)) return;
+  const prevTabId = ctx.activeTabId;
   // Auto PiP: if leaving a tab with playing video, trigger PiP
-  if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId) && ctx.activeTabId !== id) {
-    const leavingView = ctx.tabs.get(ctx.activeTabId).view;
+  if (prevTabId && ctx.tabs.has(prevTabId) && prevTabId !== id) {
+    const leavingView = ctx.tabs.get(prevTabId).view;
     if (!leavingView.webContents.isDestroyed()) {
       leavingView.webContents.executeJavaScript(`
         (function() {
@@ -553,10 +572,9 @@ function switchTab(ctx, id) {
         })();
       `).catch(() => {});
     }
-    ctx.baseWindow.contentView.removeChildView(ctx.tabs.get(ctx.activeTabId).view);
   }
   // If returning to the tab that has PiP, exit PiP
-  if (ctx.activeTabId !== id && ctx.tabs.has(id)) {
+  if (prevTabId !== id && ctx.tabs.has(id)) {
     const returningView = ctx.tabs.get(id).view;
     if (!returningView.webContents.isDestroyed()) {
       returningView.webContents.executeJavaScript(`
@@ -570,8 +588,14 @@ function switchTab(ctx, id) {
   }
   ctx.activeTabId = id;
   const { view, url } = ctx.tabs.get(id);
+  // Set correct bounds BEFORE adding to prevent layout jump
+  const { width: w, height: h } = ctx.baseWindow.getContentBounds();
+  const sw = ctx.sidebarView ? (ctx.sidebarCollapsed ? 48 : SIDEBAR_WIDTH) : 0;
+  view.setBounds({ x: sw, y: TOOLBAR_HEIGHT, width: w - sw, height: h - TOOLBAR_HEIGHT });
   ctx.baseWindow.contentView.addChildView(view);
-  layoutViews(ctx);
+  if (prevTabId && prevTabId !== id && ctx.tabs.has(prevTabId)) {
+    ctx.baseWindow.contentView.removeChildView(ctx.tabs.get(prevTabId).view);
+  }
   sendTabsUpdate(ctx);
   const realUrl = view.webContents.getURL() || url || '';
   sendToToolbar(ctx, 'tab-url-updated', { id, url: realUrl });
@@ -613,10 +637,18 @@ function navigateTab(ctx, id, url) {
   if (!ctx || !ctx.tabs.has(id)) return;
   const tabData = ctx.tabs.get(id);
   // If navigating to internal page that needs preload but current view doesn't have it,
-  // create a new tab instead
+  // create new tab first, then remove old — prevents flicker
   if (NEEDS_PRELOAD.has(url)) {
-    closeTab(ctx, id);
     createTab(ctx, url);
+    // Silently remove old tab without switching
+    const { view } = ctx.tabs.get(id);
+    ctx.baseWindow.contentView.removeChildView(view);
+    wcToWindow.delete(view.webContents.id);
+    view.webContents.removeAllListeners();
+    view.webContents.close();
+    ctx.tabs.delete(id);
+    ctx.tabOrder = ctx.tabOrder.filter(tid => tid !== id);
+    sendTabsUpdate(ctx);
     return;
   }
   tabData.url = url;
@@ -625,9 +657,15 @@ function navigateTab(ctx, id, url) {
   sendTabsUpdate(ctx);
 }
 
+let _tabsUpdateTimers = new WeakMap();
 function sendTabsUpdate(ctx) {
   if (!ctx || ctx.closing) return;
-  const data = ctx.tabOrder.map(id => {
+  // Debounce to prevent rapid-fire updates causing visual jitter
+  if (_tabsUpdateTimers.has(ctx)) clearTimeout(_tabsUpdateTimers.get(ctx));
+  _tabsUpdateTimers.set(ctx, setTimeout(() => {
+    _tabsUpdateTimers.delete(ctx);
+    if (ctx.closing) return;
+    const data = ctx.tabOrder.map(id => {
     if (!ctx.tabs.has(id)) return null;
     const t = ctx.tabs.get(id);
     const realUrl = t.view.webContents.getURL() || t.url;
@@ -644,6 +682,7 @@ function sendTabsUpdate(ctx) {
     return { id, title, url, favicon: t.favicon || null, audible: t.view.webContents.isCurrentlyAudible(), muted: t.view.webContents.isAudioMuted() };
   }).filter(Boolean);
   sendToToolbar(ctx, 'tabs-update', { tabs: data, activeId: ctx.activeTabId });
+  }, 16));
 }
 
 function sendToToolbar(ctx, channel, data) {
@@ -786,23 +825,42 @@ function saveSession(ctx) {
 
 async function restoreSession(ctx) {
   try {
+    // Primary source: encrypted local backup
+    try {
+      const raw = fs.readFileSync(userDataPath('session.json'), 'utf8');
+      const parsed = JSON.parse(raw);
+      let tabs = null;
+      if (parsed.ciphertext) {
+        const decrypted = await rustBridge.call('github.decrypt_sync', parsed);
+        tabs = JSON.parse(decrypted.data);
+      } else if (Array.isArray(parsed)) {
+        tabs = parsed;
+      }
+      if (Array.isArray(tabs) && tabs.length > 0) {
+        // Deduplicate by url
+        const seen = new Set();
+        const unique = tabs.filter(t => {
+          const url = t.url || 'gb://newtab';
+          if (seen.has(url)) return false;
+          seen.add(url);
+          return true;
+        });
+        unique.forEach((t, i) => createTab(ctx, t.url || 'gb://newtab', i === unique.length - 1));
+        return true;
+      }
+    } catch {}
+
+    // Fallback: Rust RPC session file
     let result = await rustBridge.call('session.restore', {});
-    // Fallback to local file
-    if (!Array.isArray(result) || result.length === 0) {
-      try {
-        const raw = fs.readFileSync(userDataPath('session.json'), 'utf8');
-        const parsed = JSON.parse(raw);
-        // Check if encrypted (has ciphertext field) or plain array
-        if (parsed.ciphertext) {
-          const decrypted = await rustBridge.call('github.decrypt_sync', parsed);
-          result = JSON.parse(decrypted.data);
-        } else if (Array.isArray(parsed)) {
-          result = parsed;
-        }
-      } catch {}
-    }
     if (Array.isArray(result) && result.length > 0) {
-      result.forEach((t, i) => createTab(ctx, t.url || 'gb://newtab', i === result.length - 1));
+      const seen = new Set();
+      const unique = result.filter(t => {
+        const url = t.url || 'gb://newtab';
+        if (seen.has(url)) return false;
+        seen.add(url);
+        return true;
+      });
+      unique.forEach((t, i) => createTab(ctx, t.url || 'gb://newtab', i === unique.length - 1));
       return true;
     }
   } catch {}
@@ -2992,7 +3050,9 @@ ipcMain.on('telegram-resize-delta', (_e, { dx, dy }) => {
   // Resize handled natively by BrowserWindow
 });
 
-// ─── GitHub Telemetry (anonymous, consent-based) ───
+// ─── GitHub Telemetry (anonymous, consent-based → Issues) ───
+const TELEMETRY_REPO = 'gothtr/gitbrowser';
+
 ipcMain.handle('telemetry-send', async (_e, { event, data }) => {
   try {
     // Check consent
@@ -3001,13 +3061,14 @@ ipcMain.handle('telemetry-send', async (_e, { event, data }) => {
       return { ok: false, reason: 'no_consent' };
     }
     // Check if user is authenticated with GitHub
-    const token = await rustBridge.call('github.get_token', {});
+    const tokenRes = await rustBridge.call('github.get_token', {});
+    const token = tokenRes && tokenRes.token;
     if (!token) return { ok: false, reason: 'not_authenticated' };
 
     // Build anonymous telemetry payload
     const payload = {
       event,
-      version: '0.2.0',
+      version: APP_VERSION,
       platform: process.platform,
       arch: process.arch,
       locale: (settings.general && settings.general.language) || 'en',
@@ -3015,29 +3076,144 @@ ipcMain.handle('telemetry-send', async (_e, { event, data }) => {
       data: data || {},
     };
 
-    // Send as a GitHub Gist (private, linked to user)
-    const resp = await net.fetch('https://api.github.com/gists', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + token,
-        'Accept': 'application/vnd.github+json',
-        'User-Agent': 'GitBrowser',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        description: 'GitBrowser Telemetry — ' + event,
-        public: false,
-        files: {
-          'telemetry.json': { content: JSON.stringify(payload, null, 2) },
+    // Format as readable text
+    const body = [
+      `**Event:** ${payload.event}`,
+      `**Version:** ${payload.version}`,
+      `**Platform:** ${payload.platform} (${payload.arch})`,
+      `**Locale:** ${payload.locale}`,
+      `**Time:** ${payload.timestamp}`,
+      payload.data && Object.keys(payload.data).length > 0
+        ? `\n**Details:**\n${Object.entries(payload.data).map(([k, v]) => `- ${k}: ${v}`).join('\n')}`
+        : '',
+    ].filter(Boolean).join('\n');
+
+    // Create Issue in public repo with "telemetry" label
+    const resp = await net.fetch(
+      `https://api.github.com/repos/${TELEMETRY_REPO}/issues`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'GitBrowser',
+          'Content-Type': 'application/json',
         },
-      }),
-    });
-    if (!resp.ok) return { ok: false, reason: 'api_error' };
+        body: JSON.stringify({
+          title: `[Telemetry] ${event}`,
+          body,
+          labels: ['telemetry'],
+        }),
+      }
+    );
+    if (!resp.ok) {
+      const errBody = await resp.text().catch(() => '');
+      return { ok: false, reason: 'api_error', status: resp.status, detail: errBody };
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, reason: e.message };
   }
 });
+
+// ─── Bug Report (user-submitted → GitHub Issue) ───
+ipcMain.handle('bug-report-send', async (_e, { description }) => {
+  try {
+    const tokenRes = await rustBridge.call('github.get_token', {});
+    const token = tokenRes && tokenRes.token;
+    if (!token) return { ok: false, reason: 'not_authenticated' };
+
+    const settings = await rustBridge.call('settings.get', {});
+    const locale = (settings && settings.general && settings.general.language) || 'en';
+
+    const body = [
+      `**Description:**\n${description}`,
+      '',
+      `**Version:** ${APP_VERSION}`,
+      `**Platform:** ${process.platform} (${process.arch})`,
+      `**Locale:** ${locale}`,
+      `**Time:** ${new Date().toISOString()}`,
+    ].join('\n');
+
+    const resp = await net.fetch(
+      `https://api.github.com/repos/${TELEMETRY_REPO}/issues`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Accept': 'application/vnd.github+json',
+          'User-Agent': 'GitBrowser',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: `[Bug Report] ${description.slice(0, 80)}`,
+          body,
+          labels: ['bug'],
+        }),
+      }
+    );
+    if (!resp.ok) {
+      const errBody = await resp.text().catch(() => '');
+      return { ok: false, reason: 'api_error', status: resp.status, detail: errBody };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e.message };
+  }
+});
+
+// ─── Crash/Error Dialog ───
+function showCrashReportDialog(win, errorInfo) {
+  if (!win || win.isDestroyed()) return;
+  const { dialog } = require('electron');
+  dialog.showMessageBox(win, {
+    type: 'warning',
+    title: 'Something went wrong',
+    message: 'It looks like something crashed. Would you like to send an error report to help us fix it?',
+    detail: errorInfo || '',
+    buttons: ['Send Report', 'Dismiss'],
+    defaultId: 0,
+    cancelId: 1,
+  }).then(async ({ response }) => {
+    if (response === 0) {
+      try {
+        const tokenRes = await rustBridge.call('github.get_token', {});
+        const token = tokenRes && tokenRes.token;
+        if (!token) return;
+
+        const body = [
+          `**Auto-detected crash/error**`,
+          '',
+          '```',
+          errorInfo || 'No details available',
+          '```',
+          '',
+          `**Version:** ${APP_VERSION}`,
+          `**Platform:** ${process.platform} (${process.arch})`,
+          `**Time:** ${new Date().toISOString()}`,
+        ].join('\n');
+
+        await net.fetch(
+          `https://api.github.com/repos/${TELEMETRY_REPO}/issues`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + token,
+              'Accept': 'application/vnd.github+json',
+              'User-Agent': 'GitBrowser',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              title: `[Crash] ${(errorInfo || 'Unknown error').slice(0, 80)}`,
+              body,
+              labels: ['bug', 'crash'],
+            }),
+          }
+        );
+      } catch {}
+    }
+  });
+}
 
 // Extensions
 ipcMain.handle('extension-list', async () => {

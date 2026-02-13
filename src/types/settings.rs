@@ -86,6 +86,8 @@ pub struct PrivacySettings {
     pub dns_provider: String,
     pub anti_fingerprinting: bool,
     pub clear_data_on_exit: bool,
+    #[serde(default)]
+    pub telemetry_consent: bool,
 }
 
 impl Default for PrivacySettings {
@@ -98,6 +100,7 @@ impl Default for PrivacySettings {
             dns_provider: "https://cloudflare-dns.com/dns-query".to_string(),
             anti_fingerprinting: true,
             clear_data_on_exit: false,
+            telemetry_consent: false,
         }
     }
 }

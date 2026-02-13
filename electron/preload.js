@@ -145,6 +145,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
 
   // Telemetry (consent-based)
   sendTelemetry: (event, data) => ipcRenderer.invoke('telemetry-send', { event, data }),
+  sendBugReport: (description) => ipcRenderer.invoke('bug-report-send', { description }),
 
   // Sidebar context menu (when collapsed, show via overlay)
   sidebarContextMenu: (x, y) => ipcRenderer.send('sidebar-context-menu', x, y),
