@@ -1,7 +1,13 @@
 const { app, BaseWindow, BrowserWindow, WebContentsView, ipcMain, session, Menu, nativeTheme, net, clipboard, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const rustBridge = require('./rust-bridge');
+
+// SEC-06: Generate a unique token per context menu invocation to prevent spoofing via console.log
+function generateCtxToken() {
+  return crypto.randomBytes(16).toString('hex');
+}
 
 // Disable Autofill CDP errors from DevTools
 app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication,AutofillEnableAccountWalletStorage');
@@ -38,21 +44,61 @@ function userDataPath(...segments) {
 let currentTheme = 'Dark'; // Track current theme
 let currentSearchEngine = 'google'; // Track current search engine
 
-let mainWindow = null;
-let toolbarView = null;
-let sidebarView = null;
-const tabs = new Map();
-let tabOrder = [];
-let activeTabId = null;
-let nextTabId = 1;
+// ─── Multi-window architecture ───
+// Each browser window (normal or private) is a WindowContext.
+// Global registry maps window IDs and webContents IDs to their context.
 const TOOLBAR_HEIGHT = 48;
 const SIDEBAR_WIDTH = 240;
-let sidebarCollapsed = false;
+const MAX_CLOSED_TABS = 20;
+
+const windowRegistry = new Map(); // windowId -> WindowContext
+const wcToWindow = new Map(); // webContents.id -> WindowContext (for IPC routing)
+let primaryWindowCtx = null; // The first/main window context
+let globalNextTabId = 1;
+
+class WindowContext {
+  constructor({ isPrivate = false, partition = null } = {}) {
+    this.id = 'win-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    this.isPrivate = isPrivate;
+    this.partition = partition || null;
+    this.baseWindow = null;
+    this.toolbarView = null;
+    this.sidebarView = null; // null for private windows
+    this.tabs = new Map();
+    this.tabOrder = [];
+    this.activeTabId = null;
+    this.sidebarCollapsed = false;
+    this.isHtmlFullscreen = false;
+    this.closedTabsStack = [];
+    this.closing = false;
+  }
+}
+
+// Resolve which WindowContext owns a given webContents (toolbar, sidebar, or tab)
+function getWindowCtx(sender) {
+  if (!sender) return primaryWindowCtx;
+  const wcId = sender.id;
+  if (wcToWindow.has(wcId)) return wcToWindow.get(wcId);
+  // Fallback: search all windows
+  for (const ctx of windowRegistry.values()) {
+    if (ctx.toolbarView && ctx.toolbarView.webContents.id === wcId) { wcToWindow.set(wcId, ctx); return ctx; }
+    if (ctx.sidebarView && ctx.sidebarView.webContents.id === wcId) { wcToWindow.set(wcId, ctx); return ctx; }
+    for (const [, tab] of ctx.tabs) {
+      if (tab.view.webContents.id === wcId) { wcToWindow.set(wcId, ctx); return ctx; }
+    }
+  }
+  return primaryWindowCtx;
+}
+
+// Convenience: get the "current" main window and its state (for backward compat in global handlers)
+function getMainWindow() { return primaryWindowCtx ? primaryWindowCtx.baseWindow : null; }
+
+// Legacy aliases — these point to the primary window context for code that hasn't been refactored
+// They are getter-based so they always reflect the current primary context
+Object.defineProperty(global, '__gbPrimaryCtx', { get: () => primaryWindowCtx });
+
 const downloads = new Map();
 let nextDownloadId = 1;
-const closedTabsStack = []; // Stack for reopening closed tabs (Ctrl+Shift+T)
-const MAX_CLOSED_TABS = 20;
-let isHtmlFullscreen = false; // Track HTML5 fullscreen (e.g. YouTube video)
 
 // ─── Picture-in-Picture state ───
 let pipView = null; // WebContentsView for PiP overlay
@@ -84,58 +130,118 @@ const NEEDS_PRELOAD = new Set([
   'gb://downloads', 'gb://ai', 'gb://github', 'gb://passwords', 'gb://extensions',
 ]);
 
-function createWindow() {
-  mainWindow = new BaseWindow({
-    width: 1280, height: 800,
-    title: 'GitBrowser',
-    backgroundColor: '#0a0e14',
+// Create a new browser window (normal or private)
+function createBrowserWindow({ isPrivate = false } = {}) {
+  const partition = isPrivate ? ('private-' + Date.now()) : null;
+  const ctx = new WindowContext({ isPrivate, partition });
+
+  ctx.baseWindow = new BaseWindow({
+    width: isPrivate ? 1100 : 1280,
+    height: isPrivate ? 700 : 800,
+    title: isPrivate ? 'GitBrowser — Private' : 'GitBrowser',
+    backgroundColor: isPrivate ? '#1a0a2e' : '#0a0e14',
     icon: resolvePath('resources', 'icons', 'app.ico'),
-    minWidth: 800, minHeight: 600,
+    minWidth: isPrivate ? 600 : 800,
+    minHeight: isPrivate ? 400 : 600,
     frame: false,
   });
 
-  // Sidebar view (left panel with tabs)
-  sidebarView = new WebContentsView({
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-  mainWindow.contentView.addChildView(sidebarView);
-  sidebarView.webContents.loadFile(path.join(__dirname, 'ui', 'sidebar.html'));
+  // Sidebar (only for normal windows)
+  if (!isPrivate) {
+    ctx.sidebarView = new WebContentsView({
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+    ctx.baseWindow.contentView.addChildView(ctx.sidebarView);
+    ctx.sidebarView.webContents.loadFile(path.join(__dirname, 'ui', 'sidebar.html'));
+    wcToWindow.set(ctx.sidebarView.webContents.id, ctx);
 
-  // Toolbar view (compact nav bar)
-  toolbarView = new WebContentsView({
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-  mainWindow.contentView.addChildView(toolbarView);
-  toolbarView.webContents.loadFile(path.join(__dirname, 'ui', 'toolbar.html'));
-
-  // Custom glass context menu for toolbar and sidebar via overlay view
-  // (injected menus get clipped by view bounds, so we use a full-window overlay)
-  toolbarView.webContents.on('context-menu', (e, params) => {
-    e.preventDefault();
-    const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
-    showOverlayContextMenu(toolbarView.webContents, params, sw, 0);
-  });
-  sidebarView.webContents.on('context-menu', (e) => {
-    e.preventDefault();
-    // Custom context menu handled inside sidebar.html
-  });
-
-  layoutViews();
-  mainWindow.on('resize', layoutViews);
-
-  restoreSession().then(ok => { if (!ok) createTab('gb://newtab'); });
-
-  if (process.argv.includes('--dev')) {
-    toolbarView.webContents.openDevTools({ mode: 'detach' });
+    ctx.sidebarView.webContents.on('context-menu', (e) => {
+      e.preventDefault();
+      // Custom context menu handled inside sidebar.html
+    });
   }
+
+  // Toolbar
+  ctx.toolbarView = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  ctx.baseWindow.contentView.addChildView(ctx.toolbarView);
+  ctx.toolbarView.webContents.loadFile(path.join(__dirname, 'ui', 'toolbar.html'));
+  wcToWindow.set(ctx.toolbarView.webContents.id, ctx);
+
+  // Custom glass context menu for toolbar via overlay view
+  ctx.toolbarView.webContents.on('context-menu', (e, params) => {
+    e.preventDefault();
+    const sw = ctx.sidebarView ? (ctx.sidebarCollapsed ? 48 : SIDEBAR_WIDTH) : 0;
+    showOverlayContextMenu(ctx, ctx.toolbarView.webContents, params, sw, 0);
+  });
+
+  // Register in global registry
+  windowRegistry.set(ctx.id, ctx);
+
+  // Layout
+  layoutViews(ctx);
+  ctx.baseWindow.on('resize', () => layoutViews(ctx));
+
+  // Window close handler
+  ctx.baseWindow.on('close', () => {
+    ctx.closing = true;
+    // Save session only for primary (non-private) window
+    if (!isPrivate && ctx === primaryWindowCtx) {
+      saveSession(ctx);
+    }
+    // Clean up all tabs
+    for (const [, { view }] of ctx.tabs) {
+      try { if (!view.webContents.isDestroyed()) { view.webContents.removeAllListeners(); view.webContents.close(); } } catch {}
+    }
+    ctx.tabs.clear();
+    ctx.tabOrder = [];
+    // Unregister webContents mappings
+    if (ctx.toolbarView) wcToWindow.delete(ctx.toolbarView.webContents.id);
+    if (ctx.sidebarView) wcToWindow.delete(ctx.sidebarView.webContents.id);
+    // Remove from registry
+    windowRegistry.delete(ctx.id);
+    // If this was the primary window, promote another normal window or null out
+    if (ctx === primaryWindowCtx) {
+      primaryWindowCtx = null;
+      for (const otherCtx of windowRegistry.values()) {
+        if (!otherCtx.isPrivate) { primaryWindowCtx = otherCtx; break; }
+      }
+    }
+    // Destroy telegram child window if closing primary
+    if (!isPrivate && telegramWin && !telegramWin.isDestroyed()) {
+      telegramWin.removeAllListeners('close');
+      telegramWin.destroy();
+      telegramWin = null;
+    }
+  });
+
+  if (process.argv.includes('--dev') && !isPrivate) {
+    ctx.toolbarView.webContents.openDevTools({ mode: 'detach' });
+  }
+
+  // Notify toolbar that this is a private window (for UI styling)
+  if (isPrivate) {
+    ctx.toolbarView.webContents.on('did-finish-load', () => {
+      ctx.toolbarView.webContents.send('private-mode', { isPrivate: true });
+    });
+  }
+
+  return ctx;
+}
+
+function createWindow() {
+  const ctx = createBrowserWindow({ isPrivate: false });
+  primaryWindowCtx = ctx;
+
   Menu.setApplicationMenu(null);
 
   // Register will-download once on the default session (not per-tab!)
@@ -148,7 +254,7 @@ function createWindow() {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          'Content-Security-Policy': ["default-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.github.com https://*.githubusercontent.com; font-src 'self' data:;"],
+          'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://api.github.com https://*.githubusercontent.com; font-src 'self' data:;"],
         },
       });
     } else {
@@ -156,7 +262,7 @@ function createWindow() {
     }
   });
 
-  setInterval(saveSession, 30000);
+  setInterval(() => saveSession(primaryWindowCtx), 30000);
   // Clean up old completed downloads every hour
   setInterval(() => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours
@@ -166,83 +272,82 @@ function createWindow() {
       }
     }
   }, 3600000);
-  mainWindow.on('close', () => {
-    saveSession();
-    // Destroy telegram child window so it doesn't block quit
-    if (telegramWin && !telegramWin.isDestroyed()) {
-      telegramWin.removeAllListeners('close');
-      telegramWin.destroy();
-      telegramWin = null;
-    }
-  });
+
+  restoreSession(ctx).then(ok => { if (!ok) createTab(ctx, 'gb://newtab'); });
 }
 
-function layoutViews() {
-  if (!mainWindow) return;
-  const { width: w, height: h } = mainWindow.getContentBounds();
+function layoutViews(ctx) {
+  if (!ctx || !ctx.baseWindow || ctx.baseWindow.isDestroyed()) return;
+  const { width: w, height: h } = ctx.baseWindow.getContentBounds();
 
-  if (isHtmlFullscreen) {
+  if (ctx.isHtmlFullscreen) {
     // Hide sidebar and toolbar, tab takes full window
-    if (sidebarView) sidebarView.setBounds({ x: -SIDEBAR_WIDTH, y: 0, width: SIDEBAR_WIDTH, height: h });
-    if (toolbarView) toolbarView.setBounds({ x: 0, y: -TOOLBAR_HEIGHT, width: w, height: TOOLBAR_HEIGHT });
-    if (activeTabId && tabs.has(activeTabId)) {
-      tabs.get(activeTabId).view.setBounds({ x: 0, y: 0, width: w, height: h });
+    if (ctx.sidebarView) ctx.sidebarView.setBounds({ x: -SIDEBAR_WIDTH, y: 0, width: SIDEBAR_WIDTH, height: h });
+    if (ctx.toolbarView) ctx.toolbarView.setBounds({ x: 0, y: -TOOLBAR_HEIGHT, width: w, height: TOOLBAR_HEIGHT });
+    if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+      ctx.tabs.get(ctx.activeTabId).view.setBounds({ x: 0, y: 0, width: w, height: h });
     }
     return;
   }
 
-  const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
-  if (sidebarView) sidebarView.setBounds({ x: 0, y: 0, width: sw, height: h });
-  if (toolbarView) toolbarView.setBounds({ x: sw, y: 0, width: w - sw, height: TOOLBAR_HEIGHT });
-  if (activeTabId && tabs.has(activeTabId)) {
-    tabs.get(activeTabId).view.setBounds({ x: sw, y: TOOLBAR_HEIGHT, width: w - sw, height: h - TOOLBAR_HEIGHT });
+  const sw = ctx.sidebarView ? (ctx.sidebarCollapsed ? 48 : SIDEBAR_WIDTH) : 0;
+  if (ctx.sidebarView) ctx.sidebarView.setBounds({ x: 0, y: 0, width: sw, height: h });
+  if (ctx.toolbarView) ctx.toolbarView.setBounds({ x: sw, y: 0, width: w - sw, height: TOOLBAR_HEIGHT });
+  if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+    ctx.tabs.get(ctx.activeTabId).view.setBounds({ x: sw, y: TOOLBAR_HEIGHT, width: w - sw, height: h - TOOLBAR_HEIGHT });
   }
 }
 
 // ─── Tab management ───
 
 // For internal pages (gb://...), switch to existing tab if already open
-function openOrSwitchTab(url) {
+function openOrSwitchTab(ctx, url) {
+  if (!ctx) ctx = primaryWindowCtx;
+  if (!ctx) return;
   if (url && url.startsWith('gb://') && url !== 'gb://newtab') {
-    for (const [id, tab] of tabs) {
+    for (const [id, tab] of ctx.tabs) {
       if (tab.url === url) {
-        switchTab(id);
+        switchTab(ctx, id);
         return;
       }
     }
   }
-  createTab(url);
+  createTab(ctx, url);
 }
 
-function createTab(url, activate = true) {
-  const id = 'tab-' + (nextTabId++);
+function createTab(ctx, url, activate = true) {
+  if (!ctx || ctx.closing) return null;
+  const id = 'tab-' + (globalNextTabId++);
   const needsPreload = NEEDS_PRELOAD.has(url);
-  const view = new WebContentsView({
-    webPreferences: {
-      contextIsolation: true,
-      sandbox: !needsPreload,
-      preload: needsPreload ? path.join(__dirname, 'preload.js') : undefined,
-    },
-  });
+  const webPrefs = {
+    contextIsolation: true,
+    sandbox: !needsPreload,
+    preload: needsPreload ? path.join(__dirname, 'preload.js') : undefined,
+  };
+  if (ctx.partition) webPrefs.partition = ctx.partition;
+
+  const view = new WebContentsView({ webPreferences: webPrefs });
 
   const tabData = { view, url: url || 'gb://newtab', title: getInternalTitle(url) || 'New Tab' };
-  tabs.set(id, tabData);
-  tabOrder.push(id);
+  ctx.tabs.set(id, tabData);
+  ctx.tabOrder.push(id);
+  wcToWindow.set(view.webContents.id, ctx);
 
   view.webContents.setWindowOpenHandler(({ url: newUrl }) => {
     if (newUrl && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) {
-      createTab(newUrl);
+      createTab(ctx, newUrl);
     }
     return { action: 'deny' };
   });
 
   view.webContents.on('page-title-updated', (_e, title) => {
+    if (ctx.closing) return;
     if (title.startsWith('__gb_navigate:')) {
-      navigateTab(id, normalizeUrl(title.substring('__gb_navigate:'.length)));
+      navigateTab(ctx, id, normalizeUrl(title.substring('__gb_navigate:'.length)));
       return;
     }
     if (title.startsWith('__gb_newtab:')) {
-      createTab(title.substring('__gb_newtab:'.length));
+      createTab(ctx, title.substring('__gb_newtab:'.length));
       return;
     }
     if (title.startsWith('__gb_save_password:')) {
@@ -254,9 +359,26 @@ function createTab(url, activate = true) {
             rustBridge.call('password.list', { url: data.url }).then(existing => {
               const alreadySaved = Array.isArray(existing) && existing.some(c => c.username === data.username);
               if (!alreadySaved) {
-                sendToToolbar('toast', { message: cmL('passwords.save_prompt', 'Save password?'), action: 'save-password', data });
+                sendToToolbar(ctx, 'toast', { message: cmL('passwords.save_prompt', 'Save password?'), action: 'save-password', data });
               }
             }).catch(() => {});
+          }
+        }).catch(() => {});
+      } catch { /* ignore */ }
+      return;
+    }
+    // SEC-04: Handle autofill request — decrypt password on demand and inject into page
+    if (title.startsWith('__gb_autofill_req:')) {
+      try {
+        const { id: credId } = JSON.parse(title.substring('__gb_autofill_req:'.length));
+        rustBridge.call('password.decrypt', { id: credId }).then(res => {
+          if (res && res.password) {
+            view.webContents.executeJavaScript(`
+              (function() {
+                var pw = document.querySelector('input[type="password"]');
+                if (pw) { pw.value = ${JSON.stringify(res.password)}; pw.dispatchEvent(new Event('input', {bubbles:true})); }
+              })();
+            `).catch(() => {});
           }
         }).catch(() => {});
       } catch { /* ignore */ }
@@ -265,43 +387,43 @@ function createTab(url, activate = true) {
     // Don't override internal page titles
     if (!isInternalUrl(tabData.url)) {
       tabData.title = title;
-      // Record history when we have the real title
+      // Record history when we have the real title (skip for private windows)
       const url = tabData.url;
-      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      if (!ctx.isPrivate && url && (url.startsWith('http://') || url.startsWith('https://'))) {
         rustBridge.call('history.record', { url, title }).catch(() => {});
       }
     }
-    sendTabsUpdate();
+    sendTabsUpdate(ctx);
   });
 
   view.webContents.on('did-navigate', (_e, navUrl) => {
     tabData.url = navUrl;
-    sendToToolbar('tab-url-updated', { id, url: navUrl });
-    sendTabsUpdate();
+    sendToToolbar(ctx, 'tab-url-updated', { id, url: navUrl });
+    sendTabsUpdate(ctx);
   });
   view.webContents.on('did-navigate-in-page', (_e, navUrl) => {
     tabData.url = navUrl;
-    sendToToolbar('tab-url-updated', { id, url: navUrl });
+    sendToToolbar(ctx, 'tab-url-updated', { id, url: navUrl });
   });
 
   view.webContents.on('did-start-loading', () => {
-    sendToToolbar('tab-loading', { id, loading: true });
+    sendToToolbar(ctx, 'tab-loading', { id, loading: true });
     // Inject document_start content scripts early
     if (!isInternalUrl(tabData.url)) {
       injectContentScripts(view.webContents, tabData.url, 'document_start');
     }
   });
-  view.webContents.on('did-stop-loading', () => sendToToolbar('tab-loading', { id, loading: false }));
+  view.webContents.on('did-stop-loading', () => sendToToolbar(ctx, 'tab-loading', { id, loading: false }));
 
   // Audio state tracking
-  view.webContents.on('media-started-playing', () => sendTabsUpdate());
-  view.webContents.on('media-paused', () => sendTabsUpdate());
+  view.webContents.on('media-started-playing', () => sendTabsUpdate(ctx));
+  view.webContents.on('media-paused', () => sendTabsUpdate(ctx));
 
   // Favicon
   view.webContents.on('page-favicon-updated', (_e, favicons) => {
     if (favicons && favicons.length > 0) {
       tabData.favicon = favicons[0];
-      sendTabsUpdate();
+      sendTabsUpdate(ctx);
     }
   });
 
@@ -345,41 +467,42 @@ function createTab(url, activate = true) {
     const key = input.key.toLowerCase();
 
     if (ctrl && !shift) {
-      if (key === '=' || key === '+') { e.preventDefault(); ipcMain.emit('zoom-in', { sender: null }); }
-      else if (key === '-') { e.preventDefault(); ipcMain.emit('zoom-out', { sender: null }); }
-      else if (key === '0') { e.preventDefault(); ipcMain.emit('zoom-reset', { sender: null }); }
-      else if (key === 't') { e.preventDefault(); createTab('gb://newtab'); }
-      else if (key === 'w') { e.preventDefault(); if (activeTabId) closeTab(activeTabId); }
-      else if (key === 'l') { e.preventDefault(); if (toolbarView) toolbarView.webContents.executeJavaScript('document.getElementById("url").focus();document.getElementById("url").select();').catch(() => {}); }
-      else if (key === 'f') { e.preventDefault(); if (toolbarView) toolbarView.webContents.executeJavaScript('toggleFindBar()').catch(() => {}); }
-      else if (key === 'r') { e.preventDefault(); if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.reload(); }
-      else if (key === 'd') { e.preventDefault(); ipcMain.emit('add-bookmark-current', { sender: null }); }
-      else if (key === 'tab') { e.preventDefault(); ipcMain.emit('next-tab', { sender: null }); }
+      if (key === '=' || key === '+') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() + 0.5); sendToToolbar(ctx, 'zoom-changed', { level: wc2.getZoomLevel() }); }
+      else if (key === '-') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() - 0.5); sendToToolbar(ctx, 'zoom-changed', { level: wc2.getZoomLevel() }); }
+      else if (key === '0') { e.preventDefault(); view.webContents.setZoomLevel(0); sendToToolbar(ctx, 'zoom-changed', { level: 0 }); }
+      else if (key === 't') { e.preventDefault(); createTab(ctx, 'gb://newtab'); }
+      else if (key === 'w') { e.preventDefault(); if (ctx.activeTabId) closeTab(ctx, ctx.activeTabId); }
+      else if (key === 'l') { e.preventDefault(); if (ctx.toolbarView) ctx.toolbarView.webContents.executeJavaScript('document.getElementById("url").focus();document.getElementById("url").select();').catch(() => {}); }
+      else if (key === 'f') { e.preventDefault(); if (ctx.toolbarView) ctx.toolbarView.webContents.executeJavaScript('toggleFindBar()').catch(() => {}); }
+      else if (key === 'r') { e.preventDefault(); if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) ctx.tabs.get(ctx.activeTabId).view.webContents.reload(); }
+      else if (key === 'd') { e.preventDefault(); addBookmarkCurrent(ctx); }
+      else if (key === 'n') { e.preventDefault(); openNewWindow(); }
+      else if (key === 'tab') { e.preventDefault(); cycleTab(ctx, 1); }
     }
     if (ctrl && shift) {
-      if (key === 'tab') { e.preventDefault(); ipcMain.emit('prev-tab', { sender: null }); }
-      else if (key === 't') { e.preventDefault(); ipcMain.emit('reopen-closed-tab', { sender: null }); }
-      else if (key === 'n') { e.preventDefault(); ipcMain.emit('open-private-window', { sender: null }); }
+      if (key === 'tab') { e.preventDefault(); cycleTab(ctx, -1); }
+      else if (key === 't') { e.preventDefault(); reopenClosedTab(ctx); }
+      else if (key === 'n') { e.preventDefault(); openPrivateWindow(); }
     }
     if (!ctrl && !shift) {
-      if (key === 'f5') { e.preventDefault(); if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.reload(); }
-      else if (key === 'f11') { e.preventDefault(); if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen()); }
+      if (key === 'f5') { e.preventDefault(); if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) ctx.tabs.get(ctx.activeTabId).view.webContents.reload(); }
+      else if (key === 'f11') { e.preventDefault(); if (ctx.baseWindow) ctx.baseWindow.setFullScreen(!ctx.baseWindow.isFullScreen()); }
     }
   });
 
   // HTML5 fullscreen (e.g. YouTube video player)
   view.webContents.on('enter-html-full-screen', () => {
-    isHtmlFullscreen = true;
-    layoutViews();
+    ctx.isHtmlFullscreen = true;
+    layoutViews(ctx);
   });
   view.webContents.on('leave-html-full-screen', () => {
-    isHtmlFullscreen = false;
-    layoutViews();
+    ctx.isHtmlFullscreen = false;
+    layoutViews(ctx);
   });
 
   loadUrlInView(view, url);
-  if (activate) switchTab(id);
-  sendTabsUpdate();
+  if (activate) switchTab(ctx, id);
+  sendTabsUpdate(ctx);
   return id;
 }
 
@@ -415,11 +538,11 @@ function loadUrlInView(view, url) {
   }
 }
 
-function switchTab(id) {
-  if (!tabs.has(id)) return;
+function switchTab(ctx, id) {
+  if (!ctx || !ctx.tabs.has(id)) return;
   // Auto PiP: if leaving a tab with playing video, trigger PiP
-  if (activeTabId && tabs.has(activeTabId) && activeTabId !== id) {
-    const leavingView = tabs.get(activeTabId).view;
+  if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId) && ctx.activeTabId !== id) {
+    const leavingView = ctx.tabs.get(ctx.activeTabId).view;
     if (!leavingView.webContents.isDestroyed()) {
       leavingView.webContents.executeJavaScript(`
         (function() {
@@ -430,11 +553,11 @@ function switchTab(id) {
         })();
       `).catch(() => {});
     }
-    mainWindow.contentView.removeChildView(tabs.get(activeTabId).view);
+    ctx.baseWindow.contentView.removeChildView(ctx.tabs.get(ctx.activeTabId).view);
   }
   // If returning to the tab that has PiP, exit PiP
-  if (activeTabId !== id && tabs.has(id)) {
-    const returningView = tabs.get(id).view;
+  if (ctx.activeTabId !== id && ctx.tabs.has(id)) {
+    const returningView = ctx.tabs.get(id).view;
     if (!returningView.webContents.isDestroyed()) {
       returningView.webContents.executeJavaScript(`
         (function() {
@@ -445,59 +568,68 @@ function switchTab(id) {
       `).catch(() => {});
     }
   }
-  activeTabId = id;
-  const { view, url } = tabs.get(id);
-  mainWindow.contentView.addChildView(view);
-  layoutViews();
-  sendTabsUpdate();
+  ctx.activeTabId = id;
+  const { view, url } = ctx.tabs.get(id);
+  ctx.baseWindow.contentView.addChildView(view);
+  layoutViews(ctx);
+  sendTabsUpdate(ctx);
   const realUrl = view.webContents.getURL() || url || '';
-  sendToToolbar('tab-url-updated', { id, url: realUrl });
-  sendToToolbar('zoom-changed', { level: view.webContents.getZoomLevel() });
-  sendToToolbar('close-find', {});
+  sendToToolbar(ctx, 'tab-url-updated', { id, url: realUrl });
+  sendToToolbar(ctx, 'zoom-changed', { level: view.webContents.getZoomLevel() });
+  sendToToolbar(ctx, 'close-find', {});
 }
 
-function closeTab(id) {
-  if (!tabs.has(id)) return;
-  const { view, url, title } = tabs.get(id);
+function closeTab(ctx, id) {
+  if (!ctx || !ctx.tabs.has(id)) return;
+  const { view, url, title } = ctx.tabs.get(id);
   // Save to closed tabs stack for Ctrl+Shift+T
   if (url && url !== 'gb://newtab') {
-    closedTabsStack.push({ url, title });
-    if (closedTabsStack.length > MAX_CLOSED_TABS) closedTabsStack.shift();
+    ctx.closedTabsStack.push({ url, title });
+    if (ctx.closedTabsStack.length > MAX_CLOSED_TABS) ctx.closedTabsStack.shift();
   }
-  mainWindow.contentView.removeChildView(view);
+  ctx.baseWindow.contentView.removeChildView(view);
   // Clean up all event listeners before closing
+  wcToWindow.delete(view.webContents.id);
   view.webContents.removeAllListeners();
   view.webContents.close();
-  tabs.delete(id);
-  tabOrder = tabOrder.filter(tid => tid !== id);
-  if (activeTabId === id) {
-    activeTabId = null;
-    if (tabOrder.length > 0) switchTab(tabOrder[tabOrder.length - 1]);
-    else createTab('gb://newtab');
+  ctx.tabs.delete(id);
+  ctx.tabOrder = ctx.tabOrder.filter(tid => tid !== id);
+  if (ctx.activeTabId === id) {
+    ctx.activeTabId = null;
+    if (ctx.tabOrder.length > 0) switchTab(ctx, ctx.tabOrder[ctx.tabOrder.length - 1]);
+    else {
+      // If private window and no tabs left, close the window
+      if (ctx.isPrivate) {
+        ctx.baseWindow.close();
+        return;
+      }
+      createTab(ctx, 'gb://newtab');
+    }
   }
-  sendTabsUpdate();
+  sendTabsUpdate(ctx);
 }
 
-function navigateTab(id, url) {
-  if (!tabs.has(id)) return;
-  const tabData = tabs.get(id);
+function navigateTab(ctx, id, url) {
+  if (!ctx || !ctx.tabs.has(id)) return;
+  const tabData = ctx.tabs.get(id);
   // If navigating to internal page that needs preload but current view doesn't have it,
   // create a new tab instead
   if (NEEDS_PRELOAD.has(url)) {
-    closeTab(id);
-    createTab(url);
+    closeTab(ctx, id);
+    createTab(ctx, url);
     return;
   }
   tabData.url = url;
   tabData.title = getInternalTitle(url) || tabData.title;
   loadUrlInView(tabData.view, url);
-  sendTabsUpdate();
+  sendTabsUpdate(ctx);
 }
 
-function sendTabsUpdate() {
-  const data = tabOrder.map(id => {
-    if (!tabs.has(id)) return null;
-    const t = tabs.get(id);
+function sendTabsUpdate(ctx) {
+  if (!ctx || ctx.closing) return;
+  const data = ctx.tabOrder.map(id => {
+    if (!ctx.tabs.has(id)) return null;
+    const t = ctx.tabs.get(id);
     const realUrl = t.view.webContents.getURL() || t.url;
     // Resolve back to gb:// URL for internal pages
     let url = realUrl;
@@ -511,16 +643,47 @@ function sendTabsUpdate() {
     }
     return { id, title, url, favicon: t.favicon || null, audible: t.view.webContents.isCurrentlyAudible(), muted: t.view.webContents.isAudioMuted() };
   }).filter(Boolean);
-  sendToToolbar('tabs-update', { tabs: data, activeId: activeTabId });
+  sendToToolbar(ctx, 'tabs-update', { tabs: data, activeId: ctx.activeTabId });
 }
 
-function sendToToolbar(channel, data) {
-  if (toolbarView && !toolbarView.webContents.isDestroyed()) {
-    toolbarView.webContents.send(channel, data);
+function sendToToolbar(ctx, channel, data) {
+  if (!ctx) return;
+  if (ctx.toolbarView && !ctx.toolbarView.webContents.isDestroyed()) {
+    ctx.toolbarView.webContents.send(channel, data);
   }
-  if (sidebarView && !sidebarView.webContents.isDestroyed()) {
-    sidebarView.webContents.send(channel, data);
+  if (ctx.sidebarView && !ctx.sidebarView.webContents.isDestroyed()) {
+    ctx.sidebarView.webContents.send(channel, data);
   }
+}
+
+// Helper functions for keyboard shortcuts
+function cycleTab(ctx, direction) {
+  if (!ctx || ctx.tabOrder.length < 2) return;
+  const idx = ctx.tabOrder.indexOf(ctx.activeTabId);
+  const next = (idx + direction + ctx.tabOrder.length) % ctx.tabOrder.length;
+  switchTab(ctx, ctx.tabOrder[next]);
+}
+
+function reopenClosedTab(ctx) {
+  if (!ctx || ctx.closedTabsStack.length === 0) return;
+  const { url } = ctx.closedTabsStack.pop();
+  createTab(ctx, url);
+}
+
+function addBookmarkCurrent(ctx) {
+  if (!ctx || !ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) return;
+  const t = ctx.tabs.get(ctx.activeTabId);
+  rustBridge.call('bookmark.add', { url: t.url, title: t.title }).catch(() => {});
+}
+
+function openPrivateWindow() {
+  const ctx = createBrowserWindow({ isPrivate: true });
+  createTab(ctx, 'gb://newtab');
+}
+
+function openNewWindow() {
+  const ctx = createBrowserWindow({ isPrivate: false });
+  createTab(ctx, 'gb://newtab');
 }
 
 // ─── Downloads ───
@@ -553,7 +716,7 @@ function handleDownload(item) {
   };
   downloads.set(dlId, dl);
   downloadItems.set(dlId, item);
-  sendToToolbar('download-started', dl);
+  sendToToolbar(primaryWindowCtx, 'download-started', dl);
 
   let lastBytes = 0;
   let lastTime = Date.now();
@@ -576,7 +739,7 @@ function handleDownload(item) {
       lastTime = now;
     }
 
-    sendToToolbar('download-progress', {
+    sendToToolbar(primaryWindowCtx, 'download-progress', {
       id: dlId, receivedBytes: dl.receivedBytes, totalBytes: dl.totalBytes,
       state, paused: dl.paused, speed: dl.speed, eta: dl.eta,
     });
@@ -588,23 +751,27 @@ function handleDownload(item) {
     dl.speed = 0;
     dl.eta = 0;
     downloadItems.delete(dlId);
-    sendToToolbar('download-done', { id: dlId, state, savePath: dl.savePath, filename: dl.filename });
+    sendToToolbar(primaryWindowCtx, 'download-done', { id: dlId, state, savePath: dl.savePath, filename: dl.filename });
     if (state === 'completed') {
-      sendToToolbar('toast', { message: cmL('downloads.completed', 'Downloaded') + ': ' + dl.filename, action: 'open-download', data: { savePath: dl.savePath } });
+      sendToToolbar(primaryWindowCtx, 'toast', { message: cmL('downloads.completed', 'Downloaded') + ': ' + dl.filename, action: 'open-download', data: { savePath: dl.savePath } });
     }
   });
 }
 
 // ─── Session ───
 
-function saveSession() {
+function saveSession(ctx) {
+  if (!ctx) ctx = primaryWindowCtx;
+  if (!ctx || ctx.isPrivate) return;
   try {
-    const data = tabOrder.map(id => {
-      if (!tabs.has(id)) return null;
-      const t = tabs.get(id);
+    const data = ctx.tabOrder.map(id => {
+      if (!ctx.tabs.has(id)) return null;
+      const t = ctx.tabs.get(id);
       const url = t.view.webContents.getURL() || t.url;
       return { url, title: t.title };
     }).filter(Boolean);
+    // Skip save if RPC is not ready (e.g. during shutdown)
+    if (!rustBridge.ready) return;
     // Save to Rust RPC
     rustBridge.call('session.save', { tabs: data }).catch(() => {});
     // Save encrypted local backup
@@ -612,13 +779,12 @@ function saveSession() {
     rustBridge.call('github.encrypt_sync', { data: jsonStr }).then(encrypted => {
       try { fs.writeFileSync(userDataPath('session.json'), JSON.stringify(encrypted), 'utf8'); } catch {}
     }).catch(() => {
-      // Fallback: save unencrypted if encryption fails
-      try { fs.writeFileSync(userDataPath('session.json'), jsonStr, 'utf8'); } catch {}
+      // SEC-02: Do NOT fallback to unencrypted save
     });
   } catch {}
 }
 
-async function restoreSession() {
+async function restoreSession(ctx) {
   try {
     let result = await rustBridge.call('session.restore', {});
     // Fallback to local file
@@ -636,7 +802,7 @@ async function restoreSession() {
       } catch {}
     }
     if (Array.isArray(result) && result.length > 0) {
-      result.forEach((t, i) => createTab(t.url || 'gb://newtab', i === result.length - 1));
+      result.forEach((t, i) => createTab(ctx, t.url || 'gb://newtab', i === result.length - 1));
       return true;
     }
   } catch {}
@@ -645,324 +811,122 @@ async function restoreSession() {
 
 // ─── IPC handlers ───
 
-ipcMain.on('new-tab', () => createTab('gb://newtab'));
-ipcMain.on('close-tab', (_e, id) => closeTab(id));
-ipcMain.on('switch-tab', (_e, id) => switchTab(id));
-ipcMain.on('next-tab', () => {
-  if (tabOrder.length < 2) return;
-  const idx = tabOrder.indexOf(activeTabId);
-  const next = (idx + 1) % tabOrder.length;
-  switchTab(tabOrder[next]);
-});
-ipcMain.on('prev-tab', () => {
-  if (tabOrder.length < 2) return;
-  const idx = tabOrder.indexOf(activeTabId);
-  const prev = (idx - 1 + tabOrder.length) % tabOrder.length;
-  switchTab(tabOrder[prev]);
-});
-ipcMain.on('reopen-closed-tab', () => {
-  if (closedTabsStack.length > 0) {
-    const { url } = closedTabsStack.pop();
-    createTab(url);
-  }
-});
-ipcMain.on('reorder-tab', (_e, { fromId, toId }) => {
-  const fromIdx = tabOrder.indexOf(fromId);
-  const toIdx = tabOrder.indexOf(toId);
+ipcMain.on('new-tab', (e) => { const ctx = getWindowCtx(e.sender); createTab(ctx, 'gb://newtab'); });
+ipcMain.on('close-tab', (e, id) => { const ctx = getWindowCtx(e.sender); closeTab(ctx, id); });
+ipcMain.on('switch-tab', (e, id) => { const ctx = getWindowCtx(e.sender); switchTab(ctx, id); });
+ipcMain.on('next-tab', (e) => { const ctx = getWindowCtx(e.sender); cycleTab(ctx, 1); });
+ipcMain.on('prev-tab', (e) => { const ctx = getWindowCtx(e.sender); cycleTab(ctx, -1); });
+ipcMain.on('reopen-closed-tab', (e) => { const ctx = getWindowCtx(e.sender); reopenClosedTab(ctx); });
+ipcMain.on('reorder-tab', (e, { fromId, toId }) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx) return;
+  const fromIdx = ctx.tabOrder.indexOf(fromId);
+  const toIdx = ctx.tabOrder.indexOf(toId);
   if (fromIdx >= 0 && toIdx >= 0) {
-    tabOrder.splice(fromIdx, 1);
-    tabOrder.splice(toIdx, 0, fromId);
-    sendTabsUpdate();
+    ctx.tabOrder.splice(fromIdx, 1);
+    ctx.tabOrder.splice(toIdx, 0, fromId);
+    sendTabsUpdate(ctx);
   }
 });
-ipcMain.on('go-back', () => { if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.goBack(); });
-ipcMain.on('go-forward', () => { if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.goForward(); });
-ipcMain.on('reload', () => { if (activeTabId && tabs.has(activeTabId)) tabs.get(activeTabId).view.webContents.reload(); });
-ipcMain.on('get-tabs', () => sendTabsUpdate());
-ipcMain.on('toggle-mute', (_e, id) => {
-  if (tabs.has(id)) {
-    const wc = tabs.get(id).view.webContents;
+ipcMain.on('go-back', (e) => { const ctx = getWindowCtx(e.sender); if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) ctx.tabs.get(ctx.activeTabId).view.webContents.goBack(); });
+ipcMain.on('go-forward', (e) => { const ctx = getWindowCtx(e.sender); if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) ctx.tabs.get(ctx.activeTabId).view.webContents.goForward(); });
+ipcMain.on('reload', (e) => { const ctx = getWindowCtx(e.sender); if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) ctx.tabs.get(ctx.activeTabId).view.webContents.reload(); });
+ipcMain.on('get-tabs', (e) => { const ctx = getWindowCtx(e.sender); sendTabsUpdate(ctx); });
+ipcMain.on('toggle-mute', (e, id) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.tabs.has(id)) {
+    const wc = ctx.tabs.get(id).view.webContents;
     wc.setAudioMuted(!wc.isAudioMuted());
-    sendTabsUpdate();
+    sendTabsUpdate(ctx);
   }
 });
 
 // Zoom
-ipcMain.on('zoom-in', () => {
-  if (activeTabId && tabs.has(activeTabId)) {
-    const wc = tabs.get(activeTabId).view.webContents;
+ipcMain.on('zoom-in', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+    const wc = ctx.tabs.get(ctx.activeTabId).view.webContents;
     wc.setZoomLevel(wc.getZoomLevel() + 0.5);
-    sendToToolbar('zoom-changed', { level: wc.getZoomLevel() });
+    sendToToolbar(ctx, 'zoom-changed', { level: wc.getZoomLevel() });
   }
 });
-ipcMain.on('zoom-out', () => {
-  if (activeTabId && tabs.has(activeTabId)) {
-    const wc = tabs.get(activeTabId).view.webContents;
+ipcMain.on('zoom-out', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+    const wc = ctx.tabs.get(ctx.activeTabId).view.webContents;
     wc.setZoomLevel(wc.getZoomLevel() - 0.5);
-    sendToToolbar('zoom-changed', { level: wc.getZoomLevel() });
+    sendToToolbar(ctx, 'zoom-changed', { level: wc.getZoomLevel() });
   }
 });
-ipcMain.on('zoom-reset', () => {
-  if (activeTabId && tabs.has(activeTabId)) {
-    tabs.get(activeTabId).view.webContents.setZoomLevel(0);
-    sendToToolbar('zoom-changed', { level: 0 });
+ipcMain.on('zoom-reset', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+    ctx.tabs.get(ctx.activeTabId).view.webContents.setZoomLevel(0);
+    sendToToolbar(ctx, 'zoom-changed', { level: 0 });
   }
 });
 
 // Fullscreen
-ipcMain.on('toggle-fullscreen', () => {
-  if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
+ipcMain.on('toggle-fullscreen', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.baseWindow) ctx.baseWindow.setFullScreen(!ctx.baseWindow.isFullScreen());
 });
 
 // Window controls (frameless)
-ipcMain.on('win-minimize', () => {
-  if (mainWindow) mainWindow.minimize();
+ipcMain.on('win-minimize', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.baseWindow) ctx.baseWindow.minimize();
 });
-ipcMain.on('win-maximize', () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) mainWindow.unmaximize();
-    else mainWindow.maximize();
+ipcMain.on('win-maximize', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.baseWindow) {
+    if (ctx.baseWindow.isMaximized()) ctx.baseWindow.unmaximize();
+    else ctx.baseWindow.maximize();
   }
 });
-ipcMain.on('win-close', () => {
-  if (mainWindow) mainWindow.close();
+ipcMain.on('win-close', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.baseWindow) ctx.baseWindow.close();
 });
 
 // Sidebar toggle — instant bounds change, CSS handles visual smoothness inside sidebar
-ipcMain.on('toggle-sidebar', () => {
-  sidebarCollapsed = !sidebarCollapsed;
-  layoutViews();
+ipcMain.on('toggle-sidebar', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx) return;
+  ctx.sidebarCollapsed = !ctx.sidebarCollapsed;
+  layoutViews(ctx);
   // Notify sidebar view about collapse state
-  if (sidebarView && !sidebarView.webContents.isDestroyed()) {
-    sidebarView.webContents.send('sidebar-collapsed', { collapsed: sidebarCollapsed });
+  if (ctx.sidebarView && !ctx.sidebarView.webContents.isDestroyed()) {
+    ctx.sidebarView.webContents.send('sidebar-collapsed', { collapsed: ctx.sidebarCollapsed });
   }
 });
 
-// Private mode
-ipcMain.on('open-private-window', () => {
-  const privWin = new BaseWindow({
-    width: 1100, height: 700, title: 'GitBrowser — Private',
-    backgroundColor: '#1a0a2e', minWidth: 600, minHeight: 400,
-    frame: false,
-  });
-  const privToolbar = new WebContentsView({
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true, nodeIntegration: false,
-    },
-  });
-  privWin.contentView.addChildView(privToolbar);
-  privToolbar.webContents.loadFile(path.join(__dirname, 'ui', 'toolbar.html'));
+// Private mode — now uses the unified multi-window architecture
+ipcMain.on('open-private-window', () => openPrivateWindow());
 
-  // Glass context menu for private toolbar
-  privToolbar.webContents.on('context-menu', (e, params) => {
-    e.preventDefault();
-    buildPageContextMenu(privToolbar.webContents, params);
-  });
-
-  // Private window tab management
-  const privTabs = new Map();
-  let privTabOrder = [];
-  let privActiveTabId = null;
-  let privNextTabId = 1;
-  let privHtmlFullscreen = false;
-  // Ephemeral partition — no 'persist:' prefix means in-memory only, destroyed when all webContents using it are closed
-  const privPartition = 'private-' + Date.now();
-  let privClosing = false;
-
-  function privCreateTab(url, activate = true) {
-    if (privClosing || privWin.isDestroyed()) return null;
-    const id = 'priv-tab-' + (privNextTabId++);
-    const view = new WebContentsView({
-      webPreferences: {
-        contextIsolation: true,
-        partition: privPartition,
-      },
-    });
-    const tabData = { view, url: url || 'gb://newtab', title: 'New Tab' };
-    privTabs.set(id, tabData);
-    privTabOrder.push(id);
-
-    view.webContents.on('page-title-updated', (_e, title) => {
-      if (privClosing) return;
-      if (title.startsWith('__gb_navigate:')) {
-        const navUrl = normalizeUrl(title.substring('__gb_navigate:'.length));
-        tabData.url = navUrl;
-        if (navUrl.startsWith('http://') || navUrl.startsWith('https://')) view.webContents.loadURL(navUrl);
-        else {
-          const pg = INTERNAL_PAGES[navUrl];
-          if (pg) view.webContents.loadFile(path.join(__dirname, 'ui', pg));
-        }
-        if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-url-updated', { id, url: navUrl });
-        privSendTabsUpdate();
-        return;
-      }
-      if (title.startsWith('__gb_newtab:')) { privCreateTab(title.substring('__gb_newtab:'.length)); return; }
-      tabData.title = title;
-      privSendTabsUpdate();
-    });
-    view.webContents.on('did-navigate', (_e, navUrl) => {
-      tabData.url = navUrl;
-      if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-url-updated', { id, url: navUrl });
-      privSendTabsUpdate();
-    });
-    view.webContents.on('did-start-loading', () => { if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-loading', { id, loading: true }); });
-    view.webContents.on('did-stop-loading', () => { if (!privClosing && !privToolbar.webContents.isDestroyed()) privToolbar.webContents.send('tab-loading', { id, loading: false }); });
-    view.webContents.on('page-favicon-updated', (_e, favicons) => {
-      if (favicons && favicons.length > 0) { tabData.favicon = favicons[0]; privSendTabsUpdate(); }
-    });
-    view.webContents.setWindowOpenHandler(({ url: newUrl }) => {
-      if (newUrl && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) privCreateTab(newUrl);
-      return { action: 'deny' };
-    });
-
-    // HTML5 fullscreen
-    view.webContents.on('enter-html-full-screen', () => { privHtmlFullscreen = true; layoutPriv(); });
-    view.webContents.on('leave-html-full-screen', () => { privHtmlFullscreen = false; layoutPriv(); });
-
-    // Glass context menu for private tabs
-    view.webContents.on('context-menu', (e, params) => {
-      e.preventDefault();
-      buildPageContextMenu(view.webContents, params);
-    });
-
-    // Keyboard shortcuts for private tabs
-    view.webContents.on('before-input-event', (e, input) => {
-      if (input.type !== 'keyDown') return;
-      const ctrl = input.control || input.meta;
-      const shift = input.shift;
-      const key = input.key.toLowerCase();
-      if (ctrl && !shift) {
-        if (key === '=' || key === '+') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() + 0.5); }
-        else if (key === '-') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() - 0.5); }
-        else if (key === '0') { e.preventDefault(); view.webContents.setZoomLevel(0); }
-        else if (key === 't') { e.preventDefault(); privCreateTab('gb://newtab'); }
-        else if (key === 'w') { e.preventDefault(); if (privActiveTabId) privCloseTab(privActiveTabId); }
-        else if (key === 'r') { e.preventDefault(); view.webContents.reload(); }
-      }
-      if (!ctrl && !shift) {
-        if (key === 'f5') { e.preventDefault(); view.webContents.reload(); }
-        if (key === 'f11') { e.preventDefault(); if (privWin && !privWin.isDestroyed()) privWin.setFullScreen(!privWin.isFullScreen()); }
-      }
-    });
-
-    const page = INTERNAL_PAGES[url];
-    if (page) view.webContents.loadFile(path.join(__dirname, 'ui', page));
-    else if (url && (url.startsWith('http://') || url.startsWith('https://'))) view.webContents.loadURL(url);
-    else view.webContents.loadFile(path.join(__dirname, 'ui', 'newtab.html'));
-
-    if (activate) privSwitchTab(id);
-    privSendTabsUpdate();
-    return id;
-  }
-
-  function privSwitchTab(id) {
-    if (privClosing || !privTabs.has(id)) return;
-    if (privActiveTabId && privTabs.has(privActiveTabId)) {
-      privWin.contentView.removeChildView(privTabs.get(privActiveTabId).view);
-    }
-    privActiveTabId = id;
-    const { view } = privTabs.get(id);
-    privWin.contentView.addChildView(view);
-    layoutPriv();
-    privSendTabsUpdate();
-  }
-
-  function privCloseTab(id) {
-    if (privClosing || !privTabs.has(id)) return;
-    const { view } = privTabs.get(id);
-    privWin.contentView.removeChildView(view);
-    view.webContents.close();
-    privTabs.delete(id);
-    privTabOrder = privTabOrder.filter(t => t !== id);
-    if (privActiveTabId === id) {
-      if (privTabOrder.length > 0) privSwitchTab(privTabOrder[privTabOrder.length - 1]);
-      else privWin.close();
-    }
-    privSendTabsUpdate();
-  }
-
-  function privSendTabsUpdate() {
-    if (privClosing || privToolbar.webContents.isDestroyed()) return;
-    const list = privTabOrder.map(tid => {
-      if (!privTabs.has(tid)) return null;
-      const t = privTabs.get(tid);
-      return { id: tid, title: t.title, url: t.url, active: tid === privActiveTabId, favicon: t.favicon, audible: t.view.webContents.isCurrentlyAudible(), muted: t.view.webContents.isAudioMuted() };
-    }).filter(Boolean);
-    privToolbar.webContents.send('tabs-update', list);
-  }
-
-  function layoutPriv() {
-    if (privClosing || privWin.isDestroyed()) return;
-    const { width: w, height: h } = privWin.getContentBounds();
-    if (privHtmlFullscreen) {
-      privToolbar.setBounds({ x: 0, y: -TOOLBAR_HEIGHT, width: w, height: TOOLBAR_HEIGHT });
-      if (privActiveTabId && privTabs.has(privActiveTabId)) {
-        privTabs.get(privActiveTabId).view.setBounds({ x: 0, y: 0, width: w, height: h });
-      }
-      return;
-    }
-    privToolbar.setBounds({ x: 0, y: 0, width: w, height: TOOLBAR_HEIGHT });
-    if (privActiveTabId && privTabs.has(privActiveTabId)) {
-      privTabs.get(privActiveTabId).view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width: w, height: h - TOOLBAR_HEIGHT });
-    }
-  }
-
-  // Handle IPC from private toolbar
-  privToolbar.webContents.on('ipc-message', (_e, channel, ...args) => {
-    if (privClosing) return;
-    if (channel === 'new-tab') privCreateTab('gb://newtab');
-    else if (channel === 'close-tab') privCloseTab(args[0]);
-    else if (channel === 'switch-tab') privSwitchTab(args[0]);
-    else if (channel === 'navigate') {
-      if (privActiveTabId && privTabs.has(privActiveTabId)) {
-        const url = normalizeUrl(args[0]);
-        const tabData = privTabs.get(privActiveTabId);
-        tabData.url = url;
-        if (url.startsWith('http://') || url.startsWith('https://')) tabData.view.webContents.loadURL(url);
-        else {
-          const page = INTERNAL_PAGES[url];
-          if (page) tabData.view.webContents.loadFile(path.join(__dirname, 'ui', page));
-        }
-      }
-    }
-    else if (channel === 'go-back') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.goBack(); }
-    else if (channel === 'go-forward') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.goForward(); }
-    else if (channel === 'reload') { if (privActiveTabId && privTabs.has(privActiveTabId)) privTabs.get(privActiveTabId).view.webContents.reload(); }
-    else if (channel === 'win-minimize') privWin.minimize();
-    else if (channel === 'win-maximize') { if (privWin.isMaximized()) privWin.unmaximize(); else privWin.maximize(); }
-    else if (channel === 'win-close') privWin.close();
-  });
-
-  privCreateTab('gb://newtab');
-  layoutPriv();
-  privWin.on('resize', layoutPriv);
-  privWin.on('close', () => {
-    privClosing = true;
-    // Clean up all private tabs
-    for (const [, { view }] of privTabs) { try { if (!view.webContents.isDestroyed()) view.webContents.close(); } catch {} }
-    privTabs.clear();
-    privTabOrder = [];
-  });
-});
+// Open new normal window
+ipcMain.on('open-new-window', () => openNewWindow());
 
 // Find in page
-ipcMain.on('find-in-page', (_e, text) => {
-  if (activeTabId && tabs.has(activeTabId)) {
-    if (text) tabs.get(activeTabId).view.webContents.findInPage(text);
-    else tabs.get(activeTabId).view.webContents.stopFindInPage('clearSelection');
+ipcMain.on('find-in-page', (e, text) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+    if (text) ctx.tabs.get(ctx.activeTabId).view.webContents.findInPage(text);
+    else ctx.tabs.get(ctx.activeTabId).view.webContents.stopFindInPage('clearSelection');
   }
 });
-ipcMain.on('stop-find', () => {
-  if (activeTabId && tabs.has(activeTabId)) {
-    tabs.get(activeTabId).view.webContents.stopFindInPage('clearSelection');
+ipcMain.on('stop-find', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+    ctx.tabs.get(ctx.activeTabId).view.webContents.stopFindInPage('clearSelection');
   }
 });
 
 // Reader mode
-ipcMain.handle('reader-extract', async () => {
-  if (!activeTabId || !tabs.has(activeTabId)) return { error: 'No active tab' };
-  const wc = tabs.get(activeTabId).view.webContents;
+ipcMain.handle('reader-extract', async (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx || !ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) return { error: 'No active tab' };
+  const wc = ctx.tabs.get(ctx.activeTabId).view.webContents;
   try {
     const result = await wc.executeJavaScript(`
       (function() {
@@ -1008,19 +972,21 @@ ipcMain.handle('reader-extract', async () => {
 });
 
 // Open internal pages as tabs
-ipcMain.on('open-settings', () => openOrSwitchTab('gb://settings'));
-ipcMain.on('open-bookmarks', () => openOrSwitchTab('gb://bookmarks'));
-ipcMain.on('open-history', () => openOrSwitchTab('gb://history'));
-ipcMain.on('open-downloads', () => openOrSwitchTab('gb://downloads'));
-ipcMain.on('open-ai', () => openOrSwitchTab('gb://ai'));
-ipcMain.on('open-github', () => openOrSwitchTab('gb://github'));
+ipcMain.on('open-settings', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://settings'); });
+ipcMain.on('open-bookmarks', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://bookmarks'); });
+ipcMain.on('open-history', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://history'); });
+ipcMain.on('open-downloads', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://downloads'); });
+ipcMain.on('open-ai', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://ai'); });
+ipcMain.on('open-github', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://github'); });
 
 // Sidebar context menu (overlay in tab view when sidebar is collapsed)
-ipcMain.on('sidebar-context-menu', (_e, clientX, clientY) => {
-  if (!activeTabId || !tabs.has(activeTabId)) return;
-  const tabView = tabs.get(activeTabId).view;
+ipcMain.on('sidebar-context-menu', (e, clientX, clientY) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx || !ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) return;
+  const tabView = ctx.tabs.get(ctx.activeTabId).view;
   const tabBounds = tabView.getBounds();
-  const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
+  const sw = ctx.sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
+  const sbToken = generateCtxToken();
 
   const items = [
     { label: cmL('tabs.new_tab', 'Новая вкладка'), action: 'sb_new_tab' },
@@ -1078,7 +1044,7 @@ ipcMain.on('sidebar-context-menu', (_e, clientX, clientY) => {
       if(it.type==='separator'){var s=document.createElement('div');s.className='sbi-sep';menu.appendChild(s);return;}
       var d=document.createElement('div');d.className='sbi';
       d.textContent=it.label;
-      d.onclick=function(){closeMenu();console.log('__gb_sb_ctx:'+JSON.stringify({action:it.action}));};
+      d.onclick=function(){closeMenu();console.log('__gb_sb_ctx:${sbToken}:'+JSON.stringify({action:it.action}));};
       menu.appendChild(d);
     });
     document.documentElement.appendChild(menu);
@@ -1092,19 +1058,20 @@ ipcMain.on('sidebar-context-menu', (_e, clientX, clientY) => {
 
   const sbCtxHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_sb_ctx:')) return;
+    const prefix = '__gb_sb_ctx:' + sbToken + ':';
+    if (!message || !message.startsWith(prefix)) return;
     tabView.webContents.removeListener('console-message', sbCtxHandler);
     try {
-      const { action } = JSON.parse(message.replace('__gb_sb_ctx:', ''));
-      if (action === 'sb_new_tab') createTab('gb://newtab');
-      else if (action === 'sb_bookmarks') openOrSwitchTab('gb://bookmarks');
-      else if (action === 'sb_history') openOrSwitchTab('gb://history');
-      else if (action === 'sb_downloads') openOrSwitchTab('gb://downloads');
-      else if (action === 'sb_passwords') openOrSwitchTab('gb://passwords');
-      else if (action === 'sb_extensions') openOrSwitchTab('gb://extensions');
-      else if (action === 'sb_ai') openOrSwitchTab('gb://ai');
-      else if (action === 'sb_github') openOrSwitchTab('gb://github');
-      else if (action === 'sb_settings') openOrSwitchTab('gb://settings');
+      const { action } = JSON.parse(message.replace(prefix, ''));
+      if (action === 'sb_new_tab') createTab(ctx, 'gb://newtab');
+      else if (action === 'sb_bookmarks') openOrSwitchTab(ctx, 'gb://bookmarks');
+      else if (action === 'sb_history') openOrSwitchTab(ctx, 'gb://history');
+      else if (action === 'sb_downloads') openOrSwitchTab(ctx, 'gb://downloads');
+      else if (action === 'sb_passwords') openOrSwitchTab(ctx, 'gb://passwords');
+      else if (action === 'sb_extensions') openOrSwitchTab(ctx, 'gb://extensions');
+      else if (action === 'sb_ai') openOrSwitchTab(ctx, 'gb://ai');
+      else if (action === 'sb_github') openOrSwitchTab(ctx, 'gb://github');
+      else if (action === 'sb_settings') openOrSwitchTab(ctx, 'gb://settings');
     } catch {}
   };
   tabView.webContents.on('console-message', sbCtxHandler);
@@ -1112,7 +1079,10 @@ ipcMain.on('sidebar-context-menu', (_e, clientX, clientY) => {
 });
 
 // Sidebar quick nav context menus (glass style in tab view)
-ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
+ipcMain.on('sidebar-quick-nav-menu', (e, navId, clientX, clientY) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx) return;
+  const navToken = generateCtxToken();
   const menuActions = {
     bookmarks: [
       { label: cmL('bookmarks.add', 'Добавить закладку'), action: 'nav_bookmark_add' },
@@ -1147,19 +1117,19 @@ ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
   if (!items) return;
 
   // If no active tab, fallback to native menu
-  if (!activeTabId || !tabs.has(activeTabId)) {
+  if (!ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) {
     // Build native menu as fallback
     const nativeItems = items.map(it => ({
       label: it.label,
-      click: () => handleNavAction(it.action, it.data),
+      click: () => handleNavAction(ctx, it.action, it.data),
     }));
     Menu.buildFromTemplate(nativeItems).popup();
     return;
   }
 
-  const tabView = tabs.get(activeTabId).view;
+  const tabView = ctx.tabs.get(ctx.activeTabId).view;
   const tabBounds = tabView.getBounds();
-  const sidebarBounds = sidebarView ? sidebarView.getBounds() : { x: 0, y: 0 };
+  const sidebarBounds = ctx.sidebarView ? ctx.sidebarView.getBounds() : { x: 0, y: 0 };
 
   // Convert sidebar-local coords to tab-local coords
   const tabLocalX = (clientX || 0) + sidebarBounds.x - tabBounds.x;
@@ -1217,7 +1187,7 @@ ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
       d.dataset.data=it.data||'';
       d.onclick=function(){
         ov.remove();menu.remove();style.remove();
-        console.log('__gb_nav_ctx:'+JSON.stringify({action:this.dataset.action,data:this.dataset.data}));
+        console.log('__gb_nav_ctx:${navToken}:'+JSON.stringify({action:this.dataset.action,data:this.dataset.data}));
       };
       menu.appendChild(d);
     });
@@ -1233,22 +1203,23 @@ ipcMain.on('sidebar-quick-nav-menu', (_e, navId, clientX, clientY) => {
 
   const navHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_nav_ctx:')) return;
+    const prefix = '__gb_nav_ctx:' + navToken + ':';
+    if (!message || !message.startsWith(prefix)) return;
     tabView.webContents.removeListener('console-message', navHandler);
     try {
-      const { action, data } = JSON.parse(message.replace('__gb_nav_ctx:', ''));
-      handleNavAction(action, data);
+      const { action, data } = JSON.parse(message.replace(prefix, ''));
+      handleNavAction(ctx, action, data);
     } catch {}
   };
   tabView.webContents.on('console-message', navHandler);
   setTimeout(() => { try { tabView.webContents.removeListener('console-message', navHandler); } catch {} }, 10000);
 });
 
-function handleNavAction(action, data) {
-  if (action === 'nav_open') openOrSwitchTab(data);
+function handleNavAction(ctx, action, data) {
+  if (action === 'nav_open') openOrSwitchTab(ctx, data);
   else if (action === 'nav_bookmark_add') {
-    if (activeTabId && tabs.has(activeTabId)) {
-      const t = tabs.get(activeTabId);
+    if (ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+      const t = ctx.tabs.get(ctx.activeTabId);
       rustBridge.call('bookmark.add', { url: t.url, title: t.title }).catch(() => {});
     }
   }
@@ -1264,8 +1235,10 @@ let _pageCtxConsoleHandler = null;
 // ─── Toolbar "More" menu ───
 let _prevMoreHandler = null;
 let _prevMoreWc = null;
-ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
-  if (!activeTabId || !tabs.has(activeTabId)) return;
+ipcMain.on('toolbar-more-menu', (e, clientX, clientY) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx || !ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) return;
+  const moreToken = generateCtxToken();
   // Clean up previous listener to prevent duplicate handling
   if (_prevMoreHandler && _prevMoreWc) {
     try { _prevMoreWc.removeListener('console-message', _prevMoreHandler); } catch {}
@@ -1274,6 +1247,7 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
 
   const items = [
     { label: cmL('toolbar.new_tab', 'Новая вкладка'), accel: 'Ctrl+T', action: 'nav_open', data: 'gb://newtab', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"/></svg>' },
+    { label: cmL('toolbar.new_window', 'Новое окно'), accel: 'Ctrl+N', action: 'more_new_window', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 1.5a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm12.5 11.5H1.75A1.75 1.75 0 0 1 0 11.25v-9.5C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13ZM3 15a.75.75 0 0 1 .75-.75h8.5a.75.75 0 0 1 0 1.5h-8.5A.75.75 0 0 1 3 15Z"/></svg>' },
     { label: cmL('toolbar.private_window', 'Приватное окно'), accel: 'Ctrl+Shift+N', action: 'more_private', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M.143 2.31a.75.75 0 0 1 1.047-.167l14.5 10.5a.75.75 0 1 1-.88 1.214l-2.248-1.628C11.346 13.19 9.792 13.75 8 13.75c-4.706 0-7.5-4.25-7.5-5.75 0-.85.99-2.57 2.727-3.88L.976 2.357a.75.75 0 0 1-.833-1.047ZM4.09 4.97C2.6 6.05 1.75 7.38 1.75 8c0 .718 1.842 4.25 6.25 4.25 1.34 0 2.498-.38 3.438-.96L9.978 10.2A2.75 2.75 0 0 1 6.3 6.536L4.09 4.97ZM8 2.25c.94 0 1.81.18 2.6.47a.75.75 0 0 1-.5 1.415A6.7 6.7 0 0 0 8 3.75c-.94 0-1.76.18-2.46.46l-.01-.01C6.24 3.68 7.08 2.25 8 2.25Zm4.39 3.07a.75.75 0 0 1 1.046.2c.844 1.18 1.314 2.33 1.314 2.98 0 .47-.26 1.15-.76 1.89a.75.75 0 0 1-1.24-.84c.38-.56.5-.96.5-1.05 0-.28-.32-1.12-1.06-2.13a.75.75 0 0 1 .2-1.05Z"/></svg>' },
     { type: 'separator' },
     { label: cmL('toolbar.find', 'Найти на странице'), accel: 'Ctrl+F', action: 'more_find', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"/></svg>' },
@@ -1293,9 +1267,9 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
     { label: cmL('settings.title', 'Настройки'), accel: 'Ctrl+,', action: 'nav_open', data: 'gb://settings', icon: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.1-.303c.652-.18 1.34.03 1.73.545a8.042 8.042 0 0 1 1.088 1.89c.238.572.1 1.252-.337 1.71l-.812.804a.395.395 0 0 0-.112.29c.013.26.013.52 0 .78a.394.394 0 0 0 .112.29l.812.804c.436.458.575 1.138.337 1.71a8.04 8.04 0 0 1-1.088 1.89c-.39.515-1.078.725-1.73.545l-1.1-.303a.352.352 0 0 0-.3.071 5.834 5.834 0 0 1-.667.386.35.35 0 0 0-.212.224l-.289 1.106c-.169.646-.715 1.196-1.458 1.26a8.28 8.28 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106a.35.35 0 0 0-.212-.224 5.738 5.738 0 0 1-.668-.386.352.352 0 0 0-.299-.071l-1.1.303c-.652.18-1.34-.03-1.73-.545a8.042 8.042 0 0 1-1.088-1.89c-.238-.572-.1-1.252.337-1.71l.812-.804a.395.395 0 0 0 .112-.29 6.046 6.046 0 0 1 0-.78.394.394 0 0 0-.112-.29l-.812-.804c-.436-.458-.575-1.138-.337-1.71a8.04 8.04 0 0 1 1.088-1.89c.39-.515 1.078-.725 1.73-.545l1.1.303a.352.352 0 0 0 .3-.071c.214-.143.437-.272.667-.386a.35.35 0 0 0 .212-.224l.289-1.106C6.01.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.046-.219.29-.411.6-.573.925-.014.028-.042.112.017.182l.812.803c.407.404.63.953.63 1.52s-.223 1.116-.63 1.52l-.812.803c-.059.07-.031.154-.017.182.162.325.354.634.573.925.02.03.086.077.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.16.107.327.204.5.29.449.222.851.628.998 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.03.175-.016.195-.046.219-.29.411-.6.573-.925.014-.028.042-.112-.017-.182l-.812-.803a2.15 2.15 0 0 1-.63-1.52c0-.567.223-1.116.63-1.52l.812-.803c.059-.07.031-.154.017-.182a6.588 6.588 0 0 0-.573-.925c-.02-.03-.086-.077-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.5-.29c-.449-.222-.851-.628-.998-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"/></svg>' },
   ];
 
-  const tabView = tabs.get(activeTabId).view;
+  const tabView = ctx.tabs.get(ctx.activeTabId).view;
   const tabBounds = tabView.getBounds();
-  const toolbarBounds = toolbarView ? toolbarView.getBounds() : { x: 0, y: 0 };
+  const toolbarBounds = ctx.toolbarView ? ctx.toolbarView.getBounds() : { x: 0, y: 0 };
 
   const tabLocalX = (clientX || 0) + toolbarBounds.x - tabBounds.x;
   const tabLocalY = (clientY || 0) + toolbarBounds.y - tabBounds.y;
@@ -1362,7 +1336,7 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
       d.dataset.data=it.data||'';
       d.onclick=function(){
         ov.remove();menu.remove();style.remove();
-        console.log('__gb_more_ctx:'+JSON.stringify({action:this.dataset.action,data:this.dataset.data}));
+        console.log('__gb_more_ctx:${moreToken}:'+JSON.stringify({action:this.dataset.action,data:this.dataset.data}));
       };
       menu.appendChild(d);
     });
@@ -1378,20 +1352,22 @@ ipcMain.on('toolbar-more-menu', (_e, clientX, clientY) => {
 
   const moreHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_more_ctx:')) return;
+    const prefix = '__gb_more_ctx:' + moreToken + ':';
+    if (!message || !message.startsWith(prefix)) return;
     tabView.webContents.removeListener('console-message', moreHandler);
     try {
-      const { action, data } = JSON.parse(message.replace('__gb_more_ctx:', ''));
-      if (action === 'nav_open') openOrSwitchTab(data);
-      else if (action === 'more_private') { ipcMain.emit('open-private-window', { sender: null }); }
-      else if (action === 'more_find') { if (toolbarView) toolbarView.webContents.executeJavaScript('toggleFindBar()').catch(() => {}); }
-      else if (action === 'more_zoom_in') { if (activeTabId && tabs.has(activeTabId)) { const wc = tabs.get(activeTabId).view.webContents; wc.setZoomLevel(wc.getZoomLevel() + 1); sendToToolbar('zoom-changed', { level: wc.getZoomLevel() }); } }
-      else if (action === 'more_zoom_out') { if (activeTabId && tabs.has(activeTabId)) { const wc = tabs.get(activeTabId).view.webContents; wc.setZoomLevel(wc.getZoomLevel() - 1); sendToToolbar('zoom-changed', { level: wc.getZoomLevel() }); } }
-      else if (action === 'more_zoom_reset') { if (activeTabId && tabs.has(activeTabId)) { const wc = tabs.get(activeTabId).view.webContents; wc.setZoomLevel(0); sendToToolbar('zoom-changed', { level: 0 }); } }
-      else if (action === 'more_fullscreen') { if (mainWindow) { mainWindow.isFullScreen() ? mainWindow.setFullScreen(false) : mainWindow.setFullScreen(true); } }
+      const { action, data } = JSON.parse(message.replace(prefix, ''));
+      if (action === 'nav_open') openOrSwitchTab(ctx, data);
+      else if (action === 'more_new_window') { openNewWindow(); }
+      else if (action === 'more_private') { openPrivateWindow(); }
+      else if (action === 'more_find') { if (ctx.toolbarView) ctx.toolbarView.webContents.executeJavaScript('toggleFindBar()').catch(() => {}); }
+      else if (action === 'more_zoom_in') { if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) { const wc = ctx.tabs.get(ctx.activeTabId).view.webContents; wc.setZoomLevel(wc.getZoomLevel() + 1); sendToToolbar(ctx, 'zoom-changed', { level: wc.getZoomLevel() }); } }
+      else if (action === 'more_zoom_out') { if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) { const wc = ctx.tabs.get(ctx.activeTabId).view.webContents; wc.setZoomLevel(wc.getZoomLevel() - 1); sendToToolbar(ctx, 'zoom-changed', { level: wc.getZoomLevel() }); } }
+      else if (action === 'more_zoom_reset') { if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) { const wc = ctx.tabs.get(ctx.activeTabId).view.webContents; wc.setZoomLevel(0); sendToToolbar(ctx, 'zoom-changed', { level: 0 }); } }
+      else if (action === 'more_fullscreen') { if (ctx.baseWindow) { ctx.baseWindow.isFullScreen() ? ctx.baseWindow.setFullScreen(false) : ctx.baseWindow.setFullScreen(true); } }
       else if (action === 'more_reader') {
         // Reader mode — trigger via existing IPC
-        sendToToolbar('toast', { message: 'Режим чтения (в разработке)' });
+        sendToToolbar(ctx, 'toast', { message: 'Режим чтения (в разработке)' });
       }
     } catch {}
   };
@@ -1406,9 +1382,10 @@ let _prevGhHandler = null;
 let _prevGhWc = null;
 
 function handleGhAction(action, data) {
-  if (action === 'gh_open' && data) createTab(data);
-  else if (action === 'gh_dashboard') createTab('gb://github');
-  else if (action === 'gh_login') createTab('gb://github');
+  const ctx = primaryWindowCtx;
+  if (action === 'gh_open' && data) createTab(ctx, data);
+  else if (action === 'gh_dashboard') createTab(ctx, 'gb://github');
+  else if (action === 'gh_login') createTab(ctx, 'gb://github');
   else if (action === 'gh_logout') {
     githubToken = null;
     ghNotifCount = 0;
@@ -1416,12 +1393,14 @@ function handleGhAction(action, data) {
     if (ghNotifInterval) { clearInterval(ghNotifInterval); ghNotifInterval = null; }
     rustBridge.call('github.logout', {}).catch(() => {});
     rustBridge.call('secret.delete', { key: 'github_token' }).catch(() => {});
-    sendToToolbar('gh-notif-count', { count: 0 });
+    sendToToolbar(primaryWindowCtx, 'gh-notif-count', { count: 0 });
   }
 }
 
-ipcMain.on('toolbar-github-menu', async (_e, clientX, clientY) => {
-  if (!activeTabId || !tabs.has(activeTabId)) return;
+ipcMain.on('toolbar-github-menu', async (e, clientX, clientY) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx || !ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) return;
+  const ghToken = generateCtxToken();
   if (_prevGhHandler && _prevGhWc) {
     try { _prevGhWc.removeListener('console-message', _prevGhHandler); } catch {}
     _prevGhHandler = null; _prevGhWc = null;
@@ -1469,9 +1448,9 @@ ipcMain.on('toolbar-github-menu', async (_e, clientX, clientY) => {
     items.push({ type: 'login' });
   }
 
-  const tabView = tabs.get(activeTabId).view;
+  const tabView = ctx.tabs.get(ctx.activeTabId).view;
   const tabBounds = tabView.getBounds();
-  const toolbarBounds = toolbarView ? toolbarView.getBounds() : { x: 0, y: 0 };
+  const toolbarBounds = ctx.toolbarView ? ctx.toolbarView.getBounds() : { x: 0, y: 0 };
   const tabLocalX = (clientX || 0) + toolbarBounds.x - tabBounds.x;
   const tabLocalY = (clientY || 0) + toolbarBounds.y - tabBounds.y;
   const menuData = JSON.stringify(items);
@@ -1523,7 +1502,7 @@ ipcMain.on('toolbar-github-menu', async (_e, clientX, clientY) => {
     document.documentElement.appendChild(style);
     function closeMenu(){var o=document.getElementById('__gb-ctx-ov');if(o)o.remove();var m=document.getElementById('__gb-ctx');if(m)m.remove();var s=document.getElementById('__gb-ctx-style');if(s)s.remove();}
     var hasIpc=!!(window.gitbrowser&&window.gitbrowser.ctxAction);
-    function doAction(act,dat){closeMenu();setTimeout(function(){if(hasIpc)window.gitbrowser.ctxAction(act,dat);else console.log('__gb_gh_ctx:'+JSON.stringify({action:act,data:dat}));},50);}
+    function doAction(act,dat){closeMenu();setTimeout(function(){if(hasIpc)window.gitbrowser.ctxAction(act,dat);else console.log('__gb_gh_ctx:${ghToken}:'+JSON.stringify({action:act,data:dat}));},50);}
     var ov=document.createElement('div');ov.id='__gb-ctx-ov';ov.onclick=closeMenu;ov.oncontextmenu=function(e){e.preventDefault();closeMenu();};
     document.documentElement.appendChild(ov);
     var menu=document.createElement('div');menu.id='__gb-ctx';
@@ -1555,11 +1534,12 @@ ipcMain.on('toolbar-github-menu', async (_e, clientX, clientY) => {
 
   const ghHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_gh_ctx:')) return;
+    const prefix = '__gb_gh_ctx:' + ghToken + ':';
+    if (!message || !message.startsWith(prefix)) return;
     tabView.webContents.removeListener('console-message', ghHandler);
     _prevGhHandler = null; _prevGhWc = null;
     try {
-      const { action, data } = JSON.parse(message.replace('__gb_gh_ctx:', ''));
+      const { action, data } = JSON.parse(message.replace(prefix, ''));
       handleGhAction(action, data);
     } catch {}
   };
@@ -1569,22 +1549,27 @@ ipcMain.on('toolbar-github-menu', async (_e, clientX, clientY) => {
   setTimeout(() => { try { tabView.webContents.removeListener('console-message', ghHandler); } catch {} if (_prevGhHandler === ghHandler) { _prevGhHandler = null; _prevGhWc = null; } }, 10000);
 });
 
-ipcMain.on('navigate', (_e, input) => {
-  if (!activeTabId) return;
-  navigateTab(activeTabId, normalizeUrl(input));
+ipcMain.on('navigate', (e, input) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx || !ctx.activeTabId) return;
+  const url = normalizeUrl(input);
+  // SEC-05: Block dangerous URL schemes
+  if (isBlockedUrl(url)) return;
+  navigateTab(ctx, ctx.activeTabId, url);
 });
 
 // Bookmark
-ipcMain.on('add-bookmark', async (_e, data) => {
+ipcMain.on('add-bookmark', async (e, data) => {
+  const ctx = getWindowCtx(e.sender);
   try {
     // If title is empty, get it from the active tab
     let title = data.title;
-    if (!title && activeTabId && tabs.has(activeTabId)) {
-      title = tabs.get(activeTabId).title || '';
+    if (!title && ctx && ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) {
+      title = ctx.tabs.get(ctx.activeTabId).title || '';
     }
     await rustBridge.call('bookmark.add', { url: data.url, title });
-    sendToToolbar('toast', { message: cmL('bookmarks.added_toast', 'Bookmark added') });
-  } catch { sendToToolbar('toast', { message: cmL('bookmarks.failed_toast', 'Failed to add bookmark') }); }
+    sendToToolbar(ctx, 'toast', { message: cmL('bookmarks.added_toast', 'Bookmark added') });
+  } catch { sendToToolbar(ctx, 'toast', { message: cmL('bookmarks.failed_toast', 'Failed to add bookmark') }); }
 });
 
 ipcMain.handle('bookmark-list', async () => {
@@ -1594,7 +1579,7 @@ ipcMain.handle('bookmark-search', async (_e, query) => {
   try { return await rustBridge.call('bookmark.search', { query }); } catch { return []; }
 });
 ipcMain.on('bookmark-delete', async (_e, id) => {
-  try { await rustBridge.call('bookmark.delete', { id }); sendToToolbar('toast', { message: cmL('bookmarks.removed_toast', 'Bookmark removed') }); } catch {}
+  try { await rustBridge.call('bookmark.delete', { id }); sendToToolbar(primaryWindowCtx, 'toast', { message: cmL('bookmarks.removed_toast', 'Bookmark removed') }); } catch {}
 });
 
 // History
@@ -1604,8 +1589,9 @@ ipcMain.handle('history-recent', async () => {
 ipcMain.handle('history-search', async (_e, query) => {
   try { return await rustBridge.call('history.search', { query }); } catch { return []; }
 });
-ipcMain.on('history-clear', async () => {
-  try { await rustBridge.call('history.clear', {}); sendToToolbar('toast', { message: cmL('history.cleared', 'History cleared') }); } catch {}
+ipcMain.on('history-clear', async (e) => {
+  const ctx = getWindowCtx(e.sender);
+  try { await rustBridge.call('history.clear', {}); sendToToolbar(ctx, 'toast', { message: cmL('history.cleared', 'History cleared') }); } catch {}
 });
 ipcMain.on('history-delete', async (_e, id) => {
   try { await rustBridge.call('history.delete', { id }); } catch {}
@@ -1633,6 +1619,14 @@ ipcMain.handle('get-locale-data', async () => {
   }
 });
 ipcMain.handle('settings-set', async (_e, { key, value }) => {
+  // Broadcast visibility changes immediately (before Rust call, so UI updates even if backend fails)
+  if (key === 'appearance.show_telegram') {
+    sendToToolbar(primaryWindowCtx, 'telegram-btn-visible', { visible: !!value });
+    if (!value && telegramVisible) hideTelegram();
+  }
+  if (key === 'appearance.show_github') {
+    sendToToolbar(primaryWindowCtx, 'gh-btn-visible', { visible: !!value });
+  }
   try {
     const result = await rustBridge.call('settings.set', { key, value });
     // Broadcast theme change to all views
@@ -1642,9 +1636,11 @@ ipcMain.handle('settings-set', async (_e, { key, value }) => {
     // Broadcast font size change to all views
     if (key === 'appearance.font_size') {
       const size = parseInt(value) || 14;
-      for (const [, tabData] of tabs) {
-        if (!tabData.view.webContents.isDestroyed()) {
-          tabData.view.webContents.setZoomFactor(size / 14);
+      for (const ctx of windowRegistry.values()) {
+        for (const [, tabData] of ctx.tabs) {
+          if (!tabData.view.webContents.isDestroyed()) {
+            tabData.view.webContents.setZoomFactor(size / 14);
+          }
         }
       }
     }
@@ -1652,25 +1648,18 @@ ipcMain.handle('settings-set', async (_e, { key, value }) => {
     if (key === 'appearance.accent_color') {
       const color = value || '#3b82f6';
       const css = `:root{--accent-fg:${color};--accent-emphasis:${color};--accent-glow:${color}55}`;
-      sendToToolbar('accent-changed', { color, css });
-      for (const [, tabData] of tabs) {
-        if (!tabData.view.webContents.isDestroyed() && isInternalUrl(tabData.url)) {
-          tabData.view.webContents.insertCSS(css).catch(() => {});
+      for (const ctx of windowRegistry.values()) {
+        sendToToolbar(ctx, 'accent-changed', { color, css });
+        for (const [, tabData] of ctx.tabs) {
+          if (!tabData.view.webContents.isDestroyed() && isInternalUrl(tabData.url)) {
+            tabData.view.webContents.insertCSS(css).catch(() => {});
+          }
         }
       }
     }
     // Cache search engine
     if (key === 'general.default_search_engine') {
       currentSearchEngine = value || 'google';
-    }
-    // Broadcast telegram button visibility
-    if (key === 'appearance.show_telegram') {
-      sendToToolbar('telegram-btn-visible', { visible: !!value });
-      if (!value && telegramVisible) hideTelegram();
-    }
-    // Broadcast GitHub button visibility
-    if (key === 'appearance.show_github') {
-      sendToToolbar('gh-btn-visible', { visible: !!value });
     }
     // Reload locale for context menu when language changes
     if (key === 'general.language') {
@@ -1689,11 +1678,18 @@ ipcMain.on('download-open-file', (_e, filepath) => { const { shell } = require('
 ipcMain.on('download-show-folder', (_e, filepath) => { const { shell } = require('electron'); shell.showItemInFolder(filepath); });
 
 // Navigation from internal pages
-ipcMain.on('open-url', (_e, url) => {
-  if (activeTabId) navigateTab(activeTabId, url);
-  else createTab(url);
+ipcMain.on('open-url', (e, url) => {
+  // SEC-05: Block dangerous URL schemes
+  if (isBlockedUrl(url)) return;
+  const ctx = getWindowCtx(e.sender);
+  if (ctx && ctx.activeTabId) navigateTab(ctx, ctx.activeTabId, url);
+  else if (ctx) createTab(ctx, url);
 });
-ipcMain.on('open-url-new-tab', (_e, url) => createTab(url));
+ipcMain.on('open-url-new-tab', (e, url) => {
+  if (isBlockedUrl(url)) return;
+  const ctx = getWindowCtx(e.sender);
+  createTab(ctx, url);
+});
 
 // ─── AI Assistant (main process to bypass CORS) ───
 
@@ -1737,15 +1733,16 @@ const CLEAR_ALL_OVERLAYS_JS = `
 
 // Shows a custom glass context menu in the active tab view (which is large enough)
 // by converting coordinates from the source view to the tab view coordinate space.
-function showOverlayContextMenu(sourceWc, params, viewOffsetX, viewOffsetY) {
+function showOverlayContextMenu(ctx, sourceWc, params, viewOffsetX, viewOffsetY) {
   // We need an active tab to host the menu
-  if (!activeTabId || !tabs.has(activeTabId)) {
+  if (!ctx || !ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) {
     // Fallback to native menu if no tab is open
     buildNativeContextMenu(sourceWc, params);
     return;
   }
 
-  const tabView = tabs.get(activeTabId).view;
+  const overlayToken = generateCtxToken();
+  const tabView = ctx.tabs.get(ctx.activeTabId).view;
   const tabBounds = tabView.getBounds();
 
   const hasSelection = params.selectionText && params.selectionText.trim().length > 0;
@@ -1831,7 +1828,7 @@ function showOverlayContextMenu(sourceWc, params, viewOffsetX, viewOffsetY) {
       d.dataset.data=it.data||'';
       d.onclick=function(){
         ov.remove();menu.remove();style.remove();
-        console.log('__gb_ctx_overlay:'+JSON.stringify({action:this.dataset.action,data:this.dataset.data}));
+        console.log('__gb_ctx_overlay:${overlayToken}:'+JSON.stringify({action:this.dataset.action,data:this.dataset.data}));
       };
       menu.appendChild(d);
     });
@@ -1848,10 +1845,11 @@ function showOverlayContextMenu(sourceWc, params, viewOffsetX, viewOffsetY) {
   // Listen for overlay menu actions
   const overlayHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_ctx_overlay:')) return;
+    const prefix = '__gb_ctx_overlay:' + overlayToken + ':';
+    if (!message || !message.startsWith(prefix)) return;
     tabView.webContents.removeListener('console-message', overlayHandler);
     try {
-      const { action } = JSON.parse(message.replace('__gb_ctx_overlay:', ''));
+      const { action } = JSON.parse(message.replace(prefix, ''));
       if (action === 'copy') sourceWc.copy();
       else if (action === 'cut') sourceWc.cut();
       else if (action === 'paste') sourceWc.paste();
@@ -1893,6 +1891,7 @@ function buildPageContextMenu(wc, params) {
   // Store context for IPC handler
   _pageCtxWc = wc;
   _pageCtxParams = params;
+  const pageToken = generateCtxToken();
   // Clean up previous console handler
   if (_pageCtxConsoleHandler && wc && !wc.isDestroyed()) {
     try { wc.removeListener('console-message', _pageCtxConsoleHandler); } catch {}
@@ -2042,7 +2041,7 @@ function buildPageContextMenu(wc, params) {
       // Small delay to let focus restore before IPC triggers clipboard ops
       setTimeout(function(){
         if(hasIpc){window.gitbrowser.ctxAction(act,dat);}
-        else{console.log('__gb_page_ctx:'+JSON.stringify({action:act,data:dat}));}
+        else{console.log('__gb_page_ctx:${pageToken}:'+JSON.stringify({action:act,data:dat}));}
       },50);
     }
 
@@ -2132,20 +2131,21 @@ function buildPageContextMenu(wc, params) {
   // Console.log fallback listener for external pages without preload
   const consoleHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_page_ctx:')) return;
+    const prefix = '__gb_page_ctx:' + pageToken + ':';
+    if (!message || !message.startsWith(prefix)) return;
     try { wc.removeListener('console-message', consoleHandler); } catch {}
     _pageCtxConsoleHandler = null;
     try {
-      const { action, data } = JSON.parse(message.replace('__gb_page_ctx:', ''));
+      const { action, data } = JSON.parse(message.replace(prefix, ''));
       if (action === 'copy') wc.copy();
       else if (action === 'cut') wc.cut();
       else if (action === 'paste') wc.paste();
       else if (action === 'selectAll') wc.selectAll();
-      else if (action === 'openLink' && data) createTab(data);
+      else if (action === 'openLink' && data) { const _ctx = getWindowCtx(wc); createTab(_ctx, data); }
       else if (action === 'copyLink' && data) clipboard.writeText(data);
       else if (action === 'saveImage' && data) wc.downloadURL(data);
       else if (action === 'copyImageUrl' && data) clipboard.writeText(data);
-      else if (action === 'openImageTab' && data) createTab(data);
+      else if (action === 'openImageTab' && data) { const _ctx = getWindowCtx(wc); createTab(_ctx, data); }
       else if (action === 'inspect') wc.inspectElement(params.x, params.y);
       else if (action === 'ai' && data) {
         try {
@@ -2665,9 +2665,10 @@ async function getAiConfig() {
   } catch { /* secret store not available, fallback */ }
 
   // Fallback: read from toolbar localStorage (for backward compatibility)
-  if (toolbarView && !toolbarView.webContents.isDestroyed()) {
+  const _tv = primaryWindowCtx ? primaryWindowCtx.toolbarView : null;
+  if (_tv && !_tv.webContents.isDestroyed()) {
     try {
-      const result = await toolbarView.webContents.executeJavaScript(`
+      const result = await _tv.webContents.executeJavaScript(`
         JSON.stringify({
           provider: localStorage.getItem('ai_provider') || 'openai',
           apiKey: localStorage.getItem('ai_key_' + (localStorage.getItem('ai_provider') || 'openai')) || '',
@@ -2773,7 +2774,12 @@ ipcMain.handle('password-generate', async (_e, opts) => {
   catch (err) { return { error: err.message || String(err) }; }
 });
 
-ipcMain.on('open-passwords', () => openOrSwitchTab('gb://passwords'));
+ipcMain.handle('password-decrypt', async (_e, { id }) => {
+  try { return await rustBridge.call('password.decrypt', { id }); }
+  catch (err) { return { error: err.message || String(err) }; }
+});
+
+ipcMain.on('open-passwords', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://passwords'); });
 
 // ─── CryptoBot Donate ───
 // XOR-obfuscated token (deobfuscated only in main process, never sent to renderer)
@@ -2844,6 +2850,7 @@ ipcMain.handle('clear-cookies', async () => {
 // Titlebar is injected as a fixed overlay on top of Telegram content.
 
 function showTelegram() {
+  const mainWindow = getMainWindow();
   if (!mainWindow) return;
 
   if (!telegramWin) {
@@ -2920,7 +2927,7 @@ function showTelegram() {
     telegramWin.webContents.on('dom-ready', injectTitlebar);
 
     telegramWin.webContents.setWindowOpenHandler(({ url }) => {
-      if (url && (url.startsWith('http://') || url.startsWith('https://'))) createTab(url);
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) createTab(primaryWindowCtx, url);
       return { action: 'deny' };
     });
 
@@ -2956,7 +2963,7 @@ function showTelegram() {
   });
   telegramWin.show();
   telegramVisible = true;
-  sendToToolbar('telegram-state', { visible: true });
+  sendToToolbar(primaryWindowCtx, 'telegram-state', { visible: true });
 }
 
 function hideTelegram() {
@@ -2964,7 +2971,7 @@ function hideTelegram() {
     telegramWin.hide();
   }
   telegramVisible = false;
-  sendToToolbar('telegram-state', { visible: false });
+  sendToToolbar(primaryWindowCtx, 'telegram-state', { visible: false });
 }
 
 ipcMain.on('telegram-toggle', () => {
@@ -2973,7 +2980,7 @@ ipcMain.on('telegram-toggle', () => {
 });
 
 ipcMain.on('telegram-btn-set-visible', (_e, visible) => {
-  sendToToolbar('telegram-btn-visible', { visible: !!visible });
+  sendToToolbar(primaryWindowCtx, 'telegram-btn-visible', { visible: !!visible });
   if (!visible && telegramVisible) hideTelegram();
 });
 
@@ -3089,11 +3096,11 @@ ipcMain.handle('extension-disable', async (_e, { id }) => {
   try { return await rustBridge.call('extension.disable', { id }); }
   catch (err) { return { error: err.message }; }
 });
-ipcMain.on('open-extensions', () => openOrSwitchTab('gb://extensions'));
+ipcMain.on('open-extensions', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://extensions'); });
 
 // Extension file picker dialog (replaces prompt())
 ipcMain.handle('extension-select-path', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
+  const result = await dialog.showOpenDialog(getMainWindow(), {
     title: 'Select Extension Folder',
     properties: ['openDirectory'],
   });
@@ -3200,7 +3207,7 @@ async function pollGhNotifications() {
     if (res.ok) {
       const data = await res.json();
       ghNotifCount = Array.isArray(data) ? data.length : 0;
-      sendToToolbar('gh-notif-count', { count: ghNotifCount });
+      sendToToolbar(primaryWindowCtx, 'gh-notif-count', { count: ghNotifCount });
     }
   } catch { /* ignore */ }
 }
@@ -3362,7 +3369,7 @@ ipcMain.handle('github-logout', async () => {
     ghNotifCount = 0;
     clearGhTokenLocal();
     if (ghNotifInterval) { clearInterval(ghNotifInterval); ghNotifInterval = null; }
-    sendToToolbar('gh-notif-count', { count: 0 });
+    sendToToolbar(primaryWindowCtx, 'gh-notif-count', { count: 0 });
     await rustBridge.call('github.logout', {});
     rustBridge.call('secret.delete', { key: 'github_token' }).catch(() => {});
     return { ok: true };
@@ -3436,7 +3443,7 @@ ipcMain.handle('download-and-install-update', async (_e, { downloadUrl }) => {
 });
 
 // ─── Page context menu actions (IPC from injected glass menu) ───
-ipcMain.on('ctx-menu-action', (_e, action, data) => {
+ipcMain.on('ctx-menu-action', (e, action, data) => {
   // GitHub menu actions don't need _pageCtxWc
   if (action && action.startsWith('gh_')) {
     handleGhAction(action, data);
@@ -3445,16 +3452,17 @@ ipcMain.on('ctx-menu-action', (_e, action, data) => {
   const wc = _pageCtxWc;
   const params = _pageCtxParams;
   if (!wc || wc.isDestroyed()) return;
+  const _ctx = getWindowCtx(e.sender) || getWindowCtx(wc);
   try {
     if (action === 'copy') wc.copy();
     else if (action === 'cut') wc.cut();
     else if (action === 'paste') wc.paste();
     else if (action === 'selectAll') wc.selectAll();
-    else if (action === 'openLink' && data) createTab(data);
+    else if (action === 'openLink' && data) createTab(_ctx, data);
     else if (action === 'copyLink' && data) clipboard.writeText(data);
     else if (action === 'saveImage' && data) wc.downloadURL(data);
     else if (action === 'copyImageUrl' && data) clipboard.writeText(data);
-    else if (action === 'openImageTab' && data) createTab(data);
+    else if (action === 'openImageTab' && data) createTab(_ctx, data);
     else if (action === 'inspect' && params) wc.inspectElement(params.x, params.y);
     else if (action === 'ai' && data) {
       try {
@@ -3472,15 +3480,17 @@ ipcMain.on('ctx-menu-action', (_e, action, data) => {
 });
 
 // Tab context menu
-ipcMain.on('tab-context-menu', (_e, id, clientX, clientY) => {
-  if (!activeTabId || !tabs.has(activeTabId)) return;
-  const tabView = tabs.get(activeTabId).view;
+ipcMain.on('tab-context-menu', (e, id, clientX, clientY) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx || !ctx.activeTabId || !ctx.tabs.has(ctx.activeTabId)) return;
+  const tabCtxToken = generateCtxToken();
+  const tabView = ctx.tabs.get(ctx.activeTabId).view;
   const tabBounds = tabView.getBounds();
 
-  const sw = sidebarCollapsed ? 48 : SIDEBAR_WIDTH;
-  const sidebarBounds = sidebarView ? sidebarView.getBounds() : { x: 0, y: 0 };
+  const sw = ctx.sidebarView ? (ctx.sidebarCollapsed ? 48 : SIDEBAR_WIDTH) : 0;
+  const sidebarBounds = ctx.sidebarView ? ctx.sidebarView.getBounds() : { x: 0, y: 0 };
 
-  const isMuted = tabs.has(id) && tabs.get(id).view.webContents.isAudioMuted();
+  const isMuted = ctx.tabs.has(id) && ctx.tabs.get(id).view.webContents.isAudioMuted();
   const muteLabel = isMuted ? cmL('tabs.unmute', 'Включить звук') : cmL('tabs.mute', 'Выключить звук');
 
   const items = [
@@ -3495,7 +3505,7 @@ ipcMain.on('tab-context-menu', (_e, id, clientX, clientY) => {
     { label: cmL('tabs.close_others', 'Закрыть другие'), action: 'close_others' },
     { label: cmL('tabs.close_right', 'Закрыть вкладки снизу'), action: 'close_right' },
     { type: 'separator' },
-    { label: cmL('tabs.reopen_closed', 'Восстановить вкладку'), action: 'reopen', disabled: closedTabsStack.length === 0 },
+    { label: cmL('tabs.reopen_closed', 'Восстановить вкладку'), action: 'reopen', disabled: ctx.closedTabsStack.length === 0 },
   ];
 
   const menuData = JSON.stringify(items);
@@ -3541,7 +3551,7 @@ ipcMain.on('tab-context-menu', (_e, id, clientX, clientY) => {
       if(it.type==='separator'){var s=document.createElement('div');s.className='tci-sep';menu.appendChild(s);return;}
       var d=document.createElement('div');d.className='tci'+(it.disabled?' disabled':'');
       d.textContent=it.label;
-      d.onclick=function(){closeMenu();console.log('__gb_tab_ctx:'+JSON.stringify({action:it.action}));};
+      d.onclick=function(){closeMenu();console.log('__gb_tab_ctx:${tabCtxToken}:'+JSON.stringify({action:it.action}));};
       menu.appendChild(d);
     });
     document.documentElement.appendChild(menu);
@@ -3555,18 +3565,19 @@ ipcMain.on('tab-context-menu', (_e, id, clientX, clientY) => {
 
   const tabCtxHandler = (event) => {
     const message = event.message;
-    if (!message || !message.startsWith('__gb_tab_ctx:')) return;
+    const prefix = '__gb_tab_ctx:' + tabCtxToken + ':';
+    if (!message || !message.startsWith(prefix)) return;
     tabView.webContents.removeListener('console-message', tabCtxHandler);
     try {
-      const { action } = JSON.parse(message.replace('__gb_tab_ctx:', ''));
-      if (action === 'new_tab') createTab('gb://newtab');
-      else if (action === 'reload') { if (tabs.has(id)) tabs.get(id).view.webContents.reload(); }
-      else if (action === 'duplicate') { if (tabs.has(id)) createTab(tabs.get(id).url); }
-      else if (action === 'mute') { if (tabs.has(id)) { const wc2 = tabs.get(id).view.webContents; wc2.setAudioMuted(!wc2.isAudioMuted()); sendTabsUpdate(); } }
-      else if (action === 'close') closeTab(id);
-      else if (action === 'close_others') { tabOrder.filter(tid => tid !== id).forEach(tid => closeTab(tid)); }
-      else if (action === 'close_right') { const idx = tabOrder.indexOf(id); if (idx >= 0) tabOrder.slice(idx + 1).forEach(tid => closeTab(tid)); }
-      else if (action === 'reopen') { if (closedTabsStack.length > 0) { const { url } = closedTabsStack.pop(); createTab(url); } }
+      const { action } = JSON.parse(message.replace(prefix, ''));
+      if (action === 'new_tab') createTab(ctx, 'gb://newtab');
+      else if (action === 'reload') { if (ctx.tabs.has(id)) ctx.tabs.get(id).view.webContents.reload(); }
+      else if (action === 'duplicate') { if (ctx.tabs.has(id)) createTab(ctx, ctx.tabs.get(id).url); }
+      else if (action === 'mute') { if (ctx.tabs.has(id)) { const wc2 = ctx.tabs.get(id).view.webContents; wc2.setAudioMuted(!wc2.isAudioMuted()); sendTabsUpdate(ctx); } }
+      else if (action === 'close') closeTab(ctx, id);
+      else if (action === 'close_others') { ctx.tabOrder.filter(tid => tid !== id).forEach(tid => closeTab(ctx, tid)); }
+      else if (action === 'close_right') { const idx = ctx.tabOrder.indexOf(id); if (idx >= 0) ctx.tabOrder.slice(idx + 1).forEach(tid => closeTab(ctx, tid)); }
+      else if (action === 'reopen') { reopenClosedTab(ctx); }
     } catch {}
   };
   tabView.webContents.on('console-message', tabCtxHandler);
@@ -3583,8 +3594,8 @@ async function injectPasswordAutofill(wc, pageUrl) {
     if (!unlocked || !unlocked.unlocked) return;
     const creds = await rustBridge.call('password.list', { url: pageUrl });
     if (!Array.isArray(creds) || creds.length === 0) return;
-    // Inject autofill script
-    const credsJson = JSON.stringify(creds.map(c => ({ username: c.username, password: c.password })));
+    // SEC-04: Only send usernames to the page, decrypt passwords on demand via IPC
+    const credsJson = JSON.stringify(creds.map(c => ({ id: c.id, username: c.username })));
     wc.executeJavaScript(`
       (function() {
         if (window.__gbAutofillInjected) return;
@@ -3622,7 +3633,8 @@ async function injectPasswordAutofill(wc, pageUrl) {
               item.onmouseleave = () => item.style.background = 'transparent';
               item.onclick = () => {
                 if (userField) { userField.value = c.username; userField.dispatchEvent(new Event('input', {bubbles:true})); }
-                pwField.value = c.password; pwField.dispatchEvent(new Event('input', {bubbles:true}));
+                // Signal main process to decrypt and fill via title hack
+                document.title = '__gb_autofill_req:' + JSON.stringify({ id: c.id });
                 dd.remove();
               };
               dd.appendChild(item);
@@ -3693,6 +3705,18 @@ function normalizeUrl(input) {
   return engines[currentSearchEngine] || engines.google;
 }
 
+// SEC-05: Block dangerous URL schemes (file://, javascript:, data:, vbscript:, etc.)
+function isBlockedUrl(url) {
+  if (!url || typeof url !== 'string') return true;
+  const lower = url.trim().toLowerCase();
+  if (lower.startsWith('javascript:')) return true;
+  if (lower.startsWith('file://')) return true;
+  if (lower.startsWith('data:')) return true;
+  if (lower.startsWith('vbscript:')) return true;
+  if (lower.startsWith('blob:')) return true;
+  return false;
+}
+
 // ─── App lifecycle ───
 
 // ─── Theme management ───
@@ -3705,12 +3729,13 @@ function resolveTheme(theme) {
 function broadcastTheme(theme) {
   currentTheme = theme;
   const resolved = resolveTheme(theme);
-  // Send to toolbar and sidebar
-  sendToToolbar('theme-changed', { theme: resolved });
-  // Send to all tab views
-  for (const [, tabData] of tabs) {
-    if (!tabData.view.webContents.isDestroyed()) {
-      tabData.view.webContents.send('theme-changed', { theme: resolved });
+  // Send to all windows
+  for (const ctx of windowRegistry.values()) {
+    sendToToolbar(ctx, 'theme-changed', { theme: resolved });
+    for (const [, tabData] of ctx.tabs) {
+      if (!tabData.view.webContents.isDestroyed()) {
+        tabData.view.webContents.send('theme-changed', { theme: resolved });
+      }
     }
   }
 }
@@ -3728,9 +3753,11 @@ async function loadInitialTheme() {
     if (settings && settings.appearance && settings.appearance.font_size) {
       const size = parseInt(settings.appearance.font_size) || 14;
       if (size !== 14) {
-        for (const [, tabData] of tabs) {
-          if (!tabData.view.webContents.isDestroyed()) {
-            tabData.view.webContents.setZoomFactor(size / 14);
+        for (const ctx of windowRegistry.values()) {
+          for (const [, tabData] of ctx.tabs) {
+            if (!tabData.view.webContents.isDestroyed()) {
+              tabData.view.webContents.setZoomFactor(size / 14);
+            }
           }
         }
       }
@@ -3767,7 +3794,8 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  saveSession();
+  // Save session for primary window if it still exists
+  if (primaryWindowCtx) saveSession(primaryWindowCtx);
   rustBridge.stop();
   app.quit();
 });

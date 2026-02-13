@@ -108,6 +108,14 @@ pub struct AppearanceSettings {
     pub theme: ThemeMode,
     pub accent_color: String,
     pub font_size: u32,
+    #[serde(default = "default_true")]
+    pub show_telegram: bool,
+    #[serde(default = "default_true")]
+    pub show_github: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for AppearanceSettings {
@@ -116,6 +124,8 @@ impl Default for AppearanceSettings {
             theme: ThemeMode::System,
             accent_color: "#2ea44f".to_string(),
             font_size: 14,
+            show_telegram: true,
+            show_github: true,
         }
     }
 }

@@ -89,11 +89,13 @@ fn arb_privacy_settings() -> impl Strategy<Value = PrivacySettings> {
 }
 
 fn arb_appearance_settings() -> impl Strategy<Value = AppearanceSettings> {
-    (arb_theme_mode(), "#[0-9a-f]{6}", 8u32..=72u32).prop_map(
-        |(theme, accent_color, font_size)| AppearanceSettings {
+    (arb_theme_mode(), "#[0-9a-f]{6}", 8u32..=72u32, proptest::bool::ANY, proptest::bool::ANY).prop_map(
+        |(theme, accent_color, font_size, show_telegram, show_github)| AppearanceSettings {
             theme,
             accent_color,
             font_size,
+            show_telegram,
+            show_github,
         },
     )
 }

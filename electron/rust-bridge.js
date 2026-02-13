@@ -49,6 +49,7 @@ class RustBridge {
     this.process = spawn(rpcBin, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd,
+      env: { ...process.env, GITBROWSER_DATA_DIR: app.isPackaged ? app.getPath('userData') : cwd },
     });
 
     this.readyPromise = new Promise((resolve) => {

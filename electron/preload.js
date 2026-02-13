@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   // Private mode
   openPrivateWindow: () => ipcRenderer.send('open-private-window'),
 
+  // New window
+  openNewWindow: () => ipcRenderer.send('open-new-window'),
+
   // Find in page
   findInPage: (text) => ipcRenderer.send('find-in-page', text),
   stopFind: () => ipcRenderer.send('stop-find'),
@@ -92,6 +95,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   passwordUpdate: (data) => ipcRenderer.invoke('password-update', data),
   passwordDelete: (data) => ipcRenderer.invoke('password-delete', data),
   passwordGenerate: (data) => ipcRenderer.invoke('password-generate', data || {}),
+  passwordDecrypt: (data) => ipcRenderer.invoke('password-decrypt', data),
   openPasswords: () => ipcRenderer.send('open-passwords'),
 
   // GitHub

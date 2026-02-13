@@ -134,8 +134,15 @@ ipcMain.handle('create-shortcuts', async () => {
     });
 
     const mkLnk = (lnkPath) => {
-      const ps = `$s=(New-Object -COM WScript.Shell).CreateShortcut('${lnkPath.replace(/'/g, "''")}');$s.TargetPath='${exe.replace(/'/g, "''")}';$s.WorkingDirectory='${INSTALL_DIR.replace(/'/g, "''")}';$s.Save()`;
-      return runPS(ps);
+      // SEC-07: Use separate arguments to avoid PowerShell injection via path values
+      const ps = [
+        '-NoProfile', '-Command',
+        '$s=(New-Object -COM WScript.Shell).CreateShortcut($args[0]);$s.TargetPath=$args[1];$s.WorkingDirectory=$args[2];$s.Save()',
+        lnkPath, exe, INSTALL_DIR
+      ];
+      return new Promise((resolve) => {
+        execFile('powershell', ps, { timeout: 10000 }, (err) => resolve(!err));
+      });
     };
 
     await mkLnk(path.join(desktop, 'GitBrowser.lnk'));

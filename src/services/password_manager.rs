@@ -281,8 +281,26 @@ impl PasswordManagerTrait for PasswordManager {
         }
 
         let chars: Vec<char> = charset.chars().collect();
-        let random_bytes = self.crypto.generate_random_bytes(options.length);
-        random_bytes.iter().map(|b| chars[*b as usize % chars.len()]).collect()
+        // BUG-02: Use rejection sampling to avoid modulo bias
+        let charset_len = chars.len();
+        let max_valid = 256 - (256 % charset_len); // Reject bytes >= this value
+        let mut result = String::with_capacity(options.length);
+        let mut pos = 0;
+        // Generate extra bytes to account for rejections
+        let mut random_bytes = self.crypto.generate_random_bytes(options.length * 2);
+        while result.len() < options.length {
+            if pos >= random_bytes.len() {
+                // Need more random bytes
+                random_bytes = self.crypto.generate_random_bytes(options.length * 2);
+                pos = 0;
+            }
+            let b = random_bytes[pos] as usize;
+            pos += 1;
+            if b < max_valid {
+                result.push(chars[b % charset_len]);
+            }
+        }
+        result
     }
 
     fn export_encrypted(&self, master_password: &str, file_path: &str) -> Result<(), CryptoError> {

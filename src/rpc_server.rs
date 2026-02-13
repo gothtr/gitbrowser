@@ -4,7 +4,7 @@
 //! Request:  {"id":1, "method":"bookmark.add", "params":{"url":"...","title":"..."}}
 //! Response: {"id":1, "result":{...}} or {"id":1, "error":"..."}
 
-use std::cell::RefCell;
+use std::sync::Mutex;
 use std::io::{self, BufRead, Write};
 
 use gitbrowser::app::App;
@@ -56,7 +56,7 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
 }
 
 fn main() {
-    let app = RefCell::new(App::new("gitbrowser.db").expect("Failed to initialize GitBrowser"));
+    let app = Mutex::new(App::new("gitbrowser.db").expect("Failed to initialize GitBrowser"));
 
     // Signal ready
     let ready = json!({"event":"ready","version":env!("CARGO_PKG_VERSION")});
@@ -96,7 +96,7 @@ fn main() {
     }
 }
 
-fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Value, String> {
+fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<Value, String> {
     match method {
         // ─── Bookmarks ───
         "bookmark.add" => {
@@ -107,7 +107,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
                 return Err("invalid url: must start with http://, https://, or gb://".to_string());
             }
             let folder = params.get("folder_id").and_then(|v| v.as_str());
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mut mgr = BookmarkManager::new(conn);
             let bm_id = mgr.add_bookmark(url, title, folder).map_err(|e| e.to_string())?;
@@ -115,7 +115,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "bookmark.list" => {
             let folder = params.get("folder_id").and_then(|v| v.as_str());
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mgr = BookmarkManager::new(conn);
             let bms = mgr.list_bookmarks(folder).map_err(|e| e.to_string())?;
@@ -124,7 +124,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "bookmark.search" => {
             let query = params.get("query").and_then(|v| v.as_str()).ok_or("missing query")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mgr = BookmarkManager::new(conn);
             let bms = mgr.search_bookmarks(query).map_err(|e| e.to_string())?;
@@ -133,7 +133,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "bookmark.delete" => {
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mut mgr = BookmarkManager::new(conn);
             mgr.remove_bookmark(id).map_err(|e| e.to_string())?;
@@ -148,7 +148,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             if !url.starts_with("http://") && !url.starts_with("https://") {
                 return Err("invalid url: must start with http:// or https://".to_string());
             }
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mut mgr = HistoryManager::new(conn);
             mgr.record_visit(url, title).map_err(|e| e.to_string())?;
@@ -156,7 +156,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "history.search" => {
             let query = params.get("query").and_then(|v| v.as_str()).ok_or("missing query")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mgr = HistoryManager::new(conn);
             let entries = mgr.search_history(query).map_err(|e| e.to_string())?;
@@ -164,7 +164,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             Ok(json!(arr))
         }
         "history.recent" => {
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mgr = HistoryManager::new(conn);
             let entries = mgr.list_history(None).map_err(|e| e.to_string())?;
@@ -173,14 +173,14 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "history.delete" => {
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mut mgr = HistoryManager::new(conn);
             mgr.delete_entry(id).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "history.clear" => {
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mut mgr = HistoryManager::new(conn);
             mgr.clear_all().map_err(|e| e.to_string())?;
@@ -189,7 +189,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
 
         // ─── Settings ───
         "settings.get" => {
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let settings = a.settings_engine.get_settings();
             let json_val = serde_json::to_value(settings).map_err(|e| e.to_string())?;
             Ok(json_val)
@@ -197,7 +197,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         "settings.set" => {
             let key = params.get("key").and_then(|v| v.as_str()).ok_or("missing key")?;
             let value = params.get("value").cloned().ok_or("missing value")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             // Use the set_value method which handles key-path updates
             a.settings_engine.set_value(key, value).map_err(|e| e.to_string())?;
             // Also handle language change in localization engine
@@ -213,12 +213,12 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         // ─── Localization ───
         "i18n.t" => {
             let key = params.get("key").and_then(|v| v.as_str()).ok_or("missing key")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let text = a.localization_engine.t(key, None);
             Ok(json!({"text": text}))
         }
         "i18n.locale" => {
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let locale = a.localization_engine.get_locale();
             Ok(json!({"locale": locale}))
         }
@@ -226,15 +226,23 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         // ─── Session ───
         "session.save" => {
             let tabs_val = params.get("tabs").ok_or("missing tabs")?;
-            // Save session data to a file for simplicity
-            let session_path = "session.json";
+            // BUG-01: Use absolute path via user data directory instead of relative CWD
+            let session_path = if let Ok(dir) = std::env::var("GITBROWSER_DATA_DIR") {
+                std::path::PathBuf::from(dir).join("session.json")
+            } else {
+                std::path::PathBuf::from("session.json")
+            };
             let data = serde_json::to_string(tabs_val).map_err(|e| e.to_string())?;
-            std::fs::write(session_path, data).map_err(|e| e.to_string())?;
+            std::fs::write(&session_path, data).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "session.restore" => {
-            let session_path = "session.json";
-            match std::fs::read_to_string(session_path) {
+            let session_path = if let Ok(dir) = std::env::var("GITBROWSER_DATA_DIR") {
+                std::path::PathBuf::from(dir).join("session.json")
+            } else {
+                std::path::PathBuf::from("session.json")
+            };
+            match std::fs::read_to_string(&session_path) {
                 Ok(data) => {
                     let tabs: Value = serde_json::from_str(&data).unwrap_or(json!([]));
                     Ok(tabs)
@@ -246,7 +254,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         // ─── Password Manager ───
         "password.unlock" => {
             let master = params.get("master_password").and_then(|v| v.as_str()).ok_or("missing master_password")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             let ok = a.password_manager.unlock(master).map_err(|e| e.to_string())?;
             if ok {
                 // Re-key GitHub and AI secrets with master password
@@ -258,36 +266,44 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             Ok(json!({"ok": ok}))
         }
         "password.lock" => {
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             a.password_manager.lock();
             Ok(json!({"ok": true}))
         }
         "password.is_unlocked" => {
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             Ok(json!({"unlocked": a.password_manager.is_unlocked()}))
         }
         "password.list" => {
             let url = params.get("url").and_then(|v| v.as_str()).unwrap_or("");
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let creds = if url.is_empty() {
                 a.password_manager.list_all_credentials().map_err(|e| e.to_string())?
             } else {
                 a.password_manager.get_credentials(url).map_err(|e| e.to_string())?
             };
+            // SEC-04: Do NOT return decrypted passwords in list — return metadata only
             let arr: Vec<Value> = creds.iter().map(|c| {
-                let pw = a.password_manager.decrypt_password(c).unwrap_or_default();
                 json!({
                     "id": c.id, "url": c.url, "username": c.username,
-                    "password": pw, "created_at": c.created_at, "updated_at": c.updated_at
+                    "created_at": c.created_at, "updated_at": c.updated_at
                 })
             }).collect();
             Ok(json!(arr))
+        }
+        "password.decrypt" => {
+            let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
+            let a = app.lock().map_err(|e| e.to_string())?;
+            let creds = a.password_manager.list_all_credentials().map_err(|e| e.to_string())?;
+            let entry = creds.iter().find(|c| c.id == id).ok_or("credential not found")?;
+            let pw = a.password_manager.decrypt_password(entry).map_err(|e| e.to_string())?;
+            Ok(json!({"password": pw}))
         }
         "password.save" => {
             let url = params.get("url").and_then(|v| v.as_str()).ok_or("missing url")?;
             let username = params.get("username").and_then(|v| v.as_str()).ok_or("missing username")?;
             let password = params.get("password").and_then(|v| v.as_str()).ok_or("missing password")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             let id = a.password_manager.save_credential(url, username, password).map_err(|e| e.to_string())?;
             Ok(json!({"id": id}))
         }
@@ -295,13 +311,13 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
             let username = params.get("username").and_then(|v| v.as_str());
             let password = params.get("password").and_then(|v| v.as_str());
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             a.password_manager.update_credential(id, username, password).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "password.delete" => {
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             a.password_manager.delete_credential(id).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
@@ -311,7 +327,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             let lowercase = params.get("lowercase").and_then(|v| v.as_bool()).unwrap_or(true);
             let numbers = params.get("numbers").and_then(|v| v.as_bool()).unwrap_or(true);
             let symbols = params.get("symbols").and_then(|v| v.as_bool()).unwrap_or(true);
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let opts = gitbrowser::types::credential::PasswordGenOptions {
                 length, uppercase, lowercase, numbers, symbols,
             };
@@ -324,7 +340,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
 
         // ─── Extensions ───
         "extension.list" => {
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let exts = a.extension_framework.list_extensions();
             let arr: Vec<Value> = exts.iter().map(|e| json!({
                 "id": e.id, "name": e.name, "version": e.version, "enabled": e.enabled,
@@ -336,31 +352,31 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "extension.install" => {
             let path = params.get("path").and_then(|v| v.as_str()).ok_or("missing path")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             let id = a.extension_framework.install(path).map_err(|e| e.to_string())?;
             Ok(json!({"id": id}))
         }
         "extension.uninstall" => {
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             a.extension_framework.uninstall(id).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "extension.enable" => {
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             a.extension_framework.enable(id).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "extension.disable" => {
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             a.extension_framework.disable(id).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "extension.content_scripts" => {
             let url = params.get("url").and_then(|v| v.as_str()).ok_or("missing url")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let scripts = a.extension_framework.get_content_scripts_for_url(url);
             let arr: Vec<Value> = scripts.iter().map(|s| json!({
                 "extension_id": s.extension_id,
@@ -377,23 +393,23 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
             let token = params.get("token").and_then(|v| v.as_str()).ok_or("missing token")?;
             let login = params.get("login").and_then(|v| v.as_str()).ok_or("missing login")?;
             let avatar_url = params.get("avatar_url").and_then(|v| v.as_str());
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             a.github_integration.store_token(token, login, avatar_url).map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "github.get_token" => {
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let token = a.github_integration.get_token().map_err(|e| e.to_string())?;
             Ok(json!({"token": token}))
         }
         "github.logout" => {
-            let mut a = app.borrow_mut();
+            let mut a = app.lock().map_err(|e| e.to_string())?;
             a.github_integration.logout().map_err(|e| e.to_string())?;
             Ok(json!({"ok": true}))
         }
         "github.encrypt_sync" => {
             let data = params.get("data").and_then(|v| v.as_str()).ok_or("missing data")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let encrypted = a.github_integration.encrypt_for_sync(data.as_bytes()).map_err(|e| e.to_string())?;
             Ok(json!({
                 "ciphertext": base64_encode(&encrypted.ciphertext),
@@ -410,7 +426,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
                 iv: base64_decode(iv).map_err(|e| e.to_string())?,
                 auth_tag: base64_decode(auth_tag).map_err(|e| e.to_string())?,
             };
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let decrypted = a.github_integration.decrypt_from_sync(&encrypted).map_err(|e| e.to_string())?;
             let text = String::from_utf8(decrypted).map_err(|e| e.to_string())?;
             Ok(json!({"data": text}))
@@ -420,7 +436,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         "secret.store" => {
             let key = params.get("key").and_then(|v| v.as_str()).ok_or("missing key")?;
             let value = params.get("value").and_then(|v| v.as_str()).ok_or("missing value")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             // Prefer master password derived key; fall back to GitHub integration key
             let encrypted = if let Some(master_key) = a.password_manager.get_derived_key() {
                 let crypto = gitbrowser::services::crypto_service::CryptoService::new();
@@ -444,7 +460,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "secret.get" => {
             let key = params.get("key").and_then(|v| v.as_str()).ok_or("missing key")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let _ = conn.execute(
                 "CREATE TABLE IF NOT EXISTS secure_store (key TEXT PRIMARY KEY, ciphertext BLOB, iv BLOB, auth_tag BLOB, updated_at INTEGER, uses_master INTEGER DEFAULT 0)",
@@ -482,7 +498,7 @@ fn handle_method(app: &RefCell<App>, method: &str, params: &Value) -> Result<Val
         }
         "secret.delete" => {
             let key = params.get("key").and_then(|v| v.as_str()).ok_or("missing key")?;
-            let a = app.borrow();
+            let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let _ = conn.execute("DELETE FROM secure_store WHERE key = ?1", rusqlite::params![key]);
             Ok(json!({"ok": true}))

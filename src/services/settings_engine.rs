@@ -416,6 +416,8 @@ mod tests {
         assert_eq!(defaults.appearance.theme, crate::types::settings::ThemeMode::System);
         assert_eq!(defaults.appearance.accent_color, "#2ea44f");
         assert_eq!(defaults.appearance.font_size, 14);
+        assert!(defaults.appearance.show_telegram);
+        assert!(defaults.appearance.show_github);
 
         // Shortcuts
         assert_eq!(defaults.shortcuts.get("new_tab").unwrap(), "Ctrl+T");
