@@ -149,6 +149,7 @@
     "clear_cookies": "Очистить cookies",
     "clear_cookies_desc": "Удалить все cookies и данные сайтов",
     "clear_btn": "Очистить",
+    "data_cleared": "Данные браузера очищены",
     "license": "Лицензия",
     "check_update": "Проверить обновления",
     "check_update_desc": "Проверить наличие новой версии",

@@ -120,8 +120,21 @@ impl ExtensionFramework {
     }
 
     /// Read a file from the extension directory, returning its contents as a string.
+    /// SEC-09: Canonicalize path and verify it stays within the extension directory.
     fn read_extension_file(base_path: &str, relative: &str) -> Result<String, ExtensionError> {
-        let full = std::path::Path::new(base_path).join(relative);
+        let base = std::path::Path::new(base_path)
+            .canonicalize()
+            .map_err(|e| ExtensionError::LoadError(format!("Invalid base path: {}", e)))?;
+        let full = std::path::Path::new(base_path)
+            .join(relative)
+            .canonicalize()
+            .map_err(|e| ExtensionError::LoadError(format!("Cannot resolve {}: {}", relative, e)))?;
+        if !full.starts_with(&base) {
+            return Err(ExtensionError::LoadError(format!(
+                "Path traversal blocked: {} escapes extension directory",
+                relative
+            )));
+        }
         std::fs::read_to_string(&full)
             .map_err(|e| ExtensionError::LoadError(format!("Cannot read {}: {}", relative, e)))
     }

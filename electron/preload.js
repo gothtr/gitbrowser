@@ -130,6 +130,10 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   // Clear data
   clearCache: () => ipcRenderer.invoke('clear-cache'),
   clearCookies: () => ipcRenderer.invoke('clear-cookies'),
+  clearBrowsingData: () => ipcRenderer.invoke('clear-browsing-data'),
+
+  // Open local file
+  openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
 
   // Auto-update
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),

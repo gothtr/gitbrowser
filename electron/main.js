@@ -205,6 +205,14 @@ function createBrowserWindow({ isPrivate = false, showImmediately = true } = {})
     if (!isPrivate && ctx === primaryWindowCtx) {
       saveSession(ctx);
     }
+    // BUG-07: Clear browsing data for private windows on close
+    if (isPrivate && ctx.partition) {
+      try {
+        const ses = session.fromPartition(ctx.partition);
+        ses.clearStorageData().catch(() => {});
+        ses.clearCache().catch(() => {});
+      } catch {}
+    }
     // Clean up all tabs
     for (const [, { view }] of ctx.tabs) {
       try { if (!view.webContents.isDestroyed()) { view.webContents.removeAllListeners(); view.webContents.close(); } } catch {}
@@ -270,12 +278,22 @@ function createWindow() {
   });
 
   setInterval(() => saveSession(primaryWindowCtx), 30000);
-  // Clean up old completed downloads every hour
+  // BUG-05: Clean up old completed downloads every hour + cap total size
   setInterval(() => {
     const cutoff = Date.now() - 24 * 60 * 60 * 1000; // 24 hours
     for (const [dlId, dl] of downloads) {
       if ((dl.state === 'completed' || dl.state === 'cancelled' || dl.state === 'interrupted') && dl.startTime < cutoff) {
         downloads.delete(dlId);
+        downloadItems.delete(dlId);
+      }
+    }
+    // Hard cap: keep only the most recent 500 entries
+    if (downloads.size > 500) {
+      const sorted = [...downloads.entries()].sort((a, b) => b[1].startTime - a[1].startTime);
+      const toRemove = sorted.slice(500);
+      for (const [dlId] of toRemove) {
+        downloads.delete(dlId);
+        downloadItems.delete(dlId);
       }
     }
   }, 3600000);
@@ -389,10 +407,12 @@ function createTab(ctx, url, activate = true) {
         const { id: credId } = JSON.parse(title.substring('__gb_autofill_req:'.length));
         rustBridge.call('password.decrypt', { id: credId }).then(res => {
           if (res && res.password) {
+            // SEC-13: Safe data passing — double-serialize to avoid any interpolation risks
+            const safePayload = JSON.stringify(JSON.stringify(res.password));
             view.webContents.executeJavaScript(`
               (function() {
                 var pw = document.querySelector('input[type="password"]');
-                if (pw) { pw.value = ${JSON.stringify(res.password)}; pw.dispatchEvent(new Event('input', {bubbles:true})); }
+                if (pw) { pw.value = JSON.parse(${safePayload}); pw.dispatchEvent(new Event('input', {bubbles:true})); }
               })();
             `).catch(() => {});
           }
@@ -453,6 +473,20 @@ function createTab(ctx, url, activate = true) {
   // Middle-click to open link in new tab
   view.webContents.on('did-finish-load', () => {
     if (!isInternalUrl(tabData.url)) {
+      // Inject custom scrollbar styles into web pages
+      view.webContents.insertCSS(`
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+          background: rgba(128, 128, 128, 0.35);
+          border-radius: 5px;
+          border: 2px solid transparent;
+          background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.55); background-clip: padding-box; }
+        ::-webkit-scrollbar-thumb:active { background: rgba(128, 128, 128, 0.7); background-clip: padding-box; }
+        ::-webkit-scrollbar-corner { background: transparent; }
+      `).catch(() => {});
       view.webContents.executeJavaScript(`
         document.addEventListener('auxclick', function(e) {
           if (e.button === 1) {
@@ -487,9 +521,10 @@ function createTab(ctx, url, activate = true) {
     if (input.type !== 'keyDown') return;
     const ctrl = input.control || input.meta;
     const shift = input.shift;
+    const alt = input.alt;
     const key = input.key.toLowerCase();
 
-    if (ctrl && !shift) {
+    if (ctrl && !shift && !alt) {
       if (key === '=' || key === '+') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() + 0.5); sendToToolbar(ctx, 'zoom-changed', { level: wc2.getZoomLevel() }); }
       else if (key === '-') { e.preventDefault(); const wc2 = view.webContents; wc2.setZoomLevel(wc2.getZoomLevel() - 0.5); sendToToolbar(ctx, 'zoom-changed', { level: wc2.getZoomLevel() }); }
       else if (key === '0') { e.preventDefault(); view.webContents.setZoomLevel(0); sendToToolbar(ctx, 'zoom-changed', { level: 0 }); }
@@ -501,15 +536,59 @@ function createTab(ctx, url, activate = true) {
       else if (key === 'd') { e.preventDefault(); addBookmarkCurrent(ctx); }
       else if (key === 'n') { e.preventDefault(); openNewWindow(); }
       else if (key === 'tab') { e.preventDefault(); cycleTab(ctx, 1); }
+      else if (key === 'h') { e.preventDefault(); openOrSwitchTab(ctx, 'gb://history'); }
+      else if (key === 'j') { e.preventDefault(); openOrSwitchTab(ctx, 'gb://downloads'); }
+      else if (key === 'p') { e.preventDefault(); view.webContents.print(); }
+      else if (key === 'u') { e.preventDefault(); const srcUrl = view.webContents.getURL(); if (srcUrl) createTab(ctx, 'view-source:' + srcUrl); }
+      else if (key === 's') { e.preventDefault(); view.webContents.downloadURL(view.webContents.getURL()); }
+      else if (key === 'o') {
+        // Ctrl+O: open local file
+        e.preventDefault();
+        dialog.showOpenDialog(ctx.baseWindow, {
+          properties: ['openFile'],
+          filters: [
+            { name: 'Web Files', extensions: ['html', 'htm', 'xhtml', 'svg', 'xml', 'json', 'txt', 'css', 'js', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'] },
+            { name: 'All Files', extensions: ['*'] },
+          ],
+        }).then(result => {
+          if (!result.canceled && result.filePaths.length > 0) {
+            const fileUrl = 'file:///' + result.filePaths[0].replace(/\\/g, '/');
+            createTab(ctx, fileUrl);
+          }
+        }).catch(() => {});
+      }
+      // Ctrl+1-9: switch to tab by index
+      else if (key >= '1' && key <= '9') {
+        e.preventDefault();
+        const idx = parseInt(key) - 1;
+        if (key === '9') { if (ctx.tabOrder.length > 0) switchTab(ctx, ctx.tabOrder[ctx.tabOrder.length - 1]); }
+        else if (idx < ctx.tabOrder.length) switchTab(ctx, ctx.tabOrder[idx]);
+      }
     }
-    if (ctrl && shift) {
+    if (ctrl && shift && !alt) {
       if (key === 'tab') { e.preventDefault(); cycleTab(ctx, -1); }
       else if (key === 't') { e.preventDefault(); reopenClosedTab(ctx); }
       else if (key === 'n') { e.preventDefault(); openPrivateWindow(); }
+      else if (key === 'i' || key === 'j') { e.preventDefault(); view.webContents.openDevTools(); }
+      else if (key === 'r') { e.preventDefault(); if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) ctx.tabs.get(ctx.activeTabId).view.webContents.reloadIgnoringCache(); }
+      else if (key === 'delete') {
+        // Ctrl+Shift+Delete — clear browsing data
+        e.preventDefault();
+        session.defaultSession.clearCache().catch(() => {});
+        session.defaultSession.clearStorageData().catch(() => {});
+        sendToToolbar(ctx, 'toast', { message: cmL('settings.data_cleared', 'Browsing data cleared') });
+      }
     }
-    if (!ctrl && !shift) {
+    if (alt && !ctrl && !shift) {
+      if (key === 'arrowleft') { e.preventDefault(); view.webContents.goBack(); }
+      else if (key === 'arrowright') { e.preventDefault(); view.webContents.goForward(); }
+      else if (key === 'home' || key === 'd') { e.preventDefault(); if (ctx.activeTabId) navigateTab(ctx, ctx.activeTabId, 'gb://newtab'); }
+    }
+    if (!ctrl && !shift && !alt) {
       if (key === 'f5') { e.preventDefault(); if (ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)) ctx.tabs.get(ctx.activeTabId).view.webContents.reload(); }
       else if (key === 'f11') { e.preventDefault(); if (ctx.baseWindow) ctx.baseWindow.setFullScreen(!ctx.baseWindow.isFullScreen()); }
+      else if (key === 'f12') { e.preventDefault(); view.webContents.openDevTools(); }
+      else if (key === 'escape') { e.preventDefault(); view.webContents.stop(); if (ctx.toolbarView) ctx.toolbarView.webContents.executeJavaScript('if(findOpen)toggleFindBar()').catch(() => {}); }
     }
   });
 
@@ -556,6 +635,19 @@ function loadUrlInView(view, url) {
     view.webContents.loadFile(path.join(__dirname, 'ui', page));
   } else if (url.startsWith('http://') || url.startsWith('https://')) {
     view.webContents.loadURL(url);
+  } else if (url.startsWith('file://')) {
+    view.webContents.loadURL(url);
+  } else if (url.startsWith('view-source:')) {
+    // View source: load the URL and show source code
+    const srcUrl = url.substring('view-source:'.length);
+    net.fetch(srcUrl).then(r => r.text()).then(html => {
+      const escaped = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      view.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+        `<!DOCTYPE html><html><head><title>view-source:${srcUrl}</title><style>body{background:#0a0e14;color:#e2e8f0;font-family:Consolas,'SF Mono',monospace;font-size:13px;padding:16px;white-space:pre-wrap;word-wrap:break-word;tab-size:2;line-height:1.6;}::selection{background:rgba(96,165,250,0.3);}</style></head><body>${escaped}</body></html>`
+      ));
+    }).catch(() => {
+      view.webContents.loadURL('data:text/html,<h3>Failed to load source</h3>');
+    });
   } else {
     view.webContents.loadFile(path.join(__dirname, 'ui', 'newtab.html'));
   }
@@ -1077,6 +1169,26 @@ ipcMain.on('ensure-downloads-tab', (e) => {
 });
 ipcMain.on('open-ai', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://ai'); });
 ipcMain.on('open-github', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://github'); });
+
+// Open local file via dialog (Ctrl+O)
+ipcMain.handle('open-file-dialog', async (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx) return { cancelled: true };
+  const result = await dialog.showOpenDialog(ctx.baseWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Web Files', extensions: ['html', 'htm', 'xhtml', 'svg', 'xml', 'json', 'txt', 'css', 'js', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    const filePath = result.filePaths[0];
+    const fileUrl = 'file:///' + filePath.replace(/\\/g, '/');
+    createTab(ctx, fileUrl);
+    return { ok: true, path: filePath };
+  }
+  return { cancelled: true };
+});
 
 // Sidebar context menu (overlay in tab view when sidebar is collapsed)
 ipcMain.on('sidebar-context-menu', (e, clientX, clientY) => {
@@ -1773,8 +1885,21 @@ ipcMain.handle('downloads-list', () => Array.from(downloads.values()));
 ipcMain.on('download-pause', (_e, id) => { const item = downloadItems.get(id); if (item) item.pause(); });
 ipcMain.on('download-resume', (_e, id) => { const item = downloadItems.get(id); if (item && item.canResume()) item.resume(); });
 ipcMain.on('download-cancel', (_e, id) => { const item = downloadItems.get(id); if (item) item.cancel(); });
-ipcMain.on('download-open-file', (_e, filepath) => { const { shell } = require('electron'); shell.openPath(filepath); });
-ipcMain.on('download-show-folder', (_e, filepath) => { const { shell } = require('electron'); shell.showItemInFolder(filepath); });
+// SEC-08: Validate filepath belongs to a known download before opening
+ipcMain.on('download-open-file', (_e, filepath) => {
+  const { shell } = require('electron');
+  const resolved = path.resolve(filepath);
+  const knownPaths = Array.from(downloads.values()).map(d => path.resolve(d.savePath));
+  if (!knownPaths.includes(resolved)) return;
+  shell.openPath(resolved);
+});
+ipcMain.on('download-show-folder', (_e, filepath) => {
+  const { shell } = require('electron');
+  const resolved = path.resolve(filepath);
+  const knownPaths = Array.from(downloads.values()).map(d => path.resolve(d.savePath));
+  if (!knownPaths.includes(resolved)) return;
+  shell.showItemInFolder(resolved);
+});
 
 // Navigation from internal pages
 ipcMain.on('open-url', (e, url) => {
@@ -2059,10 +2184,11 @@ function buildPageContextMenu(wc, params) {
     items.push({ label: cmL('context_menu.inspect', 'Инспектировать элемент'), action: 'inspect' });
   }
 
-  const menuData = JSON.stringify(items);
-  const aiSubData = JSON.stringify(aiSub);
+  // SEC-13: Double-serialize user data to prevent injection via selectionText
+  const menuData = JSON.stringify(JSON.stringify(items));
+  const aiSubData = JSON.stringify(JSON.stringify(aiSub));
   const aiLabel = JSON.stringify(cmL('context_menu.ai', 'AI'));
-  const translateSubData = JSON.stringify(translateSub);
+  const translateSubData = JSON.stringify(JSON.stringify(translateSub));
   const translateLabel = JSON.stringify(cmL('context_menu.translate', 'Перевести'));
   const mx = params.x;
   const my = params.y;
@@ -2151,10 +2277,10 @@ function buildPageContextMenu(wc, params) {
 
     var menu=document.createElement('div');menu.id='__gb-page-ctx';
     menu.className='__gbp';
-    var items=${menuData};
-    var aiSub=${aiSubData};
+    var items=JSON.parse(${menuData});
+    var aiSub=JSON.parse(${aiSubData});
     var aiLabel=${aiLabel};
-    var translateSub=${translateSubData};
+    var translateSub=JSON.parse(${translateSubData});
     var translateLabel=${translateLabel};
 
     items.forEach(function(it){
@@ -2635,7 +2761,8 @@ async function runAiAction(wc, action, text) {
 // Inject a floating result popup into the page
 function injectAiPopup(wc, result, loading, originalText) {
   if (wc.isDestroyed()) return;
-  const origEsc = JSON.stringify(originalText || '');
+  // SEC-13: Double-serialize to prevent injection
+  const origEsc = JSON.stringify(JSON.stringify(originalText || ''));
   const js = `(function(){
     var p=document.getElementById('__gb-ai-pop');
     if(!p){
@@ -2645,9 +2772,9 @@ function injectAiPopup(wc, result, loading, originalText) {
       document.documentElement.appendChild(s);
       document.documentElement.appendChild(p);
     }
-    window.__gbOrigText=${origEsc};
+    window.__gbOrigText=JSON.parse(${origEsc});
     ${loading ? `p.innerHTML='<div class="hd"><span>AI</span><button id="__gbxl">x</button></div><div class="bd"><div class="ld">${cmL('ai.thinking', 'Thinking...')}</div></div>';p.style.display='flex';var xl=document.getElementById('__gbxl');if(xl)xl.onclick=function(){p.style.display='none';};`
-    : result ? `var r=${JSON.stringify(result)};
+    : result ? `var r=JSON.parse(${JSON.stringify(JSON.stringify(result))});
       var h='<div class="hd"><span>AI Result</span><button id="__gbxp">x</button></div>';
       if(r.error){h+='<div class="bd er">'+r.error.replace(/</g,"&lt;")+'</div>';}
       else{h+='<div class="bd">'+r.text.replace(/</g,"&lt;")+'</div>';h+='<div class="ft"><button class="pr" id="__gbcp">${cmL('ai.copy', 'Copy')}</button><button id="__gbrp">${cmL('ai.replace', 'Replace')}</button></div>';}
@@ -2943,6 +3070,14 @@ ipcMain.handle('clear-cookies', async () => {
   } catch { return { error: 'Failed' }; }
 });
 
+ipcMain.handle('clear-browsing-data', async () => {
+  try {
+    await session.defaultSession.clearCache();
+    await session.defaultSession.clearStorageData();
+    return { ok: true };
+  } catch { return { error: 'Failed' }; }
+});
+
 // ─── Telegram Widget ───
 // Uses a child BrowserWindow with transparent background for real rounded corners.
 // The window is cached (hidden, not destroyed) so Telegram loads only once.
@@ -2985,9 +3120,9 @@ function showTelegram() {
       backgroundColor: '#0d1117',
       webPreferences: {
         contextIsolation: true,
-        sandbox: false,
+        sandbox: true,
         partition: 'persist:telegram',
-        preload: path.join(__dirname, 'preload.js'),
+        preload: path.join(__dirname, 'preload-telegram.js'),
       },
     });
 
@@ -3478,7 +3613,20 @@ ipcMain.handle('github-device-poll', async (_e, { deviceCode }) => {
 
 ipcMain.handle('github-api', async (_e, { endpoint, token, method, body }) => {
   try {
-    const t = token || githubToken;
+    let t = token || githubToken;
+
+    // Restore token from storage if not in memory (fixes settings account tab bug)
+    if (!t) {
+      try { const r = await rustBridge.call('github.get_token', {}); if (r && r.token) { githubToken = r.token; t = r.token; } } catch {}
+    }
+    if (!t) {
+      const local = loadGhTokenLocal();
+      if (local) { githubToken = local; t = local; }
+    }
+    if (!t) {
+      try { const sec = await rustBridge.call('secret.get', { key: 'github_token' }); if (sec && sec.value) { githubToken = sec.value; saveGhTokenLocal(sec.value); t = sec.value; } } catch {}
+    }
+
     if (!t) return { error: 'not_authenticated' };
     const opts = {
       method: method || 'GET',
@@ -3812,12 +3960,13 @@ async function injectPasswordAutofill(wc, pageUrl) {
     const creds = await rustBridge.call('password.list', { url: pageUrl });
     if (!Array.isArray(creds) || creds.length === 0) return;
     // SEC-04: Only send usernames to the page, decrypt passwords on demand via IPC
-    const credsJson = JSON.stringify(creds.map(c => ({ id: c.id, username: c.username })));
+    // SEC-13: Safe data passing — double-serialize to avoid interpolation risks
+    const credsPayload = JSON.stringify(JSON.stringify(creds.map(c => ({ id: c.id, username: c.username }))));
     wc.executeJavaScript(`
       (function() {
         if (window.__gbAutofillInjected) return;
         window.__gbAutofillInjected = true;
-        const creds = ${credsJson};
+        const creds = JSON.parse(${credsPayload});
         const pwFields = document.querySelectorAll('input[type="password"]');
         if (pwFields.length === 0) return;
         pwFields.forEach(pwField => {
@@ -3893,17 +4042,23 @@ async function injectContentScripts(wc, pageUrl, runAt) {
       // Inject CSS
       if (script.css && script.css.length > 0) {
         for (const cssCode of script.css) {
-          wc.insertCSS(cssCode).catch(() => {});
+          wc.insertCSS(cssCode).catch((err) => {
+            console.error(`[Extension] CSS injection failed for ${pageUrl}:`, err.message);
+          });
         }
       }
-      // Inject JS
+      // BUG-06: Log errors instead of silently swallowing them
       if (script.js && script.js.length > 0) {
         for (const jsCode of script.js) {
-          wc.executeJavaScript(`(function() { ${jsCode} })();`).catch(() => {});
+          wc.executeJavaScript(`(function() { ${jsCode} })();`).catch((err) => {
+            console.error(`[Extension] JS injection failed for ${pageUrl}:`, err.message);
+          });
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('[Extension] Content script injection error:', err.message);
+  }
 }
 
 function normalizeUrl(input) {
@@ -3911,6 +4066,10 @@ function normalizeUrl(input) {
   if (!trimmed) return 'gb://newtab';
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   if (trimmed.startsWith('gb://')) return trimmed;
+  if (trimmed.startsWith('file://')) return trimmed;
+  // Support local file paths: C:\, D:\, /home/... etc.
+  if (/^[A-Za-z]:[\\\/]/.test(trimmed)) return 'file:///' + trimmed.replace(/\\/g, '/');
+  if (trimmed.startsWith('/') && fs.existsSync(trimmed)) return 'file://' + trimmed;
   if (trimmed.includes('.') && !trimmed.includes(' ')) return 'https://' + trimmed;
   const q = encodeURIComponent(trimmed);
   const engines = {
@@ -3922,12 +4081,12 @@ function normalizeUrl(input) {
   return engines[currentSearchEngine] || engines.google;
 }
 
-// SEC-05: Block dangerous URL schemes (file://, javascript:, data:, vbscript:, etc.)
+// SEC-05: Block dangerous URL schemes (javascript:, data:, vbscript:, etc.)
+// file:// is allowed for local file browsing, view-source: for source viewing
 function isBlockedUrl(url) {
   if (!url || typeof url !== 'string') return true;
   const lower = url.trim().toLowerCase();
   if (lower.startsWith('javascript:')) return true;
-  if (lower.startsWith('file://')) return true;
   if (lower.startsWith('data:')) return true;
   if (lower.startsWith('vbscript:')) return true;
   if (lower.startsWith('blob:')) return true;

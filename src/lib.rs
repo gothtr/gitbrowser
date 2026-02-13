@@ -7,6 +7,7 @@ pub mod database;
 pub mod managers;
 pub mod platform;
 pub mod services;
+pub mod rpc_handler;
 pub mod types;
 
 #[cfg(feature = "gui")]

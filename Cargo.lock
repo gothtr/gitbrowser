@@ -986,6 +986,7 @@ name = "gitbrowser"
 version = "0.3.0"
 dependencies = [
  "adblock",
+ "base64",
  "proptest",
  "reqwest",
  "ring",

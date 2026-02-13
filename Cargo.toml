@@ -23,6 +23,7 @@ tokio = { version = "1", features = ["full"] }
 adblock = { version = "0.12", optional = true }
 trust-dns-resolver = { version = "0.23", optional = true }
 uuid = { version = "1", features = ["v4", "serde"] }
+base64 = "0.22"
 
 [dev-dependencies]
 proptest = "1"
@@ -88,6 +89,34 @@ path = "tests/property/session_roundtrip_test.rs"
 [[test]]
 name = "tab_manager_test"
 path = "tests/unit/tab_manager_test.rs"
+
+[[test]]
+name = "rpc_handler_test"
+path = "tests/unit/rpc_handler_test.rs"
+
+[[test]]
+name = "security_test"
+path = "tests/unit/security_test.rs"
+
+[[test]]
+name = "extension_framework_test"
+path = "tests/unit/extension_framework_test.rs"
+
+[[test]]
+name = "github_integration_test"
+path = "tests/unit/github_integration_test.rs"
+
+[[test]]
+name = "ai_assistant_test"
+path = "tests/unit/ai_assistant_test.rs"
+
+[[test]]
+name = "privacy_engine_test"
+path = "tests/unit/privacy_engine_test.rs"
+
+[[test]]
+name = "password_manager_test"
+path = "tests/unit/password_manager_test.rs"
 
 [[bin]]
 name = "gitbrowser-rpc"

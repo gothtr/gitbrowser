@@ -53,6 +53,106 @@ impl ReaderMode {
         result
     }
 
+    /// SEC-10: Escape HTML special characters to prevent XSS in text content.
+    fn escape_html(input: &str) -> String {
+        let mut result = String::with_capacity(input.len());
+        for ch in input.chars() {
+            match ch {
+                '&' => result.push_str("&amp;"),
+                '<' => result.push_str("&lt;"),
+                '>' => result.push_str("&gt;"),
+                '"' => result.push_str("&quot;"),
+                '\'' => result.push_str("&#x27;"),
+                _ => result.push(ch),
+            }
+        }
+        result
+    }
+
+    /// SEC-10: Sanitize HTML content by removing dangerous elements and attributes.
+    fn sanitize_html(html: &str) -> String {
+        let mut result = html.to_string();
+
+        // Remove <script>...</script> tags and their content (case-insensitive)
+        loop {
+            let lower = result.to_lowercase();
+            if let Some(start) = lower.find("<script") {
+                if let Some(end) = lower[start..].find("</script>") {
+                    let remove_end = start + end + "</script>".len();
+                    result = format!("{}{}", &result[..start], &result[remove_end..]);
+                    continue;
+                } else {
+                    // Unclosed script tag — remove from <script to end
+                    result = result[..start].to_string();
+                    break;
+                }
+            }
+            break;
+        }
+
+        // Remove on* event handler attributes (e.g. onclick, onerror, onload)
+        let on_attr_re_patterns = [
+            "onerror", "onclick", "onload", "onmouseover", "onfocus", "onblur",
+            "onsubmit", "onchange", "oninput", "onkeydown", "onkeyup", "onkeypress",
+            "onmousedown", "onmouseup", "onmouseenter", "onmouseleave", "oncontextmenu",
+            "ondblclick", "ondrag", "ondrop", "onresize", "onscroll", "onwheel",
+        ];
+        for attr in &on_attr_re_patterns {
+            loop {
+                let lower = result.to_lowercase();
+                if let Some(pos) = lower.find(attr) {
+                    // Check it's inside a tag (preceded by space or quote)
+                    if pos > 0 {
+                        let before = result.as_bytes()[pos - 1];
+                        if before == b' ' || before == b'"' || before == b'\'' || before == b'\t' || before == b'\n' {
+                            // Find the end of the attribute value
+                            if let Some(eq_pos) = lower[pos..].find('=') {
+                                let after_eq = pos + eq_pos + 1;
+                                let rest = &result[after_eq..].trim_start();
+                                let attr_end = if rest.starts_with('"') {
+                                    rest[1..].find('"').map(|i| after_eq + (result.len() - after_eq - rest.len()) + 1 + i + 1)
+                                } else if rest.starts_with('\'') {
+                                    rest[1..].find('\'').map(|i| after_eq + (result.len() - after_eq - rest.len()) + 1 + i + 1)
+                                } else {
+                                    rest.find(|c: char| c.is_whitespace() || c == '>')
+                                        .map(|i| after_eq + (result.len() - after_eq - rest.len()) + i)
+                                };
+                                if let Some(end) = attr_end {
+                                    result = format!("{}{}", &result[..pos - 1], &result[end..]);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    // Not a real attribute match, skip past it
+                    break;
+                }
+                break;
+            }
+        }
+
+        // Remove javascript: URLs in href/src attributes
+        let result_lower = result.to_lowercase();
+        if result_lower.contains("javascript:") {
+            // Simple replacement: replace javascript: with blocked:
+            let mut out = String::with_capacity(result.len());
+            let mut i = 0;
+            let bytes = result.as_bytes();
+            while i < bytes.len() {
+                if i + 11 <= bytes.len() && result[i..i + 11].eq_ignore_ascii_case("javascript:") {
+                    out.push_str("blocked:");
+                    i += 11;
+                } else {
+                    out.push(bytes[i] as char);
+                    i += 1;
+                }
+            }
+            result = out;
+        }
+
+        result
+    }
+
     /// Extracts content between a given tag pair.
     fn extract_between_tags(html: &str, tag: &str) -> Option<String> {
         let open = format!("<{}", tag);
@@ -133,6 +233,11 @@ impl ReaderModeTrait for ReaderMode {
             FontFamily::Monospace => "'SF Mono', 'Fira Code', monospace",
         };
 
+        // SEC-10: HTML-escape the title to prevent XSS
+        let safe_title = Self::escape_html(&content.title);
+        // SEC-10: Sanitize content HTML (strip script tags, event handlers, javascript: URLs)
+        let safe_content = Self::sanitize_html(&content.content);
+
         format!(
             r#"<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
@@ -146,7 +251,7 @@ h1 {{ font-size: 1.8em; margin-bottom: 0.5em; }}
 </body></html>"#,
             font_family, settings.font_size, settings.line_height,
             settings.background_color, settings.max_width,
-            content.title, content.estimated_read_time_minutes, content.content
+            safe_title, content.estimated_read_time_minutes, safe_content
         )
     }
 

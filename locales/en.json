@@ -149,6 +149,7 @@
     "clear_cookies": "Clear Cookies",
     "clear_cookies_desc": "Remove all cookies and site data",
     "clear_btn": "Clear",
+    "data_cleared": "Browsing data cleared",
     "license": "License",
     "check_update": "Check for Updates",
     "check_update_desc": "Check if a newer version is available",

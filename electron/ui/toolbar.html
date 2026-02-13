@@ -300,14 +300,27 @@ urlEl.addEventListener('focus', function() { this.select(); });
 
 // ─── Keyboard shortcuts ───
 document.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.key === 'l') { e.preventDefault(); urlEl.focus(); urlEl.select(); }
-  if (e.ctrlKey && e.key === 'd') { e.preventDefault(); gb.addBookmark({ url: currentUrl || urlEl.value, title: '' }); }
-  if (e.key === 'F5') { e.preventDefault(); gb.reload(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'l') { e.preventDefault(); urlEl.focus(); urlEl.select(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'd') { e.preventDefault(); gb.addBookmark({ url: currentUrl || urlEl.value, title: '' }); }
+  if (e.key === 'F5' && !e.ctrlKey) { e.preventDefault(); gb.reload(); }
   if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); gb.zoomIn(); }
   if (e.ctrlKey && e.key === '-') { e.preventDefault(); gb.zoomOut(); }
   if (e.ctrlKey && e.key === '0') { e.preventDefault(); gb.zoomReset(); }
   if (e.key === 'F11') { e.preventDefault(); gb.toggleFullscreen(); }
-  if (e.ctrlKey && e.key === 'f') { e.preventDefault(); toggleFindBar(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'f') { e.preventDefault(); toggleFindBar(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 't') { e.preventDefault(); gb.newTab(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'w') { e.preventDefault(); gb.closeTab(currentActiveId); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'r') { e.preventDefault(); gb.reload(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'n') { e.preventDefault(); gb.openNewWindow(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'h') { e.preventDefault(); gb.openHistory(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'j') { e.preventDefault(); gb.openDownloads(); }
+  if (e.ctrlKey && e.shiftKey && e.key === 'N') { e.preventDefault(); gb.openPrivateWindow(); }
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') { e.preventDefault(); gb.reopenClosedTab(); }
+  if (e.ctrlKey && !e.shiftKey && e.key === 'Tab') { e.preventDefault(); gb.nextTab(); }
+  if (e.ctrlKey && e.shiftKey && e.key === 'Tab') { e.preventDefault(); gb.prevTab(); }
+  // Ctrl+1-9: switch tabs by index
+  if (e.ctrlKey && !e.shiftKey && e.key >= '1' && e.key <= '9') { e.preventDefault(); }
+  if (e.key === 'Escape') { if (findOpen) toggleFindBar(); }
 });
 
 // ─── Lock icon ───
@@ -319,6 +332,8 @@ function updateLockIcon(url) {
     lockIcon.className = 'secure'; lockIcon.style.display = 'flex';
   } else if (url.startsWith('http://')) {
     lockIcon.className = 'insecure'; lockIcon.style.display = 'flex';
+  } else if (url.startsWith('file://')) {
+    lockIcon.className = ''; lockIcon.style.display = 'flex'; lockIcon.style.color = 'var(--fg-muted)';
   } else { lockIcon.style.display = 'none'; }
 }
 
@@ -332,7 +347,8 @@ gb.onTabsUpdate((data) => {
 gb.onTabUrlUpdated((data) => {
   if (data.id === currentActiveId && data.url) {
     const isInternal = data.url.includes('.html') || data.url.startsWith('gb://');
-    currentUrl = isInternal ? '' : data.url;
+    const isFile = data.url.startsWith('file://');
+    currentUrl = (isInternal && !isFile) ? '' : data.url;
     urlEl.value = currentUrl;
     updateLockIcon(currentUrl);
   }
