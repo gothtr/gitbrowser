@@ -66,6 +66,7 @@ fn arb_privacy_settings() -> impl Strategy<Value = PrivacySettings> {
         "[a-zA-Z0-9:/._-]{5,60}",
         any::<bool>(),
         any::<bool>(),
+        any::<bool>(),
     )
         .prop_map(
             |(
@@ -76,6 +77,7 @@ fn arb_privacy_settings() -> impl Strategy<Value = PrivacySettings> {
                 dns_provider,
                 anti_fingerprinting,
                 clear_data_on_exit,
+                telemetry_consent,
             )| PrivacySettings {
                 tracker_blocking,
                 ad_blocking,
@@ -84,6 +86,7 @@ fn arb_privacy_settings() -> impl Strategy<Value = PrivacySettings> {
                 dns_provider,
                 anti_fingerprinting,
                 clear_data_on_exit,
+                telemetry_consent,
             },
         )
 }
