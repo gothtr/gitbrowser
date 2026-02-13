@@ -23,6 +23,10 @@ pub trait ExtensionFrameworkTrait {
     fn measure_performance_impact(&self, extension_id: &str) -> u64;
     /// Returns all content scripts from enabled extensions that match the given URL.
     fn get_content_scripts_for_url(&self, url: &str) -> Vec<MatchedContentScript>;
+    /// Check if an extension has a specific permission.
+    fn has_permission(&self, extension_id: &str, permission: &ExtensionPermission) -> bool;
+    /// Check if an extension has permission to inject content scripts (requires PageContent).
+    fn check_content_script_permission(&self, extension_id: &str) -> bool;
 }
 
 /// A content script matched to a URL, with resolved file contents.
@@ -312,6 +316,10 @@ impl ExtensionFrameworkTrait for ExtensionFramework {
         let mut result = Vec::new();
         for ext in &self.extensions {
             if !ext.enabled { continue; }
+            // FEAT-01: Enforce PageContent permission for content script injection
+            if !ext.permissions.contains(&ExtensionPermission::PageContent) {
+                continue;
+            }
             for cs in &ext.content_scripts {
                 let matched = cs.matches.iter().any(|pat| url_matches_pattern(url, pat));
                 if !matched { continue; }
@@ -336,5 +344,16 @@ impl ExtensionFrameworkTrait for ExtensionFramework {
             }
         }
         result
+    }
+
+    fn has_permission(&self, extension_id: &str, permission: &ExtensionPermission) -> bool {
+        self.extensions.iter()
+            .find(|e| e.id == extension_id)
+            .map(|e| e.permissions.contains(permission))
+            .unwrap_or(false)
+    }
+
+    fn check_content_script_permission(&self, extension_id: &str) -> bool {
+        self.has_permission(extension_id, &ExtensionPermission::PageContent)
     }
 }

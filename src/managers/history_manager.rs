@@ -15,6 +15,8 @@ pub trait HistoryManagerTrait {
     fn record_visit(&mut self, url: &str, title: &str) -> Result<String, HistoryError>;
     fn search_history(&self, query: &str) -> Result<Vec<HistoryEntry>, HistoryError>;
     fn list_history(&self, date: Option<&str>) -> Result<Vec<HistoryEntry>, HistoryError>;
+    /// Paginated history listing. Returns (entries, total_count).
+    fn list_history_paginated(&self, date: Option<&str>, limit: i64, offset: i64) -> Result<(Vec<HistoryEntry>, i64), HistoryError>;
     fn delete_entry(&mut self, id: &str) -> Result<(), HistoryError>;
     fn clear_all(&mut self) -> Result<(), HistoryError>;
     fn is_recording_enabled(&self) -> bool;
@@ -238,5 +240,58 @@ impl<'a> HistoryManagerTrait for HistoryManager<'a> {
     /// Enables or disables history recording (for private mode integration).
     fn set_recording_enabled(&mut self, enabled: bool) {
         self.recording_enabled = enabled;
+    }
+
+    fn list_history_paginated(&self, date: Option<&str>, limit: i64, offset: i64) -> Result<(Vec<HistoryEntry>, i64), HistoryError> {
+        let (entries, total) = match date {
+            Some(d) => {
+                let start = Self::parse_date_to_timestamp(d)
+                    .map_err(|e| HistoryError::DatabaseError(e))?;
+                let end = start + 86400;
+
+                let total: i64 = self.conn.query_row(
+                    "SELECT COUNT(*) FROM history WHERE visit_time >= ?1 AND visit_time < ?2",
+                    params![start, end],
+                    |row| row.get(0),
+                ).map_err(|e| HistoryError::DatabaseError(e.to_string()))?;
+
+                let mut stmt = self.conn.prepare(
+                    "SELECT id, url, title, visit_time, visit_count \
+                     FROM history WHERE visit_time >= ?1 AND visit_time < ?2 \
+                     ORDER BY visit_time DESC LIMIT ?3 OFFSET ?4",
+                ).map_err(|e| HistoryError::DatabaseError(e.to_string()))?;
+
+                let rows = stmt.query_map(params![start, end, limit, offset], Self::row_to_entry)
+                    .map_err(|e| HistoryError::DatabaseError(e.to_string()))?;
+
+                let mut results = Vec::new();
+                for row in rows {
+                    results.push(row.map_err(|e| HistoryError::DatabaseError(e.to_string()))?);
+                }
+                (results, total)
+            }
+            None => {
+                let total: i64 = self.conn.query_row(
+                    "SELECT COUNT(*) FROM history",
+                    [],
+                    |row| row.get(0),
+                ).map_err(|e| HistoryError::DatabaseError(e.to_string()))?;
+
+                let mut stmt = self.conn.prepare(
+                    "SELECT id, url, title, visit_time, visit_count \
+                     FROM history ORDER BY visit_time DESC LIMIT ?1 OFFSET ?2",
+                ).map_err(|e| HistoryError::DatabaseError(e.to_string()))?;
+
+                let rows = stmt.query_map(params![limit, offset], Self::row_to_entry)
+                    .map_err(|e| HistoryError::DatabaseError(e.to_string()))?;
+
+                let mut results = Vec::new();
+                for row in rows {
+                    results.push(row.map_err(|e| HistoryError::DatabaseError(e.to_string()))?);
+                }
+                (results, total)
+            }
+        };
+        Ok((entries, total))
     }
 }

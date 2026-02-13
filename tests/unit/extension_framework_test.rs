@@ -141,7 +141,7 @@ fn test_content_scripts_match_specific_domain() {
         "id": "domain-ext",
         "name": "GitHub Only",
         "version": "1.0.0",
-        "permissions": [],
+        "permissions": ["pagecontent"],
         "content_scripts": [{
             "matches": ["*://*.github.com/*"],
             "js": ["script.js"]
@@ -169,7 +169,7 @@ fn test_disabled_extension_scripts_not_returned() {
         "id": "disabled-ext",
         "name": "Disabled",
         "version": "1.0.0",
-        "permissions": [],
+        "permissions": ["pagecontent"],
         "content_scripts": [{"matches": ["<all_urls>"], "js": ["s.js"]}]
     }"#;
     std::fs::write(ext_dir.join("manifest.json"), manifest).unwrap();
@@ -196,7 +196,7 @@ fn test_content_script_path_traversal_blocked() {
         "id": "evil-ext",
         "name": "Evil",
         "version": "1.0.0",
-        "permissions": [],
+        "permissions": ["pagecontent"],
         "content_scripts": [{
             "matches": ["<all_urls>"],
             "js": ["../secret.txt"]
@@ -230,7 +230,7 @@ fn test_content_scripts_with_css() {
         "id": "css-ext",
         "name": "CSS Ext",
         "version": "1.0.0",
-        "permissions": [],
+        "permissions": ["pagecontent"],
         "content_scripts": [{
             "matches": ["<all_urls>"],
             "css": ["style.css"]
@@ -279,4 +279,42 @@ fn test_get_extension_returns_info() {
     let ext = fw.get_extension("info-ext").unwrap();
     assert_eq!(ext.name, "info-ext");
     assert_eq!(ext.version, "1.0.0");
+}
+
+// ─── Permission Enforcement (FEAT-01) ───
+
+#[test]
+fn test_content_scripts_blocked_without_pagecontent_permission() {
+    let (mut fw, tmp) = setup();
+    let ext_dir = tmp.path().join("no-perm-ext");
+    std::fs::create_dir_all(&ext_dir).unwrap();
+    std::fs::write(ext_dir.join("inject.js"), "console.log('no perm');").unwrap();
+
+    let manifest = r#"{
+        "id": "no-perm-ext",
+        "name": "No Permission",
+        "version": "1.0.0",
+        "permissions": ["storage"],
+        "content_scripts": [{
+            "matches": ["<all_urls>"],
+            "js": ["inject.js"]
+        }]
+    }"#;
+    std::fs::write(ext_dir.join("manifest.json"), manifest).unwrap();
+    fw.install(ext_dir.to_str().unwrap()).unwrap();
+
+    // Should return 0 scripts because extension lacks PageContent permission
+    let scripts = fw.get_content_scripts_for_url("https://example.com");
+    assert_eq!(scripts.len(), 0, "Extensions without PageContent permission must not inject content scripts");
+}
+
+#[test]
+fn test_has_permission_check() {
+    let (mut fw, tmp) = setup();
+    let ext_path = create_test_extension(&tmp, "perm-check-ext", "[]");
+    fw.install(&ext_path).unwrap();
+
+    assert!(fw.has_permission("perm-check-ext", &gitbrowser::types::extension::ExtensionPermission::PageContent));
+    assert!(!fw.has_permission("perm-check-ext", &gitbrowser::types::extension::ExtensionPermission::Network));
+    assert!(!fw.has_permission("nonexistent", &gitbrowser::types::extension::ExtensionPermission::PageContent));
 }

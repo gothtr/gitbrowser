@@ -50,12 +50,14 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
         }
         "bookmark.list" => {
             let folder = params.get("folder_id").and_then(|v| v.as_str());
+            let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(100);
+            let offset = params.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
             let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mgr = BookmarkManager::new(conn);
-            let bms = mgr.list_bookmarks(folder).map_err(|e| e.to_string())?;
+            let (bms, total) = mgr.list_bookmarks_paginated(folder, limit, offset).map_err(|e| e.to_string())?;
             let arr: Vec<Value> = bms.iter().map(|b| json!({"id":b.id,"url":b.url,"title":b.title,"folder_id":b.folder_id})).collect();
-            Ok(json!(arr))
+            Ok(json!({"items": arr, "total": total, "limit": limit, "offset": offset}))
         }
         "bookmark.search" => {
             let query = params.get("query").and_then(|v| v.as_str()).ok_or("missing query")?;
@@ -98,12 +100,15 @@ pub fn handle_method(app: &Mutex<App>, method: &str, params: &Value) -> Result<V
             Ok(json!(arr))
         }
         "history.recent" => {
+            let limit = params.get("limit").and_then(|v| v.as_i64()).unwrap_or(100);
+            let offset = params.get("offset").and_then(|v| v.as_i64()).unwrap_or(0);
+            let date = params.get("date").and_then(|v| v.as_str());
             let a = app.lock().map_err(|e| e.to_string())?;
             let conn = a.db.connection();
             let mgr = HistoryManager::new(conn);
-            let entries = mgr.list_history(None).map_err(|e| e.to_string())?;
+            let (entries, total) = mgr.list_history_paginated(date, limit, offset).map_err(|e| e.to_string())?;
             let arr: Vec<Value> = entries.iter().map(|h| json!({"id":h.id,"url":h.url,"title":h.title,"visit_count":h.visit_count,"visit_time":h.visit_time * 1000})).collect();
-            Ok(json!(arr))
+            Ok(json!({"items": arr, "total": total, "limit": limit, "offset": offset}))
         }
         "history.delete" => {
             let id = params.get("id").and_then(|v| v.as_str()).ok_or("missing id")?;

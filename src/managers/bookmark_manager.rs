@@ -18,6 +18,8 @@ pub trait BookmarkManagerTrait {
     fn move_bookmark(&mut self, id: &str, folder_id: Option<&str>) -> Result<(), BookmarkError>;
     fn search_bookmarks(&self, query: &str) -> Result<Vec<Bookmark>, BookmarkError>;
     fn list_bookmarks(&self, folder_id: Option<&str>) -> Result<Vec<Bookmark>, BookmarkError>;
+    /// Paginated bookmark listing. Returns (bookmarks, total_count).
+    fn list_bookmarks_paginated(&self, folder_id: Option<&str>, limit: i64, offset: i64) -> Result<(Vec<Bookmark>, i64), BookmarkError>;
     fn create_folder(&mut self, name: &str, parent_id: Option<&str>) -> Result<String, BookmarkError>;
     fn delete_folder(&mut self, id: &str) -> Result<(), BookmarkError>;
 }
@@ -313,5 +315,42 @@ impl<'a> BookmarkManagerTrait for BookmarkManager<'a> {
             return Err(BookmarkError::FolderNotFound(id.to_string()));
         }
         Ok(())
+    }
+
+    fn list_bookmarks_paginated(&self, folder_id: Option<&str>, limit: i64, offset: i64) -> Result<(Vec<Bookmark>, i64), BookmarkError> {
+        let total: i64 = match folder_id {
+            Some(fid) => self.conn.query_row(
+                "SELECT COUNT(*) FROM bookmarks WHERE folder_id = ?1",
+                params![fid],
+                |row| row.get(0),
+            ),
+            None => self.conn.query_row(
+                "SELECT COUNT(*) FROM bookmarks WHERE folder_id IS NULL",
+                [],
+                |row| row.get(0),
+            ),
+        }.map_err(|e| BookmarkError::DatabaseError(e.to_string()))?;
+
+        let mut stmt = match folder_id {
+            Some(_) => self.conn.prepare(
+                "SELECT id, url, title, folder_id, position, created_at, updated_at \
+                 FROM bookmarks WHERE folder_id = ?1 ORDER BY position LIMIT ?2 OFFSET ?3",
+            ),
+            None => self.conn.prepare(
+                "SELECT id, url, title, folder_id, position, created_at, updated_at \
+                 FROM bookmarks WHERE folder_id IS NULL ORDER BY position LIMIT ?1 OFFSET ?2",
+            ),
+        }.map_err(|e| BookmarkError::DatabaseError(e.to_string()))?;
+
+        let rows = match folder_id {
+            Some(fid) => stmt.query_map(params![fid, limit, offset], Self::row_to_bookmark),
+            None => stmt.query_map(params![limit, offset], Self::row_to_bookmark),
+        }.map_err(|e| BookmarkError::DatabaseError(e.to_string()))?;
+
+        let mut results = Vec::new();
+        for row in rows {
+            results.push(row.map_err(|e| BookmarkError::DatabaseError(e.to_string()))?);
+        }
+        Ok((results, total))
     }
 }

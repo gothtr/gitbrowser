@@ -1,27 +1,73 @@
 //! Schema migrations for the GitBrowser SQLite database.
 //!
-//! All tables use `CREATE TABLE IF NOT EXISTS` so migrations are idempotent
-//! and safe to run on every application startup.
+//! Uses a `schema_version` table to track which migrations have been applied.
+//! Each migration runs exactly once and is recorded with a timestamp.
 
 use rusqlite::Connection;
 
-/// Runs all schema migrations against the provided connection.
+/// Current schema version. Bump this when adding a new migration.
+pub const CURRENT_SCHEMA_VERSION: i32 = 2;
+
+/// Returns the current schema version from the database (0 if table doesn't exist).
+pub fn get_schema_version(conn: &Connection) -> i32 {
+    conn.query_row(
+        "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+        [],
+        |row| row.get(0),
+    )
+    .unwrap_or(0)
+}
+
+/// Runs all pending schema migrations against the provided connection.
 ///
-/// Creates every table and index required by the application. The function
-/// is idempotent — calling it multiple times has no adverse effect.
+/// Migrations are versioned — each runs exactly once and is recorded in
+/// the `schema_version` table. Safe to call on every startup.
 ///
 /// # Errors
 /// Returns `rusqlite::Error` if any SQL statement fails.
 pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Enable WAL and foreign keys (always, not versioned)
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA foreign_keys = ON;
+         CREATE TABLE IF NOT EXISTS schema_version (
+             version INTEGER PRIMARY KEY,
+             applied_at INTEGER NOT NULL,
+             description TEXT NOT NULL
+         );"
+    )?;
+
+    let current = get_schema_version(conn);
+
+    if current < 1 {
+        migration_v1(conn)?;
+        record_version(conn, 1, "Initial schema: all core tables")?;
+    }
+
+    if current < 2 {
+        migration_v2(conn)?;
+        record_version(conn, 2, "Add content_scripts to extensions, uses_master to secure_store")?;
+    }
+
+    Ok(())
+}
+
+fn record_version(conn: &Connection, version: i32, description: &str) -> Result<(), rusqlite::Error> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_version (version, applied_at, description) VALUES (?1, ?2, ?3)",
+        rusqlite::params![version, now, description],
+    )?;
+    Ok(())
+}
+
+/// V1: Create all core tables.
+fn migration_v1(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
         "
-        -- Enable WAL mode for better concurrent read performance
-        PRAGMA journal_mode = WAL;
-
-        -- Enable foreign key enforcement
-        PRAGMA foreign_keys = ON;
-
-        -- ===== Bookmark folders =====
         CREATE TABLE IF NOT EXISTS bookmark_folders (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -30,7 +76,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             FOREIGN KEY (parent_id) REFERENCES bookmark_folders(id)
         );
 
-        -- ===== Bookmarks =====
         CREATE TABLE IF NOT EXISTS bookmarks (
             id TEXT PRIMARY KEY,
             url TEXT NOT NULL,
@@ -42,7 +87,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             FOREIGN KEY (folder_id) REFERENCES bookmark_folders(id)
         );
 
-        -- ===== History =====
         CREATE TABLE IF NOT EXISTS history (
             id TEXT PRIMARY KEY,
             url TEXT NOT NULL,
@@ -54,7 +98,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_history_url ON history(url);
         CREATE INDEX IF NOT EXISTS idx_history_visit_time ON history(visit_time);
 
-        -- ===== Credentials (encrypted) =====
         CREATE TABLE IF NOT EXISTS credentials (
             id TEXT PRIMARY KEY,
             url TEXT NOT NULL,
@@ -68,7 +111,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
 
         CREATE INDEX IF NOT EXISTS idx_credentials_url ON credentials(url);
 
-        -- ===== Downloads =====
         CREATE TABLE IF NOT EXISTS downloads (
             id TEXT PRIMARY KEY,
             url TEXT NOT NULL,
@@ -82,7 +124,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             completed_at INTEGER
         );
 
-        -- ===== Site permissions =====
         CREATE TABLE IF NOT EXISTS site_permissions (
             id TEXT PRIMARY KEY,
             origin TEXT NOT NULL,
@@ -92,7 +133,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             UNIQUE(origin, permission_type)
         );
 
-        -- ===== AI chat messages (encrypted) =====
         CREATE TABLE IF NOT EXISTS ai_chat_messages (
             id TEXT PRIMARY KEY,
             role TEXT NOT NULL,
@@ -106,7 +146,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             timestamp INTEGER NOT NULL
         );
 
-        -- ===== Extensions =====
         CREATE TABLE IF NOT EXISTS extensions (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -118,7 +157,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             installed_at INTEGER NOT NULL
         );
 
-        -- ===== Crash logs =====
         CREATE TABLE IF NOT EXISTS crash_logs (
             id TEXT PRIMARY KEY,
             tab_url TEXT,
@@ -127,7 +165,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             timestamp INTEGER NOT NULL
         );
 
-        -- ===== Sessions (encrypted) =====
         CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY,
             encrypted_data BLOB NOT NULL,
@@ -136,7 +173,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             timestamp INTEGER NOT NULL
         );
 
-        -- ===== GitHub auth (encrypted token) =====
         CREATE TABLE IF NOT EXISTS github_auth (
             id TEXT PRIMARY KEY DEFAULT 'default',
             encrypted_token BLOB NOT NULL,
@@ -147,7 +183,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             updated_at INTEGER NOT NULL
         );
 
-        -- ===== GitHub sync (Gist cache) =====
         CREATE TABLE IF NOT EXISTS github_sync (
             id TEXT PRIMARY KEY,
             sync_type TEXT NOT NULL,
@@ -155,7 +190,6 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             last_synced_at INTEGER NOT NULL
         );
 
-        -- ===== Secure secret store (master-password encrypted) =====
         CREATE TABLE IF NOT EXISTS secure_store (
             key TEXT PRIMARY KEY,
             ciphertext BLOB NOT NULL,
@@ -164,29 +198,23 @@ pub fn run_all(conn: &Connection) -> Result<(), rusqlite::Error> {
             updated_at INTEGER NOT NULL,
             uses_master INTEGER NOT NULL DEFAULT 0
         );
-        ",
-    )?;
+        "
+    )
+}
 
-    // ─── Incremental migrations for existing databases ───
-    // Add content_scripts column to extensions table if missing
-    let has_cs_col: bool = conn
-        .prepare("SELECT content_scripts FROM extensions LIMIT 0")
-        .is_ok();
-    if !has_cs_col {
+/// V2: Add columns for older databases that were created before V1 included them.
+fn migration_v2(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // content_scripts column on extensions
+    if conn.prepare("SELECT content_scripts FROM extensions LIMIT 0").is_err() {
         let _ = conn.execute_batch(
             "ALTER TABLE extensions ADD COLUMN content_scripts TEXT NOT NULL DEFAULT '[]';"
         );
     }
-
-    // Add uses_master column to secure_store if missing
-    let has_um_col: bool = conn
-        .prepare("SELECT uses_master FROM secure_store LIMIT 0")
-        .is_ok();
-    if !has_um_col {
+    // uses_master column on secure_store
+    if conn.prepare("SELECT uses_master FROM secure_store LIMIT 0").is_err() {
         let _ = conn.execute_batch(
             "ALTER TABLE secure_store ADD COLUMN uses_master INTEGER NOT NULL DEFAULT 0;"
         );
     }
-
     Ok(())
 }

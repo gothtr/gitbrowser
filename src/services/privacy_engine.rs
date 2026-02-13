@@ -17,15 +17,48 @@ pub trait PrivacyEngineTrait {
     fn is_private_mode(&self) -> bool;
     fn get_stats(&self) -> &PrivacyStats;
     fn clear_private_data(&mut self) -> Result<(), PrivacyError>;
+    /// Record a blocked request in stats. Call after should_block_request returns true.
+    fn record_blocked(&mut self, url: &str);
+    /// Record an HTTPS upgrade in stats.
+    fn record_https_upgrade(&mut self);
 }
 
 /// Known tracker domains for basic blocking without the adblock crate.
 const TRACKER_DOMAINS: &[&str] = &[
+    // Google
     "google-analytics.com", "googletagmanager.com", "doubleclick.net",
-    "facebook.net", "fbcdn.net", "analytics.google.com",
-    "adservice.google.com", "pagead2.googlesyndication.com",
-    "amazon-adsystem.com", "scorecardresearch.com",
-    "quantserve.com", "hotjar.com", "mixpanel.com",
+    "analytics.google.com", "adservice.google.com", "pagead2.googlesyndication.com",
+    "googleadservices.com", "googlesyndication.com", "google-analytics.l.google.com",
+    // Facebook / Meta
+    "facebook.net", "fbcdn.net", "pixel.facebook.com", "connect.facebook.net",
+    "graph.facebook.com",
+    // Amazon
+    "amazon-adsystem.com", "aax.amazon-adsystem.com",
+    // Analytics & tracking
+    "scorecardresearch.com", "quantserve.com", "hotjar.com", "mixpanel.com",
+    "segment.io", "segment.com", "amplitude.com", "heapanalytics.com",
+    "fullstory.com", "mouseflow.com", "crazyegg.com", "luckyorange.com",
+    "clarity.ms", "newrelic.com", "nr-data.net",
+    // Ad networks
+    "outbrain.com", "taboola.com", "criteo.com", "criteo.net",
+    "adsrvr.org", "adnxs.com", "rubiconproject.com", "pubmatic.com",
+    "openx.net", "casalemedia.com", "indexexchange.com",
+    "moatads.com", "doubleverify.com", "adsafeprotected.com",
+    // Social trackers
+    "platform.twitter.com", "syndication.twitter.com",
+    "platform.linkedin.com", "snap.licdn.com",
+    "static.ads-twitter.com",
+    // Other trackers
+    "bat.bing.com", "ads.yahoo.com", "yandex.ru/metrika",
+    "mc.yandex.ru", "top-fwz1.mail.ru", "vk.com/rtrg",
+    "tiktokcdn.com/tiktok/falcon", "analytics.tiktok.com",
+];
+
+/// Known ad-serving URL path patterns.
+const AD_PATH_PATTERNS: &[&str] = &[
+    "/ads/", "/ad/", "/adserver", "/adclick", "/pagead/",
+    "/doubleclick/", "/adsense/", "/adview", "/adframe",
+    "/sponsor", "/banner", "/popup",
 ];
 
 /// Privacy engine implementation.
@@ -52,6 +85,11 @@ impl PrivacyEngine {
         let url_lower = url.to_lowercase();
         TRACKER_DOMAINS.iter().any(|domain| url_lower.contains(domain))
     }
+
+    fn is_ad_url(&self, url: &str) -> bool {
+        let url_lower = url.to_lowercase();
+        AD_PATH_PATTERNS.iter().any(|pat| url_lower.contains(pat))
+    }
 }
 
 impl Default for PrivacyEngine {
@@ -70,7 +108,9 @@ impl PrivacyEngineTrait for PrivacyEngine {
         if !self.tracker_blocking_enabled {
             return false;
         }
-        self.is_tracker_url(url)
+        let is_tracker = self.is_tracker_url(url);
+        let is_ad = self.is_ad_url(url);
+        is_tracker || is_ad
     }
 
     fn upgrade_to_https(&self, url: &str) -> Option<String> {
@@ -113,5 +153,18 @@ impl PrivacyEngineTrait for PrivacyEngine {
         // For now, reset stats for the private session.
         self.stats = PrivacyStats::default();
         Ok(())
+    }
+
+    fn record_blocked(&mut self, url: &str) {
+        if self.is_tracker_url(url) {
+            self.stats.trackers_blocked += 1;
+        }
+        if self.is_ad_url(url) {
+            self.stats.ads_blocked += 1;
+        }
+    }
+
+    fn record_https_upgrade(&mut self) {
+        self.stats.https_upgrades += 1;
     }
 }

@@ -54,7 +54,7 @@ fn test_bookmark_add_and_list() {
     assert_eq!(res["url"], "https://example.com");
 
     let list = handle_method(&app, "bookmark.list", &json!({})).unwrap();
-    let arr = list.as_array().unwrap();
+    let arr = list["items"].as_array().unwrap();
     assert_eq!(arr.len(), 1);
     assert_eq!(arr[0]["title"], "Example");
 }
@@ -106,7 +106,7 @@ fn test_bookmark_delete() {
     handle_method(&app, "bookmark.delete", &json!({"id": id})).unwrap();
 
     let list = handle_method(&app, "bookmark.list", &json!({})).unwrap();
-    assert_eq!(list.as_array().unwrap().len(), 0);
+    assert_eq!(list["items"].as_array().unwrap().len(), 0);
 }
 
 #[test]
@@ -124,8 +124,8 @@ fn test_bookmark_list_with_folder() {
 
     let root = handle_method(&app, "bookmark.list", &json!({})).unwrap();
     // Root listing should only show bookmarks without folder
-    assert_eq!(root.as_array().unwrap().len(), 1);
-    assert_eq!(root.as_array().unwrap()[0]["title"], "Root");
+    assert_eq!(root["items"].as_array().unwrap().len(), 1);
+    assert_eq!(root["items"].as_array().unwrap()[0]["title"], "Root");
 }
 
 // ─── History ───
@@ -138,7 +138,7 @@ fn test_history_record_and_recent() {
     })).unwrap();
 
     let recent = handle_method(&app, "history.recent", &json!({})).unwrap();
-    let arr = recent.as_array().unwrap();
+    let arr = recent["items"].as_array().unwrap();
     assert_eq!(arr.len(), 1);
     assert_eq!(arr[0]["url"], "https://example.com");
     // visit_time should be in milliseconds (multiplied by 1000)
@@ -180,12 +180,12 @@ fn test_history_delete() {
     handle_method(&app, "history.record", &json!({"url": "https://example.com", "title": "Ex"})).unwrap();
 
     let recent = handle_method(&app, "history.recent", &json!({})).unwrap();
-    let id = recent.as_array().unwrap()[0]["id"].as_str().unwrap().to_string();
+    let id = recent["items"].as_array().unwrap()[0]["id"].as_str().unwrap().to_string();
 
     handle_method(&app, "history.delete", &json!({"id": id})).unwrap();
 
     let after = handle_method(&app, "history.recent", &json!({})).unwrap();
-    assert_eq!(after.as_array().unwrap().len(), 0);
+    assert_eq!(after["items"].as_array().unwrap().len(), 0);
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn test_history_clear() {
     handle_method(&app, "history.clear", &json!({})).unwrap();
 
     let recent = handle_method(&app, "history.recent", &json!({})).unwrap();
-    assert_eq!(recent.as_array().unwrap().len(), 0);
+    assert_eq!(recent["items"].as_array().unwrap().len(), 0);
 }
 
 // ─── Settings ───
