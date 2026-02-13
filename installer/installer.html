@@ -5,181 +5,203 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{
-  width:480px;height:480px;overflow:hidden;
+  width:480px;height:520px;overflow:hidden;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;
   background:#0a0e14;color:#e2e8f0;
   user-select:none;-webkit-user-select:none;
   -webkit-font-smoothing:antialiased;
 }
-body{display:flex;flex-direction:column;position:relative;border-radius:16px;overflow:hidden}
+body{display:flex;flex-direction:column;position:relative}
 
-.bg-glow{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.bg-glow::before{
-  content:'';position:absolute;top:-50%;left:-30%;width:160%;height:160%;
-  background:radial-gradient(ellipse at 30% 30%,rgba(59,130,246,0.07) 0%,transparent 60%),
-             radial-gradient(ellipse at 70% 70%,rgba(59,130,246,0.04) 0%,transparent 50%);
-  animation:glowDrift 14s ease-in-out infinite alternate;
+/* ─── Ambient background ─── */
+.bg{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.bg::before{
+  content:'';position:absolute;top:-40%;left:-20%;width:140%;height:140%;
+  background:radial-gradient(ellipse at 35% 25%,rgba(96,165,250,0.06) 0%,transparent 55%),
+             radial-gradient(ellipse at 65% 75%,rgba(96,165,250,0.03) 0%,transparent 50%);
+  animation:drift 16s ease-in-out infinite alternate;
 }
-@keyframes glowDrift{0%{transform:translate(0,0) scale(1)}100%{transform:translate(15px,-10px) scale(1.04)}}
+@keyframes drift{0%{transform:translate(0,0)}100%{transform:translate(10px,-8px)}}
 
+/* ─── Title bar ─── */
 .titlebar{
-  position:relative;z-index:10;height:32px;flex-shrink:0;
+  position:relative;z-index:10;height:36px;flex-shrink:0;
   -webkit-app-region:drag;
-  display:flex;align-items:center;justify-content:flex-end;padding:0 6px;
+  display:flex;align-items:center;justify-content:flex-end;padding:0 8px;
 }
-.tb-btn{
+.tb-close{
   -webkit-app-region:no-drag;
   width:28px;height:28px;border:none;background:none;
-  color:#4a5168;cursor:pointer;border-radius:8px;
+  color:rgba(255,255,255,0.2);cursor:pointer;border-radius:8px;
   display:flex;align-items:center;justify-content:center;
-  transition:all 150ms cubic-bezier(0.16,1,0.3,1);
+  transition:all 150ms;
 }
-.tb-btn:hover{background:rgba(255,255,255,0.06);color:#7c8494}
-.tb-btn.close-btn:hover{background:rgba(220,38,38,0.12);color:#f87171}
+.tb-close:hover{background:rgba(220,38,38,0.12);color:#f87171}
 
+/* ─── Content ─── */
 .content{
   flex:1;display:flex;flex-direction:column;align-items:center;
   justify-content:center;position:relative;z-index:1;
-  padding:0 36px 24px;gap:0;
+  padding:0 40px 28px;gap:0;
 }
 
-.logo-wrap{animation:logoEnter 0.6s cubic-bezier(0.16,1,0.3,1) both;margin-bottom:6px}
-.logo-wrap img{height:64px;width:auto;filter:drop-shadow(0 4px 20px rgba(59,130,246,0.1))}
-@keyframes logoEnter{from{opacity:0;transform:scale(0.85) translateY(10px)}to{opacity:1;transform:none}}
+/* Logo */
+.logo-area{
+  position:relative;margin-bottom:8px;
+  animation:logoIn 0.7s cubic-bezier(0.16,1,0.3,1) both;
+}
+.logo-area img{height:72px;width:auto;position:relative;z-index:2;filter:drop-shadow(0 0 24px rgba(96,165,250,0.15))}
+.logo-glow{
+  position:absolute;inset:-24px;border-radius:50%;
+  background:radial-gradient(circle,rgba(96,165,250,0.12) 0%,transparent 70%);
+  animation:pulse 3s ease-in-out infinite;
+}
+@keyframes logoIn{from{opacity:0;transform:scale(0.8) translateY(12px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
 
-.version{
+/* Version pill */
+.ver-pill{
   display:inline-flex;align-items:center;gap:6px;
-  padding:3px 10px;border-radius:9999px;
-  background:rgba(18,22,30,0.88);
-  border:1px solid rgba(255,255,255,0.07);
-  font-size:11px;color:#7c8494;font-weight:500;
+  padding:3px 12px;border-radius:99px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+  font-size:11px;color:rgba(255,255,255,0.35);font-weight:500;
+  margin-bottom:24px;
   animation:fadeUp 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both;
-  margin-bottom:20px;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.06);
 }
-.version .dot{width:5px;height:5px;border-radius:50%;background:#3b82f6}
-@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.ver-pill .dot{width:5px;height:5px;border-radius:50%;background:#60a5fa}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
+/* Steps */
 .steps{
-  display:flex;align-items:center;gap:0;margin-bottom:18px;
+  display:flex;align-items:center;gap:0;margin-bottom:24px;
   animation:fadeUp 0.5s 0.15s cubic-bezier(0.16,1,0.3,1) both;
 }
-.step{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:#4a5168;transition:color 0.4s}
-.step.active{color:#7c8494}
+.step{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:500;color:rgba(255,255,255,0.15);transition:color 0.4s}
+.step.active{color:rgba(255,255,255,0.5)}
 .step.done{color:#34d399}
-.step-dot{
-  width:22px;height:22px;border-radius:50%;
-  border:1.5px solid rgba(255,255,255,0.08);
+.step-num{
+  width:24px;height:24px;border-radius:50%;
+  border:1.5px solid rgba(255,255,255,0.06);
   display:flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:700;color:#4a5168;
+  font-size:10px;font-weight:700;
   transition:all 0.4s cubic-bezier(0.16,1,0.3,1);
 }
-.step.active .step-dot{border-color:rgba(59,130,246,0.35);color:#60a5fa;box-shadow:0 0 10px rgba(59,130,246,0.15)}
-.step.done .step-dot{border-color:rgba(52,211,153,0.35);color:#34d399;background:rgba(52,211,153,0.06)}
-.step-line{width:28px;height:1px;background:rgba(255,255,255,0.05);margin:0 4px;position:relative;overflow:hidden}
+.step.active .step-num{border-color:rgba(96,165,250,0.3);color:#60a5fa;box-shadow:0 0 12px rgba(96,165,250,0.12)}
+.step.done .step-num{border-color:rgba(52,211,153,0.3);color:#34d399;background:rgba(52,211,153,0.06)}
+.step-line{width:32px;height:1px;background:rgba(255,255,255,0.04);margin:0 6px;position:relative;overflow:hidden}
 .step-line::after{
   content:'';position:absolute;inset:0;
-  background:linear-gradient(90deg,#3b82f6,#34d399);
+  background:linear-gradient(90deg,#60a5fa,#34d399);
   transform:scaleX(0);transform-origin:left;
   transition:transform 0.6s cubic-bezier(0.16,1,0.3,1);
 }
 .step-line.filled::after{transform:scaleX(1)}
 
-.status-area{text-align:center;margin-bottom:14px;min-height:32px;animation:fadeUp 0.5s 0.2s cubic-bezier(0.16,1,0.3,1) both}
-.status-text{font-size:13px;color:#7c8494;transition:color 0.3s}
-.status-sub{font-size:11px;color:#4a5168;margin-top:3px;transition:color 0.3s}
+/* Status */
+.status{text-align:center;margin-bottom:16px;min-height:36px;animation:fadeUp 0.5s 0.2s cubic-bezier(0.16,1,0.3,1) both}
+.status-main{font-size:14px;color:rgba(255,255,255,0.5);font-weight:500;transition:color 0.3s}
+.status-sub{font-size:11px;color:rgba(255,255,255,0.2);margin-top:4px;transition:color 0.3s}
 
-.progress-wrap{width:100%;max-width:280px;margin-bottom:18px;animation:fadeUp 0.5s 0.25s cubic-bezier(0.16,1,0.3,1) both}
+/* Progress */
+.progress-area{width:100%;max-width:260px;margin-bottom:20px;animation:fadeUp 0.5s 0.25s cubic-bezier(0.16,1,0.3,1) both}
 .progress-track{
-  width:100%;height:3px;background:rgba(255,255,255,0.04);border-radius:3px;overflow:hidden;opacity:0;transition:opacity 0.3s;
+  width:100%;height:3px;background:rgba(255,255,255,0.03);border-radius:3px;overflow:hidden;
+  opacity:0;transition:opacity 0.3s;
 }
-.progress-track.on{opacity:1}
-.progress-bar{
+.progress-track.visible{opacity:1}
+.progress-fill{
   height:100%;width:0%;border-radius:3px;
   background:linear-gradient(90deg,#3b82f6,#60a5fa);
-  background-size:200% 100%;
-  animation:shimmer 2s linear infinite;
-  box-shadow:0 0 8px rgba(59,130,246,0.2);
-  transition:width 0.5s cubic-bezier(0.16,1,0.3,1);
+  transition:width 0.4s cubic-bezier(0.16,1,0.3,1);
+  box-shadow:0 0 8px rgba(96,165,250,0.2);
 }
-@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-.progress-bar.pulse{width:30%;animation:barPulse 1.6s cubic-bezier(0.4,0,0.6,1) infinite,shimmer 2s linear infinite}
-@keyframes barPulse{0%{transform:translateX(-100%)}100%{transform:translateX(433%)}}
-.progress-bar.success{background:linear-gradient(90deg,#059669,#34d399);box-shadow:0 0 8px rgba(52,211,153,0.2)}
-.progress-bar.error{background:linear-gradient(90deg,#dc2626,#f87171);box-shadow:0 0 8px rgba(220,38,38,0.2)}
-.progress-pct{text-align:right;font-size:10px;color:#4a5168;margin-top:4px;height:12px;transition:color 0.3s}
+.progress-fill.indeterminate{
+  width:30%;
+  animation:indeterminate 1.6s cubic-bezier(0.4,0,0.6,1) infinite;
+}
+@keyframes indeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(433%)}}
+.progress-fill.success{background:linear-gradient(90deg,#059669,#34d399);box-shadow:0 0 8px rgba(52,211,153,0.2)}
+.progress-fill.error{background:linear-gradient(90deg,#dc2626,#f87171);box-shadow:0 0 8px rgba(220,38,38,0.2)}
+.progress-pct{text-align:right;font-size:10px;color:rgba(255,255,255,0.15);margin-top:4px;height:14px}
 
-.action-btn{
-  width:180px;height:40px;border:none;border-radius:12px;
+/* Button */
+.btn{
+  width:200px;height:42px;border:none;border-radius:12px;
   font-family:inherit;font-size:13px;font-weight:600;
-  cursor:pointer;letter-spacing:0.2px;
+  cursor:pointer;letter-spacing:0.3px;
   position:relative;overflow:hidden;
   transition:all 250ms cubic-bezier(0.16,1,0.3,1);
   animation:fadeUp 0.5s 0.3s cubic-bezier(0.16,1,0.3,1) both;
   -webkit-app-region:no-drag;
-  background:rgba(59,130,246,0.12);
-  border:1px solid rgba(59,130,246,0.2);
+  background:rgba(96,165,250,0.1);
+  border:1px solid rgba(96,165,250,0.15);
   color:#60a5fa;
 }
-.action-btn::before{content:'';position:absolute;inset:0;background:rgba(59,130,246,0.06);opacity:0;transition:opacity 250ms}
-.action-btn:hover::before{opacity:1}
-.action-btn:hover{
-  border-color:rgba(59,130,246,0.35);
-  box-shadow:0 4px 20px rgba(59,130,246,0.12),0 0 0 1px rgba(59,130,246,0.08);
+.btn:hover:not(:disabled){
+  background:rgba(96,165,250,0.15);
+  border-color:rgba(96,165,250,0.3);
+  box-shadow:0 4px 24px rgba(96,165,250,0.1);
   transform:translateY(-1px);
 }
-.action-btn:active{transform:translateY(0) scale(0.98)}
-.action-btn:disabled{opacity:0.3;cursor:default;transform:none;box-shadow:none}
-.action-btn:disabled::before{display:none}
-.action-btn.success{background:rgba(52,211,153,0.12);border-color:rgba(52,211,153,0.2);color:#34d399}
-.action-btn.success:hover{border-color:rgba(52,211,153,0.35);box-shadow:0 4px 20px rgba(52,211,153,0.12)}
+.btn:active:not(:disabled){transform:translateY(0) scale(0.98)}
+.btn:disabled{opacity:0.25;cursor:default;transform:none}
+.btn.success{background:rgba(52,211,153,0.1);border-color:rgba(52,211,153,0.2);color:#34d399}
+.btn.success:hover{background:rgba(52,211,153,0.15);border-color:rgba(52,211,153,0.3);box-shadow:0 4px 24px rgba(52,211,153,0.1)}
 
+/* Path */
 .install-path{
-  position:absolute;bottom:10px;left:0;right:0;text-align:center;
-  font-size:9px;color:rgba(255,255,255,0.05);padding:0 16px;
+  position:absolute;bottom:12px;left:0;right:0;text-align:center;
+  font-size:9px;color:rgba(255,255,255,0.06);padding:0 20px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 
-.check-icon{display:inline-block;vertical-align:middle;margin-right:2px}
-@keyframes checkDraw{from{stroke-dashoffset:16}to{stroke-dashoffset:0}}
-
-.error-detail{
-  margin-top:6px;padding:6px 12px;
-  background:rgba(220,38,38,0.06);border:1px solid rgba(220,38,38,0.12);
-  border-radius:8px;font-size:11px;color:#f87171;
+/* Error */
+.error-box{
+  margin-top:8px;padding:8px 14px;
+  background:rgba(220,38,38,0.05);border:1px solid rgba(220,38,38,0.1);
+  border-radius:10px;font-size:11px;color:#f87171;
   max-width:280px;word-break:break-word;text-align:center;
 }
 
+/* Check animation */
+@keyframes checkDraw{from{stroke-dashoffset:16}to{stroke-dashoffset:0}}
 </style>
 </head>
 <body>
-<div class="bg-glow"></div>
+<div class="bg"></div>
 <div class="titlebar">
-  <button class="tb-btn close-btn" id="x">
+  <button class="tb-close" id="x">
     <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.3" fill="none">
       <line x1="1.5" y1="1.5" x2="8.5" y2="8.5"/><line x1="8.5" y1="1.5" x2="1.5" y2="8.5"/>
     </svg>
   </button>
 </div>
 <div class="content">
-  <div class="logo-wrap"><img id="logo" src="" alt="GitBrowser" /></div>
-  <div class="version"><span class="dot"></span><span id="ver">v0.3.0</span></div>
-  <div class="steps">
-    <div class="step active" id="s1"><div class="step-dot">1</div><span id="s1-label">Check</span></div>
-    <div class="step-line" id="line1"></div>
-    <div class="step" id="s2"><div class="step-dot">2</div><span id="s2-label">Install</span></div>
-    <div class="step-line" id="line2"></div>
-    <div class="step" id="s3"><div class="step-dot">3</div><span id="s3-label">Done</span></div>
+  <div class="logo-area">
+    <div class="logo-glow"></div>
+    <img id="logo" src="" alt="GitBrowser" />
   </div>
-  <div class="status-area">
-    <div class="status-text" id="st">Checking for updates…</div>
+  <div class="ver-pill"><span class="dot"></span><span id="ver">v0.3.0</span></div>
+
+  <div class="steps">
+    <div class="step active" id="s1"><div class="step-num">1</div><span id="s1l">Check</span></div>
+    <div class="step-line" id="ln1"></div>
+    <div class="step" id="s2"><div class="step-num">2</div><span id="s2l">Install</span></div>
+    <div class="step-line" id="ln2"></div>
+    <div class="step" id="s3"><div class="step-num">3</div><span id="s3l">Done</span></div>
+  </div>
+
+  <div class="status">
+    <div class="status-main" id="st">Checking for updates…</div>
     <div class="status-sub" id="sub"></div>
   </div>
-  <div class="progress-wrap">
-    <div class="progress-track" id="track"><div class="progress-bar" id="bar"></div></div>
+
+  <div class="progress-area">
+    <div class="progress-track" id="track"><div class="progress-fill" id="bar"></div></div>
     <div class="progress-pct" id="pct"></div>
   </div>
-  <button class="action-btn" id="btn" disabled>Install</button>
+
+  <button class="btn" id="btn" disabled>Install</button>
 </div>
 <div class="install-path" id="pathEl"></div>
 
@@ -187,177 +209,234 @@ body{display:flex;flex-direction:column;position:relative;border-radius:16px;ove
 const api = window.installer;
 const $ = id => document.getElementById(id);
 
-let downloadUrl = null;
-let latestVer = null;
-
-const lang = (navigator.language || '').startsWith('ru') ? 'ru' : 'en';
+/* ─── Localization ─── */
 const L = {
   en: {
-    s1:'Check',s2:'Install',s3:'Done',
-    checking:'Checking for updates\u2026',
-    newVersion:'New version available',
-    readyToInstall:'Ready to install',
-    latestVersion:'Latest version',
-    install:'Install',
-    downloading:'Downloading\u2026',
-    installing:'Installing\u2026',
-    shortcuts:'Creating shortcuts\u2026',
-    configuring:'Configuring\u2026',
-    errorInstall:'Installation failed',
-    retry:'Retry',
-    done:'Installation complete',
-    ready:'GitBrowser is ready',
-    launch:'Launch',
+    s1: 'Check', s2: 'Install', s3: 'Done',
+    checking: 'Checking for updates…',
+    ready: 'Ready to install',
+    readySub: 'GitBrowser will be installed on your computer',
+    installing: 'Installing…',
+    downloading: 'Downloading…',
+    extracting: 'Extracting files…',
+    shortcuts: 'Creating shortcuts…',
+    done: 'Installation complete',
+    doneSub: 'GitBrowser is ready to use',
+    launch: 'Launch GitBrowser',
+    install: 'Install',
+    noUpdate: 'Already up to date',
+    noUpdateSub: 'You have the latest version',
+    errTitle: 'Installation failed',
+    errCheck: 'Could not check for updates',
   },
   ru: {
-    s1:'Проверка',s2:'Установка',s3:'Готово',
-    checking:'Проверка обновлений\u2026',
-    newVersion:'Доступна новая версия',
-    readyToInstall:'Готов к установке',
-    latestVersion:'Последняя версия',
-    install:'Установить',
-    downloading:'Загрузка\u2026',
-    installing:'Установка\u2026',
-    shortcuts:'Создание ярлыков\u2026',
-    configuring:'Настройка\u2026',
-    errorInstall:'Ошибка установки',
-    retry:'Повторить',
-    done:'Установка завершена',
-    ready:'GitBrowser готов к работе',
-    launch:'Запустить',
-  },
-}[lang];
-
-$('s1-label').textContent = L.s1;
-$('s2-label').textContent = L.s2;
-$('s3-label').textContent = L.s3;
-$('st').textContent = L.checking;
-$('btn').textContent = L.install;
-$('x').onclick = () => api.close();
-
-function setStep(n) {
-  for (let i = 1; i <= 3; i++) {
-    const el = $('s' + i);
-    el.classList.remove('active', 'done');
-    if (i < n) el.classList.add('done');
-    else if (i === n) el.classList.add('active');
+    s1: 'Проверка', s2: 'Установка', s3: 'Готово',
+    checking: 'Проверка обновлений…',
+    ready: 'Готов к установке',
+    readySub: 'GitBrowser будет установлен на ваш компьютер',
+    installing: 'Установка…',
+    downloading: 'Загрузка…',
+    extracting: 'Извлечение файлов…',
+    shortcuts: 'Создание ярлыков…',
+    done: 'Установка завершена',
+    doneSub: 'GitBrowser готов к использованию',
+    launch: 'Запустить GitBrowser',
+    install: 'Установить',
+    noUpdate: 'Обновлений нет',
+    noUpdateSub: 'У вас последняя версия',
+    errTitle: 'Ошибка установки',
+    errCheck: 'Не удалось проверить обновления',
   }
-  if (n > 1) $('line1').classList.add('filled');
-  if (n > 2) $('line2').classList.add('filled');
+};
+const lang = (navigator.language || '').startsWith('ru') ? 'ru' : 'en';
+const t = key => L[lang][key] || L.en[key] || key;
+
+/* ─── Step management ─── */
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    const el = $('s' + i);
+    el.classList.toggle('active', i === n);
+    if (i < n) el.classList.add('done');
+  });
+  if (n >= 2) $('ln1').classList.add('filled');
+  if (n >= 3) $('ln2').classList.add('filled');
 }
 
 function setStepDone(n) {
-  const dot = $('s' + n).querySelector('.step-dot');
-  dot.innerHTML = '<svg class="check-icon" width="11" height="11" viewBox="0 0 12 12"><polyline points="2.5,6.5 5,9 9.5,3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="stroke-dasharray:16;stroke-dashoffset:16;animation:checkDraw 0.4s 0.1s ease forwards"/></svg>';
+  const el = $('s' + n);
+  el.classList.remove('active');
+  el.classList.add('done');
 }
+
+/* ─── Progress helpers ─── */
+function showProgress(mode) {
+  const track = $('track');
+  const bar = $('bar');
+  track.classList.add('visible');
+  bar.classList.remove('indeterminate', 'success', 'error');
+  if (mode === 'indeterminate') {
+    bar.style.width = '';
+    bar.classList.add('indeterminate');
+    $('pct').textContent = '';
+  }
+}
+
+function setProgress(pct) {
+  const bar = $('bar');
+  bar.classList.remove('indeterminate');
+  bar.style.width = pct + '%';
+  $('pct').textContent = Math.round(pct) + '%';
+}
+
+function hideProgress() {
+  $('track').classList.remove('visible');
+  $('pct').textContent = '';
+}
+
+/* ─── Animated progress ─── */
+let animFrame = null;
+function anim(from, to, duration, cb) {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  const start = performance.now();
+  const tick = (now) => {
+    const p = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - p, 3); // easeOutCubic
+    const val = from + (to - from) * ease;
+    setProgress(val);
+    if (p < 1) animFrame = requestAnimationFrame(tick);
+    else if (cb) cb();
+  };
+  animFrame = requestAnimationFrame(tick);
+}
+
+/* ─── Error display ─── */
+function showError(msg) {
+  let box = document.querySelector('.error-box');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'error-box';
+    $('btn').parentElement.insertBefore(box, $('btn'));
+  }
+  box.textContent = msg;
+  $('bar').classList.add('error');
+}
+
+/* ─── Init ─── */
+let downloadUrl = null;
 
 async function init() {
-  try { $('logo').src = await api.getIconPath(); } catch {}
-  const info = await api.getInfo();
-  $('ver').textContent = 'v' + info.version;
-  $('pathEl').textContent = info.installDir;
+  // Set labels
+  $('s1l').textContent = t('s1');
+  $('s2l').textContent = t('s2');
+  $('s3l').textContent = t('s3');
+  $('st').textContent = t('checking');
 
-  setStep(1);
-  $('track').classList.add('on');
-  $('bar').classList.add('pulse');
+  // Load logo
+  try {
+    const iconPath = await api.getIconPath();
+    $('logo').src = iconPath;
+  } catch {}
 
-  const upd = await api.checkUpdate();
-  $('bar').classList.remove('pulse');
-  $('bar').style.width = '0%';
-  $('track').classList.remove('on');
-  setStepDone(1);
+  // Load info
+  try {
+    const info = await api.getInfo();
+    $('ver').textContent = 'v' + info.version;
+    $('pathEl').textContent = info.installDir;
+  } catch {}
 
-  if (upd.latest && upd.latest !== info.version && upd.download) {
-    latestVer = upd.latest;
-    downloadUrl = upd.download;
-    $('st').textContent = L.newVersion;
-    $('st').style.color = '#60a5fa';
-    $('sub').textContent = 'v' + info.version + '  \u2192  v' + upd.latest;
-    $('sub').style.color = '#7c8494';
-    $('ver').textContent = 'v' + info.version + ' \u2192 v' + upd.latest;
-  } else {
-    $('st').textContent = L.readyToInstall;
-    $('st').style.color = '#7c8494';
-    $('sub').textContent = L.latestVersion;
-    $('sub').style.color = '#4a5168';
+  // Check for updates
+  showProgress('indeterminate');
+  try {
+    const result = await api.checkUpdate();
+    hideProgress();
+    setStepDone(1);
+
+    if (result.download) {
+      downloadUrl = result.download;
+      $('st').textContent = t('ready');
+      $('sub').textContent = t('readySub');
+      $('btn').textContent = t('install');
+      $('btn').disabled = false;
+    } else {
+      $('st').textContent = t('noUpdate');
+      $('sub').textContent = t('noUpdateSub');
+      $('btn').textContent = t('launch');
+      $('btn').disabled = false;
+      $('btn').classList.add('success');
+      setStep(3);
+    }
+  } catch (e) {
+    hideProgress();
+    $('st').textContent = t('errCheck');
+    showError(e.message || String(e));
+    // Still allow install attempt
+    $('btn').textContent = t('install');
+    $('btn').disabled = false;
   }
-  setStep(2);
-  $('btn').disabled = false;
 }
 
-$('btn').onclick = async () => {
-  $('btn').disabled = true;
-  $('track').classList.add('on');
-  $('pct').style.color = '#4a5168';
-  const prevErr = document.querySelector('.error-detail');
-  if (prevErr) prevErr.remove();
+/* ─── Install flow ─── */
+async function doInstall() {
+  const btn = $('btn');
+  btn.disabled = true;
+  setStep(2);
 
-  $('st').textContent = downloadUrl ? L.downloading : L.installing;
-  $('st').style.color = '#7c8494';
+  // Phase 1: Download (0-60%)
+  $('st').textContent = t('downloading');
   $('sub').textContent = '';
-  anim(0, 45, 2500);
+  showProgress('indeterminate');
+  anim(0, 55, 3000);
 
-  const res = await api.install({ downloadUrl });
-  if (!res.ok) {
-    $('st').textContent = L.errorInstall;
-    $('st').style.color = '#f87171';
+  try {
+    const result = await api.install({ downloadUrl });
+    if (!result.ok) throw new Error(result.error);
+
+    // Phase 2: Shortcuts (60-90%)
+    $('st').textContent = t('shortcuts');
+    anim(55, 85, 1500);
+    await api.createShortcuts();
+
+    // Phase 3: Done (90-100%)
+    anim(85, 100, 600, () => {
+      $('bar').classList.add('success');
+    });
+    setStepDone(2);
+    setStep(3);
+
+    $('st').textContent = t('done');
+    $('sub').textContent = t('doneSub');
+    btn.textContent = t('launch');
+    btn.classList.add('success');
+    btn.disabled = false;
+    btn.onclick = async () => {
+      btn.disabled = true;
+      await api.launchApp();
+    };
+  } catch (e) {
+    $('st').textContent = t('errTitle');
+    showError(e.message || String(e));
+    setProgress(100);
     $('bar').classList.add('error');
-    $('bar').style.width = '100%';
-    $('pct').textContent = '';
-    if (res.error) {
-      const errEl = document.createElement('div');
-      errEl.className = 'error-detail';
-      errEl.textContent = res.error;
-      document.querySelector('.status-area').appendChild(errEl);
-    }
-    $('btn').textContent = L.retry;
-    $('btn').disabled = false;
+    btn.textContent = t('install');
+    btn.disabled = false;
+  }
+}
+
+/* ─── Button handler ─── */
+$('btn').addEventListener('click', () => {
+  if ($('btn').classList.contains('success')) {
+    // Launch mode
+    $('btn').disabled = true;
+    api.launchApp();
     return;
   }
+  doInstall();
+});
 
-  anim(45, 70, 600);
-  $('st').textContent = L.shortcuts;
-  await api.createShortcuts();
+/* ─── Close button ─── */
+$('x').addEventListener('click', () => api.close());
 
-  anim(70, 90, 400);
-  $('st').textContent = L.configuring;
-  await new Promise(r => setTimeout(r, 300));
-
-  anim(90, 100, 300);
-  await new Promise(r => setTimeout(r, 500));
-
-  setStepDone(2);
-  setStep(3);
-  setStepDone(3);
-
-  $('bar').classList.add('success');
-  $('bar').style.width = '100%';
-  $('pct').textContent = '100%';
-  $('pct').style.color = '#34d399';
-
-  $('st').textContent = L.done;
-  $('st').style.color = '#34d399';
-  $('sub').textContent = L.ready;
-  $('sub').style.color = '#059669';
-
-  $('btn').textContent = L.launch;
-  $('btn').classList.add('success');
-  $('btn').disabled = false;
-  $('btn').onclick = () => api.launchApp();
-};
-
-function anim(from, to, ms) {
-  const t0 = performance.now();
-  (function tick(now) {
-    const p = Math.min((now - t0) / ms, 1);
-    const e = 1 - Math.pow(1 - p, 3);
-    const v = from + (to - from) * e;
-    $('bar').style.width = v + '%';
-    $('pct').textContent = Math.round(v) + '%';
-    if (p < 1) requestAnimationFrame(tick);
-  })(t0);
-}
-
+/* ─── Start ─── */
 init();
 </script>
 </body>

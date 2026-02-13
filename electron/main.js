@@ -14,6 +14,10 @@ function generateCtxToken() {
 // Disable Autofill CDP errors from DevTools
 app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication,AutofillEnableAccountWalletStorage');
 
+// Fix GPU cache errors on Windows (cache locked by previous instance)
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('gpu-disk-cache-size-kb', '0');
+
 // Suppress EPIPE errors that occur when writing to destroyed webContents/sockets
 process.on('uncaughtException', (err) => {
   if (err && err.code === 'EPIPE') return; // silently ignore
@@ -133,7 +137,7 @@ const NEEDS_PRELOAD = new Set([
 ]);
 
 // Create a new browser window (normal or private)
-function createBrowserWindow({ isPrivate = false } = {}) {
+function createBrowserWindow({ isPrivate = false, showImmediately = true } = {}) {
   const partition = isPrivate ? ('private-' + Date.now()) : null;
   const ctx = new WindowContext({ isPrivate, partition });
 
@@ -146,6 +150,7 @@ function createBrowserWindow({ isPrivate = false } = {}) {
     minWidth: isPrivate ? 600 : 800,
     minHeight: isPrivate ? 400 : 600,
     frame: false,
+    show: showImmediately,
   });
 
   // Sidebar (only for normal windows)
@@ -241,7 +246,7 @@ function createBrowserWindow({ isPrivate = false } = {}) {
 }
 
 function createWindow() {
-  const ctx = createBrowserWindow({ isPrivate: false });
+  const ctx = createBrowserWindow({ isPrivate: false, showImmediately: false });
   primaryWindowCtx = ctx;
 
   Menu.setApplicationMenu(null);
@@ -729,6 +734,24 @@ function openNewWindow() {
 
 const downloadItems = new Map(); // dlId -> DownloadItem
 
+// Broadcast download events to toolbar, sidebar, AND any open downloads tab
+function broadcastDownload(channel, data) {
+  const ctx = primaryWindowCtx;
+  if (!ctx) return;
+  sendToToolbar(ctx, channel, data);
+  // Also send to any tab showing gb://downloads
+  for (const [, tab] of ctx.tabs) {
+    try {
+      const url = tab.view.webContents.getURL();
+      if (url && (url.includes('downloads.html') || tab.url === 'gb://downloads')) {
+        if (!tab.view.webContents.isDestroyed()) {
+          tab.view.webContents.send(channel, data);
+        }
+      }
+    } catch {}
+  }
+}
+
 function handleDownload(item) {
   const dlId = 'dl-' + (nextDownloadId++);
 
@@ -755,10 +778,11 @@ function handleDownload(item) {
   };
   downloads.set(dlId, dl);
   downloadItems.set(dlId, item);
-  sendToToolbar(primaryWindowCtx, 'download-started', dl);
+  broadcastDownload('download-started', dl);
 
   let lastBytes = 0;
   let lastTime = Date.now();
+  let progressTimer = null;
 
   item.on('updated', (_e, state) => {
     dl.receivedBytes = item.getReceivedBytes();
@@ -778,19 +802,26 @@ function handleDownload(item) {
       lastTime = now;
     }
 
-    sendToToolbar(primaryWindowCtx, 'download-progress', {
-      id: dlId, receivedBytes: dl.receivedBytes, totalBytes: dl.totalBytes,
-      state, paused: dl.paused, speed: dl.speed, eta: dl.eta,
-    });
+    // Throttle UI updates to ~4 times per second
+    if (!progressTimer) {
+      progressTimer = setTimeout(() => {
+        progressTimer = null;
+        broadcastDownload('download-progress', {
+          id: dlId, receivedBytes: dl.receivedBytes, totalBytes: dl.totalBytes,
+          state: dl.state, paused: dl.paused, speed: dl.speed, eta: dl.eta,
+        });
+      }, 250);
+    }
   });
   item.once('done', (_e, state) => {
+    if (progressTimer) { clearTimeout(progressTimer); progressTimer = null; }
     dl.state = state;
     dl.savePath = item.getSavePath();
     dl.receivedBytes = dl.totalBytes;
     dl.speed = 0;
     dl.eta = 0;
     downloadItems.delete(dlId);
-    sendToToolbar(primaryWindowCtx, 'download-done', { id: dlId, state, savePath: dl.savePath, filename: dl.filename });
+    broadcastDownload('download-done', { id: dlId, state, savePath: dl.savePath, filename: dl.filename });
     if (state === 'completed') {
       sendToToolbar(primaryWindowCtx, 'toast', { message: cmL('downloads.completed', 'Downloaded') + ': ' + dl.filename, action: 'open-download', data: { savePath: dl.savePath } });
     }
@@ -1034,6 +1065,16 @@ ipcMain.on('open-settings', (e) => { const ctx = getWindowCtx(e.sender); openOrS
 ipcMain.on('open-bookmarks', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://bookmarks'); });
 ipcMain.on('open-history', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://history'); });
 ipcMain.on('open-downloads', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://downloads'); });
+// Ensure downloads tab exists without switching to it
+ipcMain.on('ensure-downloads-tab', (e) => {
+  const ctx = getWindowCtx(e.sender);
+  if (!ctx) return;
+  // Check if already open
+  for (const [, tab] of ctx.tabs) {
+    if (tab.url === 'gb://downloads') return;
+  }
+  createTab(ctx, 'gb://downloads', false);
+});
 ipcMain.on('open-ai', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://ai'); });
 ipcMain.on('open-github', (e) => { const ctx = getWindowCtx(e.sender); openOrSwitchTab(ctx, 'gb://github'); });
 
@@ -3942,24 +3983,106 @@ async function loadInitialTheme() {
   broadcastTheme(currentTheme);
 }
 
+// ─── Splash screen ───
+let splashWindow = null;
+
+function showSplash() {
+  splashWindow = new BrowserWindow({
+    width: 320,
+    height: 340,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    center: true,
+    icon: resolvePath('resources', 'icons', 'app.ico'),
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  splashWindow.loadFile(path.join(__dirname, 'ui', 'splash.html'));
+  splashWindow.on('closed', () => { splashWindow = null; });
+}
+
+function closeSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+    splashWindow = null;
+  }
+}
+
 app.whenReady().then(async () => {
+  // Show splash immediately — before any heavy init
+  showSplash();
+
+  // Start rust bridge (non-blocking)
   rustBridge.start();
-  // Load locale before creating window so context menu and titles are localized from the start
-  await loadContextMenuLocale();
+
+  // Don't block on locale — load it in background, use English fallback for now
+  loadContextMenuLocale().catch(() => {});
+
+  // Create main window immediately (hidden)
   createWindow();
+
+  // Close splash once ALL views are ready (toolbar + sidebar + first tab)
+  const mainWin = getMainWindow();
+  if (mainWin && primaryWindowCtx) {
+    const ctx = primaryWindowCtx;
+    const viewsToWait = [];
+
+    if (ctx.toolbarView) viewsToWait.push(ctx.toolbarView.webContents);
+    if (ctx.sidebarView) viewsToWait.push(ctx.sidebarView.webContents);
+
+    function checkAllReady() {
+      // Also wait for at least one tab to exist and finish loading
+      const activeTab = ctx.activeTabId && ctx.tabs.has(ctx.activeTabId)
+        ? ctx.tabs.get(ctx.activeTabId).view.webContents : null;
+
+      const allViewsLoaded = viewsToWait.every(wc => !wc.isLoading());
+      const tabReady = activeTab && !activeTab.isLoading();
+
+      if (allViewsLoaded && tabReady) {
+        // Small extra delay to let paint finish
+        setTimeout(() => {
+          if (mainWin && !mainWin.isDestroyed()) mainWin.show();
+          closeSplash();
+        }, 100);
+        return true;
+      }
+      return false;
+    }
+
+    // Poll every 200ms — covers all race conditions
+    const readyInterval = setInterval(() => {
+      if (checkAllReady()) clearInterval(readyInterval);
+    }, 200);
+
+    // Fallback — never stay on splash longer than 6s
+    setTimeout(() => {
+      clearInterval(readyInterval);
+      if (mainWin && !mainWin.isDestroyed() && !mainWin.isVisible()) {
+        mainWin.show();
+        closeSplash();
+      }
+    }, 6000);
+  } else if (mainWin) {
+    setTimeout(() => { mainWin.show(); closeSplash(); }, 2000);
+  }
+
   // Load theme after window is ready
   setTimeout(() => { loadInitialTheme(); }, 500);
 
-  // Load saved Chrome extensions
-  try {
-    const extPaths = JSON.parse(fs.readFileSync(userDataPath('chrome_extensions.json'), 'utf-8'));
-    if (Array.isArray(extPaths)) {
-      for (const p of extPaths) {
-        try { await session.defaultSession.loadExtension(p, { allowFileAccess: true }); }
-        catch { /* extension folder may have been removed */ }
+  // Load saved Chrome extensions (deferred — don't block startup)
+  setTimeout(async () => {
+    try {
+      const extPaths = JSON.parse(fs.readFileSync(userDataPath('chrome_extensions.json'), 'utf-8'));
+      if (Array.isArray(extPaths)) {
+        for (const p of extPaths) {
+          try { await session.defaultSession.loadExtension(p, { allowFileAccess: true }); }
+          catch { /* extension folder may have been removed */ }
+        }
       }
-    }
-  } catch { /* no saved extensions */ }
+    } catch { /* no saved extensions */ }
+  }, 1000);
 
   // Listen for OS theme changes (for System mode)
   nativeTheme.on('updated', () => {

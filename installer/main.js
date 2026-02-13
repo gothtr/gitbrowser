@@ -25,7 +25,7 @@ if (!gotLock) {
 function createWindow() {
   win = new BrowserWindow({
     width: 480,
-    height: 480,
+    height: 520,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -129,10 +129,6 @@ ipcMain.handle('create-shortcuts', async () => {
     const desktop = app.getPath('desktop');
     const startMenu = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
 
-    const runPS = (cmd) => new Promise((resolve) => {
-      execFile('powershell', ['-NoProfile', '-Command', cmd], { timeout: 10000 }, (err) => resolve(!err));
-    });
-
     const mkLnk = (lnkPath) => {
       // SEC-07: Use separate arguments to avoid PowerShell injection via path values
       const ps = [
@@ -171,15 +167,37 @@ ipcMain.handle('create-shortcuts', async () => {
 });
 
 ipcMain.handle('launch-app', () => {
+  // Search for the executable in install dir and common subdirectories
   const candidates = [
     path.join(INSTALL_DIR, 'GitBrowser.exe'),
     path.join(INSTALL_DIR, 'gitbrowser.exe'),
+    path.join(INSTALL_DIR, 'bin', 'GitBrowser.exe'),
+    path.join(INSTALL_DIR, 'bin', 'gitbrowser.exe'),
   ];
+
+  // Also scan INSTALL_DIR for any .exe that matches
+  try {
+    const files = fs.readdirSync(INSTALL_DIR);
+    for (const f of files) {
+      if (f.toLowerCase().includes('gitbrowser') && f.endsWith('.exe')) {
+        const full = path.join(INSTALL_DIR, f);
+        if (!candidates.includes(full)) candidates.push(full);
+      }
+    }
+  } catch {}
+
+  // Also check Program Files as fallback
+  const pf = process.env['ProgramFiles'] || 'C:\\Program Files';
+  const pfx86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  for (const dir of [pf, pfx86]) {
+    candidates.push(path.join(dir, 'GitBrowser', 'GitBrowser.exe'));
+    candidates.push(path.join(dir, 'GitBrowser', 'gitbrowser.exe'));
+  }
 
   for (const exe of candidates) {
     if (fs.existsSync(exe)) {
       try {
-        spawn(exe, [], { detached: true, stdio: 'ignore', cwd: INSTALL_DIR }).unref();
+        spawn(exe, [], { detached: true, stdio: 'ignore', cwd: path.dirname(exe) }).unref();
       } catch {
         shell.openPath(exe);
       }
@@ -188,6 +206,7 @@ ipcMain.handle('launch-app', () => {
     }
   }
 
+  // Last resort: open install directory so user can find it
   shell.openPath(INSTALL_DIR);
   setTimeout(() => app.quit(), 500);
   return { ok: false, error: 'Executable not found' };

@@ -54,6 +54,7 @@ contextBridge.exposeInMainWorld('gitbrowser', {
   openBookmarks: () => ipcRenderer.send('open-bookmarks'),
   openHistory: () => ipcRenderer.send('open-history'),
   openDownloads: () => ipcRenderer.send('open-downloads'),
+  ensureDownloadsTab: () => ipcRenderer.send('ensure-downloads-tab'),
   openAI: () => ipcRenderer.send('open-ai'),
   openGitHub: () => ipcRenderer.send('open-github'),
 

@@ -71,6 +71,72 @@ body.collapsed .collapse-btn svg { transform: rotate(180deg); }
 body.collapsed .tab-group-header { justify-content: center; }
 body.collapsed .separator { margin: 4px 6px; }
 
+/* ─── Download fly animation ─── */
+.download-fly-particle {
+  position: fixed; z-index: 200; pointer-events: none;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: var(--accent-emphasis);
+  box-shadow: 0 0 16px var(--accent-glow), 0 0 32px var(--accent-glow);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 14px;
+  animation: flyParticlePulse 0.3s ease-in-out infinite alternate;
+}
+.download-fly-particle svg { width: 16px; height: 16px; }
+@keyframes flyParticlePulse {
+  from { box-shadow: 0 0 12px var(--accent-glow), 0 0 24px var(--accent-glow); transform: scale(1); }
+  to { box-shadow: 0 0 20px var(--accent-glow), 0 0 40px var(--accent-glow); transform: scale(1.1); }
+}
+
+/* Trail effect */
+.download-fly-trail {
+  position: fixed; z-index: 199; pointer-events: none;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-fg); opacity: 0.6;
+  animation: trailFade 0.4s ease-out forwards;
+}
+@keyframes trailFade { to { opacity: 0; transform: scale(0.2); } }
+
+/* ─── Download fly-to-tab animation ─── */
+.tab-item.download-target {
+  background: rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.25);
+  box-shadow: 0 0 20px var(--accent-glow);
+  transition: all 0.4s var(--ease-out);
+}
+html.light .tab-item.download-target {
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+/* ─── Progress ring overlay on downloads tab favicon ─── */
+.dl-progress-ring {
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; pointer-events: none;
+}
+.dl-progress-ring circle {
+  fill: none; stroke-width: 2.5;
+}
+.dl-progress-ring .ring-bg {
+  stroke: rgba(255,255,255,0.08);
+}
+html.light .dl-progress-ring .ring-bg {
+  stroke: rgba(0,0,0,0.06);
+}
+.dl-progress-ring .ring-fg {
+  stroke: var(--accent-fg);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s ease;
+  filter: drop-shadow(0 0 3px var(--accent-glow));
+}
+.dl-progress-ring .ring-fg.done {
+  stroke: var(--success-fg);
+  filter: drop-shadow(0 0 4px rgba(63, 185, 80, 0.4));
+}
+.dl-progress-ring .ring-fg.error {
+  stroke: var(--danger-fg);
+  filter: none;
+}
+
 /* ─── Header ─── */
 .sidebar-header {
   display: flex;
@@ -416,7 +482,7 @@ body.collapsed .tab-item .tab-audio-dot {
   <img class="logo-img" src="../../resources/icons/logo-icon.png" alt="" />
   <div class="logo-text">GitBrowser</div>
   <button class="collapse-btn" id="collapse-btn" title="Toggle sidebar (Ctrl+B)">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M6.823 7.823a.25.25 0 0 1 0 .354l-2.396 2.396A.25.25 0 0 1 4 10.396V5.604a.25.25 0 0 1 .427-.177Z"/><path d="M1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25V1.75C0 .784.784 0 1.75 0ZM1.5 1.75v12.5c0 .138.112.25.25.25H9.5v-13H1.75a.25.25 0 0 0-.25.25ZM11 14.5h3.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25H11Z"/></svg>
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M9.78 12.78a.75.75 0 0 1-1.06 0L4.47 8.53a.75.75 0 0 1 0-1.06l4.25-4.25a.749.749 0 1 1 1.06 1.06L6.06 8l3.72 3.72a.75.75 0 0 1 0 1.06Z"/></svg>
   </button>
 </div>
 
@@ -579,6 +645,165 @@ document.addEventListener('keydown', (e) => {
 
 gb.getTabs();
 
+// ─── Download fly animation + progress ring on tab ───
+let dlTotalProgress = { received: 0, total: 0, active: 0 };
+
+function findDownloadsTabEl() {
+  const items = tabsList.querySelectorAll('.tab-item[data-url="gb://downloads"]');
+  return items.length > 0 ? items[0] : null;
+}
+
+function ensureProgressRing(tabEl) {
+  if (!tabEl || tabEl.querySelector('.dl-progress-ring')) return;
+  // Wrap favicon in relative container for ring overlay
+  const favicon = tabEl.querySelector('.tab-favicon, .tab-favicon-svg');
+  if (!favicon) return;
+  favicon.style.position = 'relative';
+  const parent = favicon.parentElement;
+  // Create a wrapper if favicon isn't already in one
+  let wrapper = favicon.closest('.dl-favicon-wrap');
+  if (!wrapper) {
+    wrapper = document.createElement('span');
+    wrapper.className = 'dl-favicon-wrap';
+    wrapper.style.cssText = 'position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;width:22px;height:22px;';
+    parent.insertBefore(wrapper, favicon);
+    wrapper.appendChild(favicon);
+  }
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'dl-progress-ring');
+  svg.setAttribute('viewBox', '0 0 22 22');
+  const circumference = 2 * Math.PI * 9; // r=9
+  svg.innerHTML = `<circle class="ring-bg" cx="11" cy="11" r="9"/><circle class="ring-fg" cx="11" cy="11" r="9" stroke-dasharray="${circumference}" stroke-dashoffset="${circumference}" transform="rotate(-90 11 11)"/>`;
+  wrapper.appendChild(svg);
+}
+
+function updateProgressRing(pct, state) {
+  const tabEl = findDownloadsTabEl();
+  if (!tabEl) return;
+  const ring = tabEl.querySelector('.dl-progress-ring .ring-fg');
+  if (!ring) return;
+  const circumference = 2 * Math.PI * 9;
+  const offset = circumference - (pct / 100) * circumference;
+  ring.style.strokeDashoffset = offset;
+  ring.classList.remove('done', 'error');
+  if (state === 'done') ring.classList.add('done');
+  else if (state === 'error') ring.classList.add('error');
+}
+
+function removeProgressRing() {
+  const tabEl = findDownloadsTabEl();
+  if (!tabEl) return;
+  const ring = tabEl.querySelector('.dl-progress-ring');
+  if (ring) {
+    ring.style.transition = 'opacity 0.5s';
+    ring.style.opacity = '0';
+    setTimeout(() => {
+      ring.remove();
+      // Unwrap favicon
+      const wrapper = tabEl.querySelector('.dl-favicon-wrap');
+      if (wrapper) {
+        const favicon = wrapper.querySelector('.tab-favicon, .tab-favicon-svg');
+        if (favicon) { wrapper.parentElement.insertBefore(favicon, wrapper); favicon.style.position = ''; }
+        wrapper.remove();
+      }
+    }, 500);
+  }
+}
+
+function flyToDownloadsTab() {
+  // Ensure tab exists in background — don't switch to it
+  if (gb.ensureDownloadsTab) gb.ensureDownloadsTab();
+
+  setTimeout(() => {
+    const tabEl = findDownloadsTabEl();
+    const targetRect = tabEl
+      ? tabEl.getBoundingClientRect()
+      : { left: 20, top: window.innerHeight / 2, width: 200, height: 36 };
+
+    const startX = window.innerWidth - 10;
+    const startY = 40 + Math.random() * 30;
+    const endX = targetRect.left + targetRect.width / 2;
+    const endY = targetRect.top + targetRect.height / 2;
+
+    const particle = document.createElement('div');
+    particle.className = 'download-fly-particle';
+    particle.innerHTML = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14ZM7.25 7.689V2a.75.75 0 0 1 1.5 0v5.689l1.97-1.969a.749.749 0 1 1 1.06 1.06l-3.25 3.25a.749.749 0 0 1-1.06 0L4.22 6.78a.749.749 0 1 1 1.06-1.06l1.97 1.969Z"/></svg>';
+    particle.style.left = startX + 'px';
+    particle.style.top = startY + 'px';
+    document.body.appendChild(particle);
+
+    const duration = 500;
+    const animStart = performance.now();
+    let trailCounter = 0;
+
+    function animate(now) {
+      const t = Math.min((now - animStart) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      const arcHeight = -50;
+      const cx = startX + (endX - startX) * ease;
+      const cy = startY + (endY - startY) * ease + arcHeight * Math.sin(Math.PI * t);
+      particle.style.left = cx + 'px';
+      particle.style.top = cy + 'px';
+      particle.style.opacity = t > 0.8 ? String(1 - (t - 0.8) / 0.2) : '1';
+      particle.style.transform = `scale(${1 - t * 0.4})`;
+
+      trailCounter++;
+      if (trailCounter % 3 === 0 && t < 0.85) {
+        const trail = document.createElement('div');
+        trail.className = 'download-fly-trail';
+        trail.style.left = cx + 'px';
+        trail.style.top = cy + 'px';
+        document.body.appendChild(trail);
+        setTimeout(() => trail.remove(), 400);
+      }
+
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        particle.remove();
+        const el = findDownloadsTabEl();
+        if (el) {
+          el.classList.add('download-target');
+          setTimeout(() => el.classList.remove('download-target'), 1000);
+          // Attach progress ring
+          ensureProgressRing(el);
+          updateProgressRing(0);
+        }
+      }
+    }
+    requestAnimationFrame(animate);
+  }, 150);
+}
+
+if (gb.onDownloadStarted) {
+  gb.onDownloadStarted((dl) => {
+    dlTotalProgress.active++;
+    dlTotalProgress.received = 0;
+    dlTotalProgress.total = 0;
+    flyToDownloadsTab();
+  });
+}
+if (gb.onDownloadProgress) {
+  gb.onDownloadProgress((dl) => {
+    // Aggregate progress across all active downloads
+    if (dl.totalBytes > 0) {
+      const pct = Math.round((dl.receivedBytes / dl.totalBytes) * 100);
+      updateProgressRing(pct);
+    }
+  });
+}
+if (gb.onDownloadDone) {
+  gb.onDownloadDone((dl) => {
+    dlTotalProgress.active = Math.max(0, dlTotalProgress.active - 1);
+    const isDone = dl.state === 'completed';
+    if (dlTotalProgress.active === 0) {
+      // All downloads finished — fill ring, then remove
+      updateProgressRing(100, isDone ? 'done' : 'error');
+      setTimeout(() => removeProgressRing(), 2000);
+    }
+  });
+}
+
 // ─── Tab Groups ───
 const GROUP_COLORS = ['#58a6ff','#3fb950','#f85149','#d29922','#a371f7','#f0883e','#f778ba','#56d4dd'];
 let tabGroups = [];
@@ -693,6 +918,14 @@ function renderTabsWithGroups(tabList, activeId) {
     tabsList.appendChild(groupEl);
   });
   ungrouped.forEach(t => tabsList.appendChild(createTabElement(t, activeId)));
+
+  // Re-attach progress ring if downloads are active
+  if (dlTotalProgress.active > 0) {
+    requestAnimationFrame(() => {
+      const el = findDownloadsTabEl();
+      if (el) ensureProgressRing(el);
+    });
+  }
 }
 
 function showGroupContextMenu(group, x, y) {
